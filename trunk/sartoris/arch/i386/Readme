@@ -1,0 +1,12 @@
+This is the i386 Sartoris implementation. 
+
+After compiling, a file named sartoris.img will be generated in the ./sartoris 
+subdir. It is a plain binary file containing a boot-sector and a kernel image. 
+In order to boot, you should raw copy this file to the desired boot media. The 
+file is always an exact number of 512 byte sectors. The kernel will load the 
+operating system's initialization task from the sectors immediately following 
+the sartoris image in the boot media. So make sure the init image is there. If 
+you are using a floppy, just raw-copy the image starting at the first sector, 
+and the native (sartoris) bootsector will do fine. To boot from hard disk, DOS 
+partitioning is used. Set partition type to 0xd0, and use chain loading. 
+The first primary partition with type 0xd0 is used to boot.
