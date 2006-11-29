@@ -1,0 +1,45 @@
+# imagename (no extension)
+# flags (lowmem, phystartmsg, none, disabled) can be comma separated 
+# type (hdd, fs, normal) exclusive
+# task id (if -1 it will be ignored)
+# main thread id (if -1 it will be ignored)
+
+directory
+none
+normal
+1
+
+console
+none
+normal
+2
+
+fdc
+none,disabled
+normal
+3
+
+dma_man
+lowmem,phystartmsg
+normal
+4
+
+atac
+none
+hdd
+5
+
+shell
+none
+normal
+6
+
+ofsservice
+none
+fs
+7
+
+pipes
+none
+normal
+8
