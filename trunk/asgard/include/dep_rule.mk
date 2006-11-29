@@ -1,0 +1,3 @@
+%.d : %.c
+	@echo making deps for $< ...
+	@$(CC) -E -MD $(CPPFLAGS) $< > /dev/null
