@@ -1,0 +1,35 @@
+PMAN 2.0 
+
+Internals:
+
+- VM Sub-system
+	- Page Handling             *
+	- Swap File Support         *
+	- Shared Memory             *
+	- File Mapping              *
+	- Physical Memory Mappings  *
+- Modular Loader (supporting multiple executable formats, but only inplementing ELF)	+ (partial, not SO modular... but separated from the rest on loader section.)
+- Exception Management          *
+- Auto OFS/Swap Mount           *
+- Multiboot Aware               *
+- Priority/Signal driven Scheduler  *
+- Non-Fixed Malloc              *
+- Signaled Interrupts           *
+- Init fs2 loading              * (No more layout.h, except for pman threads)
+
+Protocols:
+
+- Task/Thread                   *
+- Signals                       *
+- Std Service                   + (unloading supported)
+
+Tested:
+	- kmalloc has no bugs
+
+
+Idea: Implementar un servicio de LD que mantenga las librerias cargadas en memoria. Al cargar un programa el PMAN mapea el task al LD 
+y este resuelve todas las referencias (PIC) :D (esto no permite ejecución de llamadas con cambio de privilegio, ese tipo de llamadas
+deberan realizarce en forma asincrona mediante mensajes)
+
+
+
