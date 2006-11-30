@@ -21,7 +21,6 @@ clean :
 	$(MAKE) -C pipes clean
 	$(MAKE) -C pci clean
 	$(MAKE) -C atac clean
-	$(MAKE) -C testelf clean
 
 .PHONY : dep
 dep :
@@ -35,4 +34,3 @@ dep :
 	$(MAKE) -C pipes dep
 	$(MAKE) -C pci dep
 	$(MAKE) -C atac dep
-	$(MAKE) -C testelf dep

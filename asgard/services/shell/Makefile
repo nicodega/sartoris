@@ -1,6 +1,6 @@
 include ../../include/dep_rule.mk
 
-CPPFLAGS += -I"../../include" 
+CFLAGS += -I"../../include" 
 
 objects = shell_entry.o shell.o initialization.o terminal.o run_internal.o run.o cd.o env.o ls.o mount.o io.o set.o contest.o jobs.o  process.o execute.o $(extobjects)
 

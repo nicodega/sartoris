@@ -1,6 +1,6 @@
 include ../../include/dep_rule.mk
 
-CPPFLAGS += -I"../../include"
+CFLAGS += -I"../../include"
 
 objects = fdc_entry.o fdc.o $(extobjects)
 

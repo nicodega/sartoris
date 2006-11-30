@@ -1,6 +1,6 @@
 include ../../include/dep_rule.mk
 
-CPPFLAGS += -I"../../include"
+CFLAGS += -I"../../include"
 
 objects = atac.o ata_find.o atac_stddev.o ataioint.o ataioisa.o ioctrl.o ataioreg.o ataiosub.o blockdev.o channelwp.o command_queue.o pio.o tmr.o logic_devices.o helpers.o $(extobjects)
 

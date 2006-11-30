@@ -1,4 +1,4 @@
-CPPFLAGS += -I"../../include"
+CFLAGS += -I"../../include"
 include ../../include/dep_rule.mk
 
 CFLAGS += -D PMAN_SIZE=`./pmansize.pl`
@@ -12,7 +12,7 @@ extobjects = ../../klib/kserv.o ../../lib/int.o ../../lib/reboot.o \
 dependencies = pmanager_entry.d paging_fault_handler.d paging_swap.d paging_sched.d paging_steal.d paging_aging.d paging_init.d pmanager_init.d services_spawn.d init_helpers.d pmanager.d init_fs.d page_list.d paging.d exceptions.d fileio.d commands.d elf.d elffileio.d pman_malloc.d signals.d
 	
 ./sizecalc/%.o : %.c
-	$(CC) -c $(CPPFLAGS) $(CFLAGS) -s $< -o $@
+	$(CC) -c $(CFLAGS) $(CFLAGS) -s $< -o $@
 
 ./sizecalc/%.o : %.s
 	$(AS) $(ASFLAGS) $< -o $@

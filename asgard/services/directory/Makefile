@@ -1,6 +1,6 @@
 include ../../include/dep_rule.mk
 
-CPPFLAGS += -I"../../include"
+CFLAGS += -I"../../include"
 
 objects = directory_entry.o directory.o $(extobjects)
 

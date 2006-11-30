@@ -1,26 +1,24 @@
 #CC = gcc
-CFLAGS = -O2 -ffreestanding -nostdinc -nostdlib -nostartfiles 
-CXX = g++
-CXXFLAGS = -O2 -ffreestanding -nostdinc -nostdlib -nostartfiles 
+#CXX = g++
 #LD = ld
+CFLAGS = -O2 -ffreestanding -nostdinc -nostdlib -nostartfiles 
+CXXFLAGS = -O2 -nostdinc -nostdlib -nostartfiles -fno-rtti -fno-exceptions -D CPLUSPLUS
 AS = nasm
 ASFLAGS = -f elf
-
 
 export CC CFLAGS CXX CXXFLAGS LD AS ASFLAGS
 
 .SUFIXXES: # delete the default suffixes
 
-
+%.o : %.cpp
+	$(CXX) -c $(CXXFLAGS) -s $< -o $@ 
 
 %.o : %.c
-	$(CC) -c $(CPPFLAGS) $(CFLAGS) -s $< -o $@
+	$(CC) -c $(CFLAGS) -s $< -o $@
 
 %.o : %.s
 	$(AS) $(ASFLAGS) $<
 
-%.o : %.cpp
-	$(CXX) -c $(CPPFLAGS) $(CXXFLAGS) -s $< -o $@ 
 
 subdirs = tools lib drivers services programs doc 
 

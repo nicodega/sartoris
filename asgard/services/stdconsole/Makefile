@@ -1,6 +1,6 @@
 include ../../include/dep_rule.mk
 
-CPPFLAGS += -I"../../include"
+CFLAGS += -I"../../include"
 #CFLAGS =  -O0 -ffreestanding -nostdinc -nostdlib -nostartfiles 
 
 objects = console_entry.o console.o consolestddev.o $(extobjects)
