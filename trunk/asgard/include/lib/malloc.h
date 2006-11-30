@@ -30,12 +30,19 @@ struct mem_desc{
   struct mem_desc *next;
 };
 
+#ifdef CPLUSPLUS
+extern "C" {
+#endif
+
 void *malloc(size_t size);
 void *calloc(size_t nelem, size_t elsize);
 void free(void *ptr);
 void init_mem(void *buffer, unsigned int size);
 void close_malloc_mutex();
-
 unsigned int free_mem();
+
+#ifdef CPLUSPLUS
+}
+#endif
 
 #endif

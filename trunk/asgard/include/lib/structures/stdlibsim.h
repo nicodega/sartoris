@@ -22,6 +22,7 @@
 
 #ifndef WIN32DEBUGGER
 typedef int size_t;
+typedef unsigned int uint_t;
 
 void *memcpy( void *to, const void *from, size_t count );
 void *memmove (unsigned char *dest, unsigned char *src, size_t n);

@@ -1,6 +1,6 @@
 include ../../include/dep_rule.mk
 
-CPPFLAGS += -I"../../include"
+CFLAGS += -I"../../include"
 
 objects = ofsservice.o bitmaparray.o bitmaps.o cached_devices.o changeatt.o close.o create_file.o chardevrw.o \
 		delete.o device_locking.o devices.o dir_parser.o filebuffers-shared.o fileinfo.o flush.o \

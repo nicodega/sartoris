@@ -49,6 +49,7 @@ char *tty[8] = {	"/dev/tty0",
 			"/dev/tty7"};
 
 extern int main(int, char**);
+int _exit(int ret);
 
 extern void __end_dtors();
 extern void __start_dtors();
@@ -100,7 +101,7 @@ void __procinit(struct init_data *initd)
 
 		if(read_mem(init_cmd.cl_smo, 0, s, ln))
 		{
-			exit(-1);
+			_exit(-1);
 		}
 		
 		// parse arguments from command line
@@ -119,7 +120,7 @@ void __procinit(struct init_data *initd)
 		struct map_params map_params;
 		if(read_mem(init_cmd.map_smo, 0, sizeof(struct map_params), &map_params))
 		{
-			exit(-1);
+			_exit(-1);
 		}
 		if(map_params.mapstdin) map_std(&stdin, &map_params.stdin);
 		if(map_params.mapstdout) map_std(&stdout, &map_params.stdout);
@@ -141,32 +142,36 @@ void __procinit(struct init_data *initd)
   	// call main function
 	int ret = main(argc, args);
 
-	// invoke static C++ destructors
-	void (*dtor)() = __start_dtors;
+	// invoke static C++ destructors (on reverse order)
+	void (*dtor)() = __end_dtors;
 
-	while((unsigned int)dtor != (unsigned int)__end_dtors)
+	dtor--;
+
+	while((unsigned int)dtor != (unsigned int)__start_dtors)
 	{ 
 		dtor(); 
-		dtor++;
+		dtor--;
 	}
+	dtor();
 
-	exit(ret);
+	_exit(ret);
 }
 
-int exit(int ret) {
-  struct pm_msg_finished finished;
-  
-  fclose(&stdin);
-  fclose(&stdout);
-  fclose(&stderr);
+int _exit(int ret) 
+{
+	struct pm_msg_finished finished;
 
-  close_malloc_mutex();
+	fclose(&stdin);
+	fclose(&stdout);
+	fclose(&stderr);
 
-  finished.pm_type = PM_TASK_FINISHED;
-  finished.req_id = 0;
-  finished.ret_value = ret;
+	close_malloc_mutex();
 
-  send_msg(PMAN_TASK, PMAN_COMMAND_PORT, &finished);
-  
-  for(;;) { reschedule(); }
+	finished.pm_type = PM_TASK_FINISHED;
+	finished.req_id = 0;
+	finished.ret_value = ret;
+
+	send_msg(PMAN_TASK, PMAN_COMMAND_PORT, &finished);
+
+	for(;;) { reschedule(); }
 }

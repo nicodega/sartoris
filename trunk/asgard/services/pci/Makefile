@@ -1,6 +1,6 @@
 include ../../include/dep_rule.mk
 
-CPPFLAGS += -I"../../include" 
+CFLAGS += -I"../../include" 
 
 objects = helpers.o pci_srv.o pci_commands.o pcienum.o  $(extobjects)
 

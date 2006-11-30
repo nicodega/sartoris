@@ -1,6 +1,6 @@
 include ../../include/dep_rule.mk
 
-CPPFLAGS += -I"../../include" 
+CFLAGS += -I"../../include" 
 
 objects = pipes_entry.o pipes_srv.o commands.o preadgen.o pwritegen.o $(extobjects)
 
