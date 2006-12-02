@@ -1,0 +1,45 @@
+[0.6.0] - Prerelease 8
+	- Fixed smos implementation with paging.
+	- Fixed offset increment on smos when reading or writing.
+	- Changed memory layout.
+
+[0.6.0] - Prerelease 7
+	- New syscalls: get_current_thread, get_current_task, get_last_int
+	- Paging support for x86 is partially implemented!
+	- Created specific int-handling system calls. Threading and interrupt
+          handling are orthogonal now.
+        - Moved the interrupt stack to the arch-independent section.
+          (to do: interrupt privileges and in-kernel PIC handling)
+        - Modified privilege system, removing types PRC_TSK and SRV_TSK. Now
+          the microkernel keeps an integer privilege level per-task, with
+          zero being most privileged. Tasks of levels 0 and 1 have access to 
+          the input-output space (in current implementations). Some system 
+          calls are restricted to levels 0 and 1. Levels from 2 to [integer 
+          size] may be used by the operating system to represent additional
+          rings of protection.
+        - Threading and messaging permissions may be set on a per-task basis,
+          and using privilege levels (here is where the levels beyond 2 may
+          be of use). 
+        - IMPORTANT NOTE: All threads with privilege levels 0 or 1 start
+          with the interrupt flag cleared under i386. Set it when it is
+          necessary or your services will lock up the machine. [It's done this
+          way to ease the implementation of interrupt handlers.]
+
+[0.5.3] - Included new boot sector, we can load from any primary partition
+          within the first ~500 MB of any BIOS addressable hard disk as well
+          as from a floppy. It uses DOS partitioning, set partition type to
+          0xd0. The bootable flag is, well, disregarded.
+
+[0.5.2] - Moved Oblivion out of the Sartoris tree. 
+        - Redesigned Makefiles to use an inherited compile enviroment.
+        - Tested gcc 3.0.1. It works fine.
+        - Implemented automatic dependency generation. See "make dep".
+        - Added a new architecture: Li386emu. This is an attempt to emulate
+          an i386-like architecture inside of a Linux process.
+ 
+[0.5.1] - Lots of security enhancements in the kernel. 
+        - Fix to IRQ_DRIVEN threads, now exceptions can be driven.
+        - Minor enhancements and bugfixes to Oblivion.
+
+[0.5.0] - Sartoris intial release, with Oblivion 0.01 included.
+        - This is what went to the Computer Organization II people. 
