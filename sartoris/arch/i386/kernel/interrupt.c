@@ -16,47 +16,64 @@
 struct seg_desc idt[MAX_IRQ];
 
 int exc_error_code;
+extern unsigned int int7_handler[2];
 
-int arch_create_int_handler(int number) {
-  unsigned int ep;
-  
-  if (number >= MAX_IRQ) { return -1; }
+int arch_create_int_handler(int number) 
+{
+	unsigned int ep;
 
-  ep = idt_call_table[number];
-  idt[number].dword0 = (KRN_CODE << 16) | (ep & 0xffff);
-  idt[number].dword1 = (ep & 0xffff0000) | DESC_DPL(0) | IRQ_GATE_32 | 0x800;
-  
-  if ( (number > 31) && (number < 48) ) {
-    /* enable the line in the pic */
-    number -= 32;
-    if (0 <= number && number < 8) {
-      enable_int_master(number);
-    } else {
-      if (8 <= number && number < 16 && number != 9) { 
-	enable_int_slave(number-8);
-      }
-    }
-  }
-  return 0;
+	if (number >= MAX_IRQ) { return -1; }
+
+#ifdef FPU_MMX
+	/* This will be handled by us, sory. */
+	if(number == 7){return -1;}
+#endif
+
+	ep = idt_call_table[number];
+	idt[number].dword0 = (KRN_CODE << 16) | (ep & 0xffff);
+	idt[number].dword1 = (ep & 0xffff0000) | DESC_DPL(0) | IRQ_GATE_32 | 0x800;
+
+	if ( (number > 31) && (number < 48) ) 
+	{
+		/* enable the line in the pic */
+		number -= 32;
+		if (0 <= number && number < 8) 
+		{
+			enable_int_master(number);
+		} 
+		else 
+		{
+			if (8 <= number && number < 16 && number != 9) 
+			{ 
+				enable_int_slave(number-8);
+			}
+		}
+	}
+	return 0;
 }
 
-int arch_destroy_int_handler(int number) {
+int arch_destroy_int_handler(int number) 
+{
+	if (number >= MAX_IRQ) { return -1; }
+
+	if ( (number > 31) && (number < 48) ) 
+	{
+		/* disable the line in the pic */
+		number -= 32;
+		if (0 <= number && number < 8) 
+		{
+			disable_int_master(number);
+		} 
+		else 
+		{
+			if (8 <= number && number < 16 && number != 9) 
+			{ 
+				disable_int_slave(number-8);
+			}
+		}
+	}
   
-  if (number >= MAX_IRQ) { return -1; }
-  
-  if ( (number > 31) && (number < 48) ) {
-    /* disable the line in the pic */
-    number -= 32;
-    if (0 <= number && number < 8) {
-      disable_int_master(number);
-    } else {
-      if (8 <= number && number < 16 && number != 9) { 
-	disable_int_slave(number-8);
-      }
-    }
-  }
-  
-  return 0;
+	return 0;
 }
 
 void init_interrupts() 
@@ -65,7 +82,6 @@ void init_interrupts()
 	unsigned int l_desc[2];
 
 	/* set up default exception handlers */
-
 	for (i=0; i<32; i++) 
 	{
 		/* REMOVE THIS, IS IN ORDER TO FORCE BOCHS TO STOP ON GPF FOR DEBUGGING */
@@ -87,10 +103,11 @@ void init_interrupts()
 
 }
 
-static void hook_irq(int irq, int thread_id, int dpl) {
-  unsigned int ep;
-  
-  ep = idt_call_table[irq];
-  idt[irq].dword0 = (KRN_CODE << 16) | (ep & 0xffff);
-  idt[irq].dword1 = (ep & 0xffff0000) | DESC_DPL(dpl) | IRQ_GATE_32 | 0x800;
+static void hook_irq(int irq, int thread_id, int dpl) 
+{
+	unsigned int ep;
+
+	ep = idt_call_table[irq];
+	idt[irq].dword0 = (KRN_CODE << 16) | (ep & 0xffff);
+	idt[irq].dword1 = (ep & 0xffff0000) | DESC_DPL(dpl) | IRQ_GATE_32 | 0x800;
 }

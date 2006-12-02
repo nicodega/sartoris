@@ -3,8 +3,7 @@
 
 
 /* configuration for i386 platform */
-
-#define PAGING
+#define PAGING         // remember to define or comment the define on state_switch.s
 #define COMPAT_REL53
 
 /* end of configuration options */

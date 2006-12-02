@@ -5,7 +5,7 @@
 
 /* system tables macros */
 
-#define GDT_ENT (SYS_DESC + MAX_SCA + MAX_TSK + MAX_THR)
+#define GDT_ENT (SYS_DESC + MAX_SCA + MAX_TSK + 1)
 
 #define LDT_ENT 3 		/* <- shouldn't this be 2? */
 #define LDT_SIZE (LDT_ENT * sizeof(struct seg_desc))
@@ -47,15 +47,15 @@
 
 #define G_DW0_SELECTOR(x) ((unsigned int)x << 16)
 
-struct seg_desc {
-  int dword0;
-  int dword1;
+struct seg_desc 
+{
+	int dword0;
+	int dword1;
 };
 
 
 void init_desc_tables();
-void init_tss_desc(int id);
-void inv_tss_desc(int id);
+void init_tss_desc();
 void hook_syscall(int num, int dpl, void *ep, unsigned int nparams);
 void build_ldt(int task_num, void *mem_adr, unsigned int size, int type);
 void init_ldt_desc(int task_num, int type);

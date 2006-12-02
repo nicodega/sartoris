@@ -163,7 +163,7 @@
    163                                  bits 32
    164                                  
    165                                  ;; . <-- this is the entry point (And also this is possition 0 on the kernel img.)
-   166                                  ep:
+   166                                  _start: 
    167                                  	;; check we where loaded by a multiboot loader
    168 00000030 3D02B0AD1B              	cmp eax, MULTIBOOTH_MAGIC
    169 00000035 0F8593000000            	jne near die							;; if not loaded by a multiboot loader, die!
@@ -275,8 +275,8 @@
    275 000000EA [D020]1000              	dw (gdt + (image_phys_pos & 0x0000FFFF)), (image_phys_pos >> 16)
    276                                  	
    277                                  _idt_pseudo_descr:	
-   278 000000EE 0000                    	dw 0x0000		; interrupts will be desabled until 
-   279 000000F0 00000000                	dw 0x0000, 0x0000	; the real system tables are ready.
+   278 000000EE 0000                    	dw 0x0000           ; interrupts will be desabled until 
+   279 000000F0 00000000                	dw 0x0000, 0x0000   ; the real system tables are ready.
    280                                  	
    281                                  	
    282 000000F4 00<rept>                times (512-($-$$)) db 0x0 	;; fill with 0's

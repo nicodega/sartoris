@@ -37,7 +37,7 @@
 bits 32
 
 ;; . <-- this is the entry point (And also this is possition 0 on the kernel img.)
-ep:
+_start: 
 	;; check we where loaded by a multiboot loader
 	cmp eax, MULTIBOOTH_MAGIC
 	jne near die							;; if not loaded by a multiboot loader, die!
@@ -149,8 +149,8 @@ _gdt_pseudo_descr:
 	dw (gdt + (image_phys_pos & 0x0000FFFF)), (image_phys_pos >> 16)
 	
 _idt_pseudo_descr:	
-	dw 0x0000		; interrupts will be desabled until 
-	dw 0x0000, 0x0000	; the real system tables are ready.
+	dw 0x0000           ; interrupts will be desabled until 
+	dw 0x0000, 0x0000   ; the real system tables are ready.
 	
 	
 times (512-($-$$)) db 0x0 	;; fill with 0's

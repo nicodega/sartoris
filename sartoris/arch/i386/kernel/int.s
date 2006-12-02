@@ -19,6 +19,7 @@ global exceptions_call_table
 global int_code_start
 global int_run
 
+global int7_handler
 global int_33
 		
 extern exc_error_code
@@ -31,6 +32,8 @@ extern k_scr_hex
 extern arch_dump_cpu	
 extern curr_thread
 extern curr_task
+
+extern arch_detected_mmxfpu
 
 %define KRN_DATA 0x10
 	
@@ -77,6 +80,10 @@ extern curr_task
 	jmp int_run
 %endmacro
 
+int7_handler    ;; idt descriptor for the handler
+	dd 0
+	dd 0
+	
 int_code_start:
 	
 int_0:  int_hook 0		; divide error
@@ -283,11 +290,6 @@ inv_opc:
 	pushf
 	mov esi, inv_opc_msg
 	jmp exceptional_death
-no_copro:
-	pusha
-	pushf
-	mov esi, no_copro_msg
-	jmp exceptional_death
 dbl_fault:
 	pusha
 	pushf
@@ -343,7 +345,43 @@ simd_ext:
 	pushf
 	mov esi, simd_ext_msg
 	jmp exceptional_death
-		
+	
+	
+;; since we implemented software task switching and
+;; mmx fpu support, this exception will be handled first by us
+no_copro:
+	pusha
+	pushf
+	push ds
+	push es
+	
+	mov ecx, KRN_DATA
+	mov ds, ecx
+	mov es, ecx
+	
+	;; Someone used the FPU or it does not exist?
+	;; FIXME: We could try an mmx or fpu instruction 
+	;; ourserlves and decide on that... for now
+	;; I'll asume EVERYONE has an fpu.
+
+	call arch_detected_mmxfpu
+	cmp eax, 0
+	jz no_copro_end
+	
+	;; no mmx/fpu support
+	;; raise kernel exception	
+	mov esi, simd_ext_msg
+	jmp exceptional_death
+	
+no_copro_end:
+	pop es
+	pop ds
+	popf
+	popa
+	iret
+	
+	
+	
 	
 exceptional_death:
 
