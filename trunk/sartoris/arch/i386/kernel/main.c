@@ -15,6 +15,7 @@
 #include "interrupt.h"
 #include "descriptor.h"
 #include "paging.h"
+#include "caps.h"
 
 /* init_cpu initializes de system gdt (desc 0-3 are system desc: [dummy, 
  * kcode, kdata, himem]) and creates the init service.
@@ -25,7 +26,7 @@ void create_syscall_gates(void);
 
 void arch_init_cpu(void) 
 {
-	/* remap the interrupts */
+	/* remap the interrupts                               */
 	reprog_pics();
 
 	/* initialize gdt                                     */
@@ -34,7 +35,10 @@ void arch_init_cpu(void)
 	/* initialize system call gates                       */
 	create_syscall_gates();
 
-	/* idt initialization */
+	/* Find out current machine capabilities              */
+	arch_caps_init();
+
+	/* idt initialization                                 */
 	init_interrupts();
 
 	create_init_task();  
