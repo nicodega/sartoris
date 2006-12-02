@@ -22,7 +22,8 @@ pt_entry kern_ptable[0x400]  __align(PG_SIZE) ;
 /* one page directory base for each task */
 pd_entry *tsk_pdb[MAX_TSK];
 
-void init_paging() {
+void init_paging() 
+{
   pt_entry *ptab_ptr;
   pd_entry *pdir_ptr;
   unsigned int linear;

@@ -2,7 +2,7 @@ objects = ../../../mk/kimg.o cpu-arch.o scr-print.o
 
 fill = ../../../utils/fill
 
-cpu_objects = main.o task.o descriptor.o thread.o tss.o interrupt.o paging.o memory.o cpu-asm.o syscall-gates.o int.o pic.o
+cpu_objects = main.o task.o descriptor.o thread.o tss.o interrupt.o paging.o memory.o cpu-asm.o syscall-gates.o int.o pic.o state_switch.o
 
 prt_objects = print.o vga.o
 
@@ -14,7 +14,7 @@ CPPFLAGS += -I"../../../include/" -I"../include"
 	@echo making deps for $< ...
 	@gcc -E -MD $(CPPFLAGS) $< > /dev/null 
 
-all : kimg kelf
+all : kimg 
 
 kimg : $(objects)
 	$(LD) $(objects) --oformat binary -Ttext 0x0000000 -e 0x00000000 \

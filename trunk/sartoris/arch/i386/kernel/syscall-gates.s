@@ -126,12 +126,6 @@ destroy_thread_c:
 	mov edx, 1
 	call do_syscall
 	retf 4
-	
-run_thread_c:
-	mov ecx, run_thread
-	mov edx, 1
-	call do_syscall
-	retf 4
 
 set_thread_run_perm_c:
 	mov ecx, set_thread_run_perm
@@ -291,6 +285,12 @@ mem_size_c:
 	call do_syscall
 	retf 4
 
+run_thread_c:
+	mov ecx, run_thread
+	mov edx, 1
+	call do_syscall
+	retf 4
+	
 			
 do_syscall:
 	push ebp
