@@ -12,6 +12,7 @@
 #include "kernel-arch.h"
 #include "interrupt.h"
 #include "descriptor.h"
+#include "caps.h"
 
 struct seg_desc idt[MAX_IRQ];
 
@@ -26,7 +27,10 @@ int arch_create_int_handler(int number)
 
 #ifdef FPU_MMX
 	/* This will be handled by us, sory. */
-	if(number == 7){return -1;}
+	if(number == 7 && arch_has_cap_or(SCAP_MMX | SCAP_FPU | SCAP_SSE | SCAP_SSE2 | SCAP_FXSR))
+	{
+		return -1;
+	}
 #endif
 
 	ep = idt_call_table[number];

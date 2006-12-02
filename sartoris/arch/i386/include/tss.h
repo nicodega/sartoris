@@ -40,7 +40,8 @@ struct tss
 	unsigned int io_map;
 };
 
-#define SFLAG_MMXFPU            0x1
+#define SFLAG_MMXFPU            0x1     // thread used MMX/FPU/SSE
+#define SFLAG_MMXFPU_STORED     0x2     // thread has olready used MMX FU o SSE once
 
 /* Now we use a custom state management structure for threads  */
 struct thr_state

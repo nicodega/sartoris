@@ -34,6 +34,7 @@ extern curr_thread
 extern curr_task
 
 extern arch_detected_mmxfpu
+extern caps_exception
 
 %define KRN_DATA 0x10
 	
@@ -55,19 +56,7 @@ extern arch_detected_mmxfpu
 
 	;; the flags have not been saved!
 	;; (don't touch them)
-	
-	;; this was incredibly horrible:
 
-;	mov eax, [esp+4]
-;	mov [esp+8], eax
-;	mov eax, [esp]
-;	mov [esp+4], eax
-;	pop eax
-;	pop eax
-;	pop ds
-	
-	;; now it is just plain awful.	
-	
 	mov eax, [esp]
 	mov [esp+8], eax
 	pop eax
@@ -339,7 +328,7 @@ machine_check:
 	pusha
 	pushf	
 	mov esi, machine_check_msg
-	jmp exceptional_death
+	jmp exceptional_death		
 simd_ext:
 	pusha
 	pushf
@@ -359,18 +348,20 @@ no_copro:
 	mov ds, ecx
 	mov es, ecx
 	
-	;; Someone used the FPU or it does not exist?
-	;; FIXME: We could try an mmx or fpu instruction 
-	;; ourserlves and decide on that... for now
-	;; I'll asume EVERYONE has an fpu.
+	call caps_exception
+	cmp eax, 1
+	je no_copro_present
+	cmp eax, 2
+	je no_copro_end
 
 	call arch_detected_mmxfpu
 	cmp eax, 0
 	jz no_copro_end
-	
+no_copro_present:
+
 	;; no mmx/fpu support
 	;; raise kernel exception	
-	mov esi, simd_ext_msg
+	mov esi, no_copro_msg
 	jmp exceptional_death
 	
 no_copro_end:

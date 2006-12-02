@@ -10,6 +10,8 @@ extern global_tss
 extern stacks
 extern curr_thread
 
+extern arch_caps
+
 ;;
 ;; In order not to perform an mmx/fpu preservation always
 ;; because its costs us much, we will do as intel tells us.
@@ -20,6 +22,8 @@ extern curr_thread
 
 %define SFLAG_MMXFPU       0x1
 %define NOT_SFLAG_MMXFPU   0xFFFFFFFE
+%define SFLAG_SSE          0xE0       ;; SSE, SSE2 and SSE3
+%define SFLAG_MMXFPU_STORED     0x2
 %define CR0_TS             0x8
 
 ;; Now we use a custom state management structure for threads  
@@ -88,10 +92,17 @@ arch_switch_thread:
 	and eax, SFLAG_MMXFPU
 	jz _no_mmx_fpu_used	
 	
+	;; check for fxsave/fxrstor support
+	mov eax, [arch_caps]
+	and eax, 0x10					;; this is SCAP_FXSR
+	jz no_fxsave
 	fxsave [ecx + thr_state.mmx]
-	
+	jmp mmx_save_cont
+no_fxsave
+	fsave [ecx + thr_state.mmx]
 	;; clear the flag so nex time we wont preserve MMX/FPU
 	;; unless the thread uses them
+mmx_save_cont:
 	and dword [ecx + thr_state.sflags], NOT_SFLAG_MMXFPU
 	
 _no_mmx_fpu_used:
@@ -199,6 +210,14 @@ _first_time:
 	;; set eip to _dummy_eip so we never fall here again
 	mov dword [ecx + thr_state.eip], _dummy_eip
 	
+	;; load initial mxcsr if SSE is present
+	;; only for the first time
+	mov eax, [ecx + thr_state.sflags]
+	and eax, SFLAG_SSE
+	jz no_sse
+	xor eax, eax
+	ldmxcsr [arch_caps + 16]
+no_sse:	
 	;; simulate inter privilege callf
 	;; stack should be like this (grows down):
 	;;   _____
@@ -230,7 +249,18 @@ arch_detected_mmxfpu:
 
 	mov eax, 1
 %ifdef FPU_MMX
+	mov eax, [ecx + thr_state.sflags]
+	and eax, SFLAG_MMXFPU_STORED 
+	jz arch_detected_mmxfpu_never_used
+	;; Check fxrstor support
+	mov eax, [arch_caps]
+	and eax, 0x10					;; this is SCAP_FXSR
+	jz no_fxrstor
 	fxrstor [ecx + thr_state.mmx]	
+	jmp arch_detected_mmxfpu_cont
+no_fxrstor:
+	frstor  [ecx + thr_state.mmx]
+arch_detected_mmxfpu_cont:
 	or dword [ecx + thr_state.sflags], SFLAG_MMXFPU
 	clts				;; clear ts flag so we dont 
 						;; generate any more interrupts	
@@ -240,3 +270,12 @@ arch_detected_mmxfpu:
 %endif
 	xor eax, eax
 	ret
+%ifdef FPU_MMX
+arch_detected_mmxfpu_never_used:
+	or dword [ecx + thr_state.sflags], SFLAG_MMXFPU_STORED        ;; next time we will load FPU/MMX/SSE state 
+	xor eax, eax
+	ret	
+%endif
+
+
+
