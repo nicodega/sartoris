@@ -337,7 +337,7 @@ simd_ext:
 	
 	
 ;; since we implemented software task switching and
-;; mmx fpu support, this exception will be handled first by us
+;; mmx fpu sse support, this exception will be handled first by us
 no_copro:
 	pusha
 	pushf
