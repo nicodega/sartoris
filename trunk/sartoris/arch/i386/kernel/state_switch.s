@@ -185,7 +185,7 @@ _no_mmx_fpu_used:
 	mov esi, [ecx + thr_state.esi]
 	mov edi, [ecx + thr_state.edi]
 	
-	;; load eflags register now end return happily
+	;; load eflags register now 
 	mov eax, [ecx + thr_state.eflags]
 	push eax
 	popf
@@ -266,9 +266,8 @@ arch_detected_mmxfpu_cont:
 						;; generate any more interrupts	
 						;; until we switch and someone uses
 						;; MMX or FPU
-	
-%endif
 	xor eax, eax
+%endif
 	ret
 %ifdef FPU_MMX
 arch_detected_mmxfpu_never_used:
