@@ -77,7 +77,6 @@ arch_switch_thread:
 	mov edx, [ebp+12]			;; now edx contains cr3 for new thread
 	
 	;; preserve segment selectors (es and ds wont be saved, for they are loaded with kernel selectors)
-	mov [ecx + thr_state.ds], eax
 	mov eax, fs
 	mov [ecx + thr_state.fs], eax
 	mov eax, gs
@@ -173,11 +172,11 @@ _no_mmx_fpu_used:
 %endif		
 	
 	;; restore segments (no problem again, since we are on kernel segments)
-	mov [ecx + thr_state.fs], eax
+	mov eax, [ecx + thr_state.fs]
 	mov fs, eax
-	mov [ecx + thr_state.gs], eax
+	mov eax, [ecx + thr_state.gs]
 	mov gs, eax
-	mov [ecx + thr_state.ss], eax
+	mov eax, [ecx + thr_state.ss]
 	mov ss, eax
 	
 	;; restore general purpose registers 
@@ -195,11 +194,11 @@ _no_mmx_fpu_used:
 	mov eax, [ecx + thr_state.esp]
 	mov esp, eax	
 
-;; Now, since we have implemented software thread switching
+    ;; Now, since we have implemented software thread switching
 	;; by using retf, we will inject on stack0 a virtual call to
 	;; callf, as if arch_switch_thread had been called with callf
 	;; and retf instead of ret
-	;; NOTE: This will only happen once
+	;; NOTE: This will only happen first time the thread is runned
 	cmp dword [ecx + thr_state.eip], _dummy_eip
 	jne _first_time
 _dummy_eip:
