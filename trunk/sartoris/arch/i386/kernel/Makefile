@@ -17,8 +17,7 @@ CPPFLAGS += -I"../../../include/" -I"../include"
 all : kimg 
 
 kimg : $(objects)
-	$(LD) $(objects) --oformat binary -Ttext 0x0000000 -e 0x00000000 \
--Map kernel.map -o kimg
+	$(LD) $(objects) --oformat binary -Ttext 0x0000000 -e 0x00000000 -Map kernel.map -o kimg
 	$(fill) kimg -m 512
 
 kelf : $(objects)

@@ -41,6 +41,9 @@ void arch_init_cpu(void)
 	/* idt initialization                                 */
 	init_interrupts();
 
+	/* Initialize global tss */
+	arch_init_global_tss();
+
 	create_init_task();  
   
 #ifdef PAGING

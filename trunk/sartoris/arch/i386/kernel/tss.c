@@ -17,11 +17,12 @@ struct thr_state thr_states[MAX_THR];
 unsigned char stacks[MAX_THR][STACK0_SIZE];
 extern pd_entry *tsk_pdb[MAX_TSK];
 struct tss global_tss;
+struct thr_state *curr_state; // current state loaded
 
 /* Must be issued upon initialization */
 void arch_init_global_tss()
 {
-	init_tss_desc();
+	int desc = init_tss_desc();
 
 	global_tss.back_link = 0;
 	global_tss.ss0 = KRN_DATA_SS;
@@ -31,9 +32,21 @@ void arch_init_global_tss()
 	global_tss.ss2 = 0;
 	global_tss.esp2 = 0;
 	global_tss.io_map = 0;
+	curr_state = thr_states;    // first state on system will be the bogus task one
 
-	/* Load global task state segment */
-	__asm__ __volatile__ ("ltr %0" :: "m" (global_tss));
+	/* 
+	Set thr_states[0] sflags to 0, so mmx/fpu state
+	for dummy task is not preserved!
+	*/
+	curr_state->sflags = 0;
+
+	/* Load global task state segment descriptor */
+	__asm__ __volatile__ (
+	"movw %0, %%ax\n\t"
+	/* Shift the selector by 3 */
+	"shlw $3, %%ax\n\t"   
+	"ltr %%ax"
+	:: "m" (desc));
 }
 
 void build_tss(int id, int task_num, int priv, void *ep, void *stack) 
@@ -42,7 +55,13 @@ void build_tss(int id, int task_num, int priv, void *ep, void *stack)
 	thr_states[id].eip = (unsigned int)ep;
 	thr_states[id].ldt_sel = ((GDT_LDT + task_num) << 3);
 	thr_states[id].gs = 0;
-	thr_states[id].esp = (unsigned int)stack;  
+	/* esp will be initially, those on our stack 0 */
+	thr_states[id].esp = (unsigned int)(&stacks[id][0]) + STACK0_SIZE - 4;  
+	/* 
+	ebp will initially be set to the thread stack, upon
+	first preservation of state, i'll be set to current
+	stack0 ebp.
+	*/
 	thr_states[id].ebp = (unsigned int)stack;
 
 	if (priv==0) 
