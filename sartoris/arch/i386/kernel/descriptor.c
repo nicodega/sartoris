@@ -44,7 +44,6 @@ void init_desc_tables()
 
 	/* new gdt load */
 	l_desc[0] = ( GDT_ENT * sizeof(struct seg_desc) + ((((unsigned int) gdt) & 0xffff) << 16) );
-
 	l_desc[1] = (unsigned int) gdt >> 16;
 
 	__asm__ ("lgdt %0" : : "m"(*l_desc) );
@@ -115,7 +114,7 @@ void inv_ldt_desc(int task_num)
 }
 
 /* Initialize global TSS descriptor on GDT */
-void init_tss_desc() 
+int init_tss_desc() 
 {
 	int i;
 	unsigned int tss_adr;
@@ -126,6 +125,8 @@ void init_tss_desc()
 	tss_adr = (unsigned int) &global_tss;
 	gdt[GDT_TSS].dword0 = D_DW0_BASE(tss_adr) + D_DW0_LIMIT(sizeof(struct tss));
 	gdt[GDT_TSS].dword1 = D_DW1_BASE(tss_adr) + D_DW1_LIMIT(sizeof(struct tss)) + perms;
+
+	return GDT_TSS;
 }
 
 void hook_syscall(int num, int dpl, void *ep, unsigned int nparams) 

@@ -8,7 +8,7 @@ global arch_detected_mmxfpu
 extern thr_states
 extern global_tss
 extern stacks
-extern curr_thread
+extern curr_state
 
 extern arch_caps
 
@@ -61,28 +61,22 @@ arch_switch_thread:
 	push ebp
 	mov ebp, esp
 		
-	;; Preserve current thread state	
+	;; Preserve current thread state
 
-	;; I want bochs to stop here ;;
-	xchg bx,bx
-	
 	;; ds:ecx will contain thread state 
 	;; mov eax,[ecx + thr_state.xxxx]
-	mov eax, THR_STATE_SIZE
-	mul dword [curr_thread]			
-	add eax, thr_states
-	mov ecx, eax					;; now ecx contains &thr_states[curr_thr]
+	mov ecx, [curr_state]					;; now ecx contains &thr_states[thread last switched]
 	
 	;; edx will contain cr3 for new thread
 	mov edx, [ebp+12]			;; now edx contains cr3 for new thread
 	
 	;; preserve segment selectors (es and ds wont be saved, for they are loaded with kernel selectors)
+	;; ss wont be preserved, because it was already preserved on far call to interrupt or run thread
+	;; anyway, we don't need it, because we are on stack0
 	mov eax, fs
 	mov [ecx + thr_state.fs], eax
 	mov eax, gs
 	mov [ecx + thr_state.gs], eax
-	mov eax, ss
-	mov [ecx + thr_state.ss], eax
 	
 	;; preserve MMX/FPU
 %ifdef FPU_MMX
@@ -165,35 +159,25 @@ _no_mmx_fpu_used:
 	mul dword [ebp+8]           
 	add eax, thr_states
 	mov ecx, eax               ;; now ecx contains &thr_states[id]
-
+	mov [curr_state], ecx      ;; update curr_state to the new one
+	
 	;; restore ldt (no problem again, since we are on kernel segments)
 %ifndef DONT_LDT_SWITCH
 	lldt [ecx + thr_state.ldt_sel]
 %endif		
 	
 	;; restore segments (no problem again, since we are on kernel segments)
+	;; ss wont be restored, because switch happens on stack0
 	mov eax, [ecx + thr_state.fs]
 	mov fs, eax
 	mov eax, [ecx + thr_state.gs]
 	mov gs, eax
-	mov eax, [ecx + thr_state.ss]
-	mov ss, eax
-	
+		
 	;; restore general purpose registers 
 	mov ebx, [ecx + thr_state.ebx]
 	mov esi, [ecx + thr_state.esi]
 	mov edi, [ecx + thr_state.edi]
 	
-	;; load eflags register now 
-	mov eax, [ecx + thr_state.eflags]
-	push eax
-	popf
-
-	;; switch to our old stack0
-	mov ebp, [ecx + thr_state.ebp]
-	mov eax, [ecx + thr_state.esp]
-	mov esp, eax	
-
     ;; Now, since we have implemented software thread switching
 	;; by using retf, we will inject on stack0 a virtual call to
 	;; callf, as if arch_switch_thread had been called with callf
@@ -202,13 +186,23 @@ _no_mmx_fpu_used:
 	cmp dword [ecx + thr_state.eip], _dummy_eip
 	jne _first_time
 _dummy_eip:
+
+	;; switch to our old stack0
+	mov ebp, [ecx + thr_state.ebp]
+	mov eax, [ecx + thr_state.esp]
+	mov esp, eax
+		
+	;; load eflags register now 
+	mov eax, [ecx + thr_state.eflags]
+	push eax
+	popf
 	
 	pop ebp
+			
 	ret
-_first_time:
-	;; set eip to _dummy_eip so we never fall here again
-	mov dword [ecx + thr_state.eip], _dummy_eip
 	
+	
+_first_time:
 	;; load initial mxcsr if SSE is present
 	;; only for the first time
 	mov eax, [ecx + thr_state.sflags]
@@ -217,6 +211,17 @@ _first_time:
 	xor eax, eax
 	ldmxcsr [arch_caps + 16]
 no_sse:	
+
+	;; setup our stack0
+	xor ebp, ebp
+	mov eax, [ecx + thr_state.esp]
+	mov esp, eax
+		
+	;; load eflags register now 
+	mov eax, [ecx + thr_state.eflags]
+	push eax
+	popf
+	
 	;; simulate inter privilege callf
 	;; stack should be like this (grows down):
 	;;   _____
@@ -226,15 +231,21 @@ no_sse:
 	;;  |  eip  |
 	;;  |       | <- esp
 	push dword [ecx + thr_state.ss]
-	push dword 0
+	push dword [ecx + thr_state.ebp]
 	push dword [ecx + thr_state.cs]
 	push dword [ecx + thr_state.eip]
 	
+	;; set eip to _dummy_eip so we never fall here again
+	mov dword [ecx + thr_state.eip], _dummy_eip
+
+	;; first time -> load ds and es
+	mov eax, [ecx + thr_state.es]
+	mov es, eax
+	mov eax, [ecx + thr_state.ds]
+	mov ds, eax
+				
 	retf   ;; God help us!!
-
-
-
-	
+		
 
 ;; This function will be called when an mmx/fpu instruction is issued
 ;; It will be called from Device Not Available Exception

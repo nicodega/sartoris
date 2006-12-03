@@ -12,12 +12,11 @@
 
 #define SYS_DESC 4             	/* dummy, code, data, himem */
 
-#define GDT_SYSCALL SYS_DESC
-#define GDT_LDT (GDT_SYSCALL + MAX_SCA)
-#define GDT_TSS (GDT_LDT + MAX_TSK)
+#define GDT_SYSCALL   SYS_DESC
+#define GDT_LDT       (GDT_SYSCALL + MAX_SCA)
+#define GDT_TSS       (GDT_LDT + MAX_TSK)
 
 /* segment descriptor macros */
-
 #define DESC_32_BIG   0x00c08000
 #define DESC_32_SMALL 0x00408000
 
@@ -55,7 +54,7 @@ struct seg_desc
 
 
 void init_desc_tables();
-void init_tss_desc();
+int init_tss_desc();
 void hook_syscall(int num, int dpl, void *ep, unsigned int nparams);
 void build_ldt(int task_num, void *mem_adr, unsigned int size, int type);
 void init_ldt_desc(int task_num, int type);

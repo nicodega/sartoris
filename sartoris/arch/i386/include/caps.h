@@ -1,4 +1,9 @@
 
+#define SCAP_EFLAGS_ID      0x200000
+
+// AMD extended CPUID 3DNow
+#define CPUID_SCAP_3DNOW    0x80000000
+
 // CPUID FLAGS 1
 #define CPUID_SCAP_FPU      0x1
 #define CPUID_SCAP_DE       0x4
@@ -30,6 +35,7 @@
 #define SCAP_TM2      0x400
 #define SCAP_MSRS     0x800
 #define SCAP_CLFLUSH  0x1000
+#define SCAP_3DNOW    0x2000
 
 // CR4 defines
 #define SCAPS_CR4_TSD        0x4

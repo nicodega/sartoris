@@ -7,14 +7,33 @@ int arch_caps_hascpuid()
 {
 	unsigned int ret = 0;
 
-	__asm__ __volatile__ ("pushf;pushf;pop  %%eax;mov  %%eax, %%ecx;xor  $200000, %%eax;push %%eax;popf;pushf;pop  %%eax;popf;xor %%ecx,%%eax;mov %%eax, %0": "=m" (ret): : "%eax","%ecx");
+	__asm__ __volatile__ (
+		/* is CPUID instruction supported?  */
+		"pushf\n\t"
+		"popl %%eax\n\t"
+		"movl %%eax, %%ecx\n\t"
+
+		/* set ID bit */
+		"xorl %1, %%eax\n\t"
+		"push %%eax\n\t"
+		"popf\n\t"
+
+		/* get EFLAGS (should have ID set) */
+		"pushf\n\t"
+		"popl %%eax\n\t"
+
+		/* compare */
+		"xorl %%ecx, %%eax\n\t"
+		"andl %1,%%eax\n\t"
+		
+		"mov %%eax, %0": "=m" (ret): "i" (SCAP_EFLAGS_ID) : "%eax","%ecx");
 	
 	return ret;
 }
 
 void arch_caps_init()
 {
-	unsigned int flags, flags2;
+	unsigned int flags, flags2, amd_flags;
 
 	arch_caps.caps_tested = 0;
 	arch_caps.flags = 0;
@@ -29,7 +48,52 @@ void arch_caps_init()
 		/*
 			Find out capabilities based on CPUID instruction and CRX registers
 		*/
-		__asm__ __volatile__ ("xorl %%eax, %%eax;cpuid;movl %%eax, %%ebx;cmpl $1, %%ebx;jb _arch_caps_init_cpuid_end;movl $1, %%eax;cpuid;movl %%ebx, %%eax;shrl $16, %%eax;andl $0xFF, %%eax;movl %%eax, %0;movl %%ecx, %1;movl %%edx, %2;_arch_caps_init_cpuid_end:"  : : "m" (arch_caps.cores), "m" (flags), "m" (flags2) : "%eax","%ebx","%edx","%ecx");	
+		__asm__ __volatile__ (
+
+		"xorl %%eax, %%eax\n\t"
+		"cpuid\n\t"
+
+		/* Check if we have AMD or Intel processor */
+		
+		/* Check for Intel */
+		"cmpl $0x756e6547, %%ebx\n\t"
+		"jne notIntel\n\t"
+		"cmpl $0x49656e69, %%edx\n\t"
+		"jne notIntel\n\t"
+		"cmpl $0x6c65746e, %%ecx\n"
+		"jne notIntel\n\t"
+		"jmp cpuIntel\n\t"
+
+		/* Check for AMD */
+		"notIntel:\n\t"
+		"cmpl $0x68747541, %%ebx\n\t"
+		"jne standardCPUID\n\t"
+		"cmpl $0x69746e65, %%edx\n\t"
+		"jne standardCPUID\n\t"
+		"cmpl $0x444d4163, %%ecx\n"
+		"jne standardCPUID\n\t"
+		
+		/* AMD cpu, use extended cpuid for 3DNow! */ 
+		"movl $0x80000001, %%eax\n\t"
+		"cpuid\n\t"
+		"movl %%edx, %3\n\t"
+		
+		/* Standard Intel CPUID */
+		"standardCPUID:\n\t"
+		"cpuIntel:\n\t"
+		/* Try eax=1 */
+		"movl %%eax, %%ebx\n\t"
+		"cmpl $1, %%ebx\n\t"
+		"jb _arch_caps_init_cpuid_end\n\t"
+		"movl $1, %%eax\n\t"
+		"cpuid\n\t"
+		"movl %%ebx, %%eax\n\t"
+		"shrl $16, %%eax\n\t"
+		"andl $0xFF, %%eax\n\t"
+		"movl %%eax, %0\n\t"
+		"movl %%ecx, %2\n\t"
+		"movl %%edx, %1\n\t"
+		"_arch_caps_init_cpuid_end:"  : : "m" (arch_caps.cores), "m" (flags), "m" (flags2), "m" (amd_flags) : "%eax","%ebx","%edx","%ecx");	
 
 	    /* Translate flags */
 		if(flags & CPUID_SCAP_FPU) arch_caps.flags |= SCAP_FPU;
@@ -45,6 +109,7 @@ void arch_caps_init()
 		if(flags2 & CPUID_SCAP_TM2) arch_caps.flags |= SCAP_TM2;
 		if(flags2 & CPUID_SCAP_MSR) arch_caps.flags |= SCAP_MSRS;
 		if(flags2 & CPUID_SCAP_CLFLUSH) arch_caps.flags |= SCAP_CLFLUSH;
+		if(amd_flags & CPUID_SCAP_3DNOW) arch_caps.flags |= (SCAP_3DNOW | SCAP_MMX);
 		
 		/*
 		Setup CR0 and CR4 specifying our caps
