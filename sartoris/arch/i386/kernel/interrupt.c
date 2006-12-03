@@ -27,7 +27,7 @@ int arch_create_int_handler(int number)
 
 #ifdef FPU_MMX
 	/* This will be handled by us, sory. */
-	if(number == 7 && arch_has_cap_or(SCAP_MMX | SCAP_FPU | SCAP_SSE | SCAP_SSE2 | SCAP_FXSR))
+	if(number == 7 && arch_has_cap_or(SCAP_MMX | SCAP_FPU | SCAP_SSE | SCAP_SSE2))
 	{
 		return -1;
 	}
@@ -88,7 +88,6 @@ void init_interrupts()
 	/* set up default exception handlers */
 	for (i=0; i<32; i++) 
 	{
-		/* REMOVE THIS, IS IN ORDER TO FORCE BOCHS TO STOP ON GPF FOR DEBUGGING */
 		idt[i].dword0 = G_DW0_OFFSET((unsigned int) exceptions_call_table[i]) | G_DW0_SELECTOR(0x8);
 		idt[i].dword1 = G_DW1_OFFSET((unsigned int) exceptions_call_table[i]) | IRQ_GATE_32;		
 	}
