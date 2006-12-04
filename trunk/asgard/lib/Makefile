@@ -4,9 +4,9 @@ ASFLAGS = -f elf
 CFLAGS+= -I"../include"
 CXXFLAGS+= -I"../include"
 
-dependencies = sprintf.d printf.d init.d debug.d iolib.d format.d dirlib.d m_malloc.d critical_section.d io.d signals.d new.d
+dependencies = sprintf.d printf.d init.d debug.d iolib.d format.d dirlib.d m_malloc.d critical_section.d io.d signals.d bmalloc.d new.d
 
-baseobjects = proc_entry.o start.o int.o reboot.o scheduler.o sprintf.o printf.o init.o debug.o iolib.o format.o dirlib.o structures parameters.o critical_section.o m_malloc.o pm_malloc.o rawpiolib.o io.o signals.o psignals.o new.o
+baseobjects = proc_entry.o start.o int.o reboot.o scheduler.o sprintf.o printf.o init.o debug.o iolib.o format.o dirlib.o structures parameters.o critical_section.o m_malloc.o pm_malloc.o bmalloc.o rawpiolib.o io.o signals.o psignals.o new.o
 
 all : $(baseobjects) stdlibcpp.o stdlib.o
 	

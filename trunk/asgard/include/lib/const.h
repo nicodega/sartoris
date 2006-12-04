@@ -17,6 +17,11 @@
 *
 */
 
+#ifndef CONSTH
+#define CONSTH
+
+typedef unsigned char BOOL;
+
 #ifndef NULL
 #define NULL (void*)0x00000000
 #endif
@@ -29,3 +34,8 @@
 #define FALSE 0
 #endif
 
+#ifndef PACKED_ATT
+#define PACKED_ATT __attribute__ ((__packed__));
+#endif
+
+#endif

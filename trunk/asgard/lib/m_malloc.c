@@ -21,6 +21,15 @@
 #include <lib/malloc.h>
 #include <lib/const.h>
 
+
+#define TOLERANCE 0 //sizeof(struct mem_desc) + 20
+
+struct mem_desc{
+  int size;
+  struct mem_desc *next;
+};
+
+
 static unsigned int upbound;
 static unsigned int downbound;
 static struct mem_desc *mem_free_first;
@@ -148,10 +157,11 @@ void *ecalloc(size_t nelem, size_t elsize, int zero)
 	
 	m_free_mem -= size;
 
+	ptr = (unsigned char*)((int) i + sizeof(struct mem_desc));
+		
 	/* Zero out memory */
 	if(zero)
 	{
-		ptr = (unsigned char*)((int) i + sizeof(struct mem_desc));
 		for(k=0; k < size;k++){ptr[k]=0;}
 	}
 	return (void *)ptr;
