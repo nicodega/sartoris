@@ -33,10 +33,6 @@
 #include <proc/init_data.h>
 #include <services/pmanager/services.h>
 
-#define PROCINIT_MBUFF_SIZE 4096	// 4kb
-
-char mbuffer[PROCINIT_MBUFF_SIZE];	// this will change when malloc doesn't use 
-									// a fixed buffer
 extern int io_consoleid;
 
 char *tty[8] = {	"/dev/tty0",
@@ -76,7 +72,7 @@ void __procinit(struct init_data *initd)
 	res.ret = STDPROCESSERR_OK;
 
 	// init mem
-	init_mem(mbuffer, PROCINIT_MBUFF_SIZE);
+	init_mem((void*)initd->bss_end, initd->curr_limit);
 
 	dir_set_port(STDPROCESS_DIRLIBPORT);
 
