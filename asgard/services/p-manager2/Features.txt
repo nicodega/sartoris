@@ -27,9 +27,10 @@ Tested:
 	- kmalloc has no bugs
 
 
-Idea: Implementar un servicio de LD que mantenga las librerias cargadas en memoria. Al cargar un programa el PMAN mapea el task al LD 
-y este resuelve todas las referencias (PIC) :D (esto no permite ejecución de llamadas con cambio de privilegio, ese tipo de llamadas
-deberan realizarce en forma asincrona mediante mensajes)
+Idea: Implement an LD service to hold libraries loaded on memory. When process manager loads a task, it maps the process to LD and it resolves PIC references.
+This wont allow privilege level switches, those kind of things must be performed with messages.
+
+
 
 
 

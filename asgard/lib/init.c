@@ -48,8 +48,8 @@ char *tty[8] = {	"/dev/tty0",
 			"/dev/tty6",
 			"/dev/tty7"};
 
-extern int main(int, char**);
-int _exit(int ret);
+extern int main(int, char**)  __attribute__ ((noreturn));
+void _exit(int) __attribute__ ((noreturn));
 
 extern void __end_dtors();
 extern void __start_dtors();
@@ -157,7 +157,7 @@ void __procinit(struct init_data *initd)
 	_exit(ret);
 }
 
-int _exit(int ret) 
+void _exit(int ret) 
 {
 	struct pm_msg_finished finished;
 

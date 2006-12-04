@@ -23,13 +23,6 @@
 #ifndef MALLOCH
 #define MALLOCH
 
-#define TOLERANCE 0 //sizeof(struct mem_desc) + 20
-
-struct mem_desc{
-  int size;
-  struct mem_desc *next;
-};
-
 #ifdef CPLUSPLUS
 extern "C" {
 #endif
@@ -44,5 +37,7 @@ unsigned int free_mem();
 #ifdef CPLUSPLUS
 }
 #endif
+
+extern void _exit(int) __attribute__ ((noreturn));
 
 #endif

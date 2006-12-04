@@ -10,6 +10,9 @@
 #=======================================================================
 romimage: file=bios/BIOS-bochs-latest, address=0xf0000
 
+#comment if you dont want magic breaks
+magic_break: enabled=1
+
 #=======================================================================
 # MEGS
 # set this to the default number of Megabytes of memory you want
