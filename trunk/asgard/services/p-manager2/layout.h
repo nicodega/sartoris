@@ -1,6 +1,4 @@
-/*  
-*   Oblivion tasks and threads layout header
-*   
+/*
 *
 *	Copyright (C) 2002, 2003, 2004, 2005
 *       
@@ -18,6 +16,7 @@
 *
 *
 */
+
 
 /* 
 This used to be a static include. Now it should be only a pman include.

@@ -1,25 +1,42 @@
-
 /*
-Dynamic buffer malloc implementation.
+*
+*	Copyright (C) 2002, 2003, 2004, 2005
+*       
+*	Santiago Bazerque 	sbazerque@gmail.com			
+*	Nicolas de Galarreta	nicodega@gmail.com
+*
+*	
+*	Redistribution and use in source and binary forms, with or without 
+* 	modification, are permitted provided that conditions specified on 
+*	the License file, located at the root project directory are met.
+*
+*	You should have received a copy of the License along with the code,
+*	if not, it can be downloaded from our project site: sartoris.sourceforge.net,
+*	or you can contact us directly at the email addresses provided above.
+*
+*
+*/
+/*
+	Dynamic buffer malloc implementation.
 
-This malloc system will use a chunk aproach. Chunks will have 2MB by default. 
+	This malloc system will use a chunk aproach. Chunks will have 2MB by default. 
 
-We will mantain a variable size buffer, starting at bss end, and ending on max address, reported by pman. The algorithm, 
-will dinamically resize (either shrink o enlarge the buffer), according to memory needs.
+	We will mantain a variable size buffer, starting at bss end, and ending on max address, reported by pman. The algorithm, 
+	will dinamically resize (either shrink o enlarge the buffer), according to memory needs.
 
-- Small allocations, will be taken from a chunk, in a buddy fashion, using powers of 2.
-- Big allocations will be performed by generating larger chunks.
+	- Small allocations, will be taken from a chunk, in a buddy fashion, using powers of 2.
+	- Big allocations will be performed by generating larger chunks.
 
-Sizes considered for buddy will be:  2^6  to MEM_CHUNK_SIZE
+	Sizes considered for buddy will be:  2^6  to MEM_CHUNK_SIZE
 
-MAX DYNAMIC MEMORY POOL SIZE ON THIS IMPLEMENTATION WILL BE ~ 2 GB
+	MAX DYNAMIC MEMORY POOL SIZE ON THIS IMPLEMENTATION WILL BE ~ 2 GB
 
-SOME THINGS ARE REALLY INNEFICIENT... BUT THIS IS MENT TO BE JUST BETTER THAN 
-OUR PREVIOUS MALLOC
+	SOME THINGS ARE REALLY INNEFICIENT... BUT THIS IS MENT TO BE JUST BETTER THAN 
+	OUR PREVIOUS MALLOC
 
-TODO: Make bucket nodes stay on an array somewhere, in order not to page fault
-while searching.
-This will mean 4kb per chunk
+	TODO: Try to reduce page faults made by creating buddies the first time...
+	We could use a bitmap like linux does, this would give us 2 page faults for
+	each chunk, but search for a free buddie will be slower.
 
 */
 
