@@ -11,16 +11,15 @@
 #include "sartoris/kernel.h"
 #include "sartoris/cpu-arch.h"
 #include "sartoris/scr-print.h"
+#include "sartoris/metrics.h"
 #include "lib/message.h"
 #include "lib/shared-mem.h"
 #include "lib/bitops.h"
-
 #include "sartoris/kernel-data.h"
 
 /* message subsystem implementation */
 
 /* these are the proper system calls: */
-
 int open_port(int port, int priv, enum usage_mode mode) 
 {
     int i, new;
@@ -51,7 +50,9 @@ int open_port(int port, int priv, enum usage_mode mode)
 					msgc.ports[new].priv = priv;
 	    
 					open_ports[curr_task][port] = new;
-
+#ifdef _METRICS_
+					metrics.ports++;
+#endif
 					result = SUCCESS;
 				}
 			}
@@ -79,7 +80,11 @@ int close_port(int port)
 	
 			p = open_ports[curr_task][port];
 			delete_port(&msgc, curr_task, p);
-			open_ports[curr_task][port] = UNUSED;	
+			open_ports[curr_task][port] = UNUSED;
+
+#ifdef _METRICS_
+			metrics.ports--;
+#endif
 		}
       
 		arch_sti(x); /* exit critical block */
@@ -160,6 +165,9 @@ int send_msg(int dest_task_id, int port, int *msg)
 				    if ((p->mode == UNRESTRICTED) || (curr_priv <= p->priv)) 
 					{
 						result = enqueue(&msgc, curr_task, open_ports[dest_task_id][port], (int *) MAKE_KRN_PTR(msg));
+#ifdef _METRICS_
+						if(result == SUCCESS) metrics.messages++;
+#endif
 					}
 				}
 			}
@@ -188,6 +196,9 @@ int get_msg(int port, int *msg, int *id)
 			if (VALIDATE_PTR(msg) && VALIDATE_PTR(id)) 
 			{
 				result = dequeue(&msgc, (int *) MAKE_KRN_PTR(id), p, (int *) MAKE_KRN_PTR(msg));
+#ifdef _METRICS_
+				if(result == SUCCESS) metrics.messages--;
+#endif
 			}
 		}
 		

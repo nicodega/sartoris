@@ -24,6 +24,10 @@
 #include "lib/shared-mem.h"
 #include "lib/bitops.h"
 
+#ifdef _METRICS_
+#include "sartoris/metrics.h"
+#endif
+
 /* main kernel data structures:
    tasks, threads, shared memory objects and message queues */
 
@@ -112,6 +116,10 @@ int initialize_kernel(void)
 
 	/* initialize message queues */
 	init_msg(&msgc);
+
+#ifdef _METRICS_
+	initialize_metrics();
+#endif
 
 	/* initialize a pseudo task/thread with id=0,
 		necessary for syscalls from arch_init_cpu */

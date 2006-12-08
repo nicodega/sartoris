@@ -5,6 +5,11 @@
 global arch_switch_thread
 global arch_detected_mmxfpu
 
+%ifdef _SOFTINT_
+global arch_switch_thread_int
+global arch_thread_int_ret
+%endif
+
 extern thr_states
 extern global_tss
 extern stacks
@@ -20,11 +25,13 @@ extern arch_caps
 ;; 0, we will preserve. Otherwise we won't.
 ;;
 
-%define SFLAG_MMXFPU       0x1
-%define NOT_SFLAG_MMXFPU   0xFFFFFFFE
-%define SFLAG_SSE          0xE0       ;; SSE, SSE2 and SSE3
+%define SFLAG_MMXFPU            0x1
 %define SFLAG_MMXFPU_STORED     0x2
-%define CR0_TS             0x8
+%define SFLAG_RUN_INT           0x4
+%define SFLAG_SSE               0x10       ;; SSE, SSE2 and SSE3
+%define NOT_SFLAG_MMXFPU        0xFFFFFFFE
+%define NOT_SFLAG_RUN_INT       0xFFFFFFEF
+%define CR0_TS                  0x8
 
 ;; Now we use a custom state management structure for threads  
 struc thr_state
@@ -68,7 +75,7 @@ arch_switch_thread:
 	mov ecx, [curr_state]					;; now ecx contains &thr_states[thread last switched]
 	
 	;; edx will contain cr3 for new thread
-	mov edx, [ebp+12]			;; now edx contains cr3 for new thread
+	mov edx, [ebp+12]			            ;; now edx contains cr3 for new thread
 	
 	;; preserve segment selectors (es and ds wont be saved, for they are loaded with kernel selectors)
 	;; ss wont be preserved, because it was already preserved on far call to interrupt or run thread
@@ -124,7 +131,7 @@ _no_mmx_fpu_used:
 	mov [ecx + thr_state.esi], esi
 	mov [ecx + thr_state.edi], edi
 	mov [ecx + thr_state.ebp], ebp
-			
+				
 	;***************************************************** 
 	;			Now load new thread state
 	;				
@@ -134,6 +141,7 @@ _no_mmx_fpu_used:
 	;	 NOTE2: If thread has never been runned, we cannot
 	;	 ret far, then, we must check first_time
 	;*****************************************************
+restore_state:
 
 	;; edx contains cr3 for new thread
 	;; lets load it, it does not matter
@@ -173,11 +181,6 @@ _no_mmx_fpu_used:
 	mov eax, [ecx + thr_state.gs]
 	mov gs, eax
 		
-	;; restore general purpose registers 
-	mov ebx, [ecx + thr_state.ebx]
-	mov esi, [ecx + thr_state.esi]
-	mov edi, [ecx + thr_state.edi]
-	
     ;; Now, since we have implemented software thread switching
 	;; by using retf, we will inject on stack0 a virtual call to
 	;; callf, as if arch_switch_thread had been called with callf
@@ -187,7 +190,24 @@ _no_mmx_fpu_used:
 	jne _first_time
 _dummy_eip:
 
+%ifdef _SOFTINT_
+	;*****************************************************
+	; Support for fake interrupts on the same thread
+	;*****************************************************
+	;; this might not be the first time, but a run_thread_int
+	mov eax, [ecx + thr_state.sflags]
+	and eax, SFLAG_RUN_INT
+	jnz run_thread_int_cont
+%endif
+
+	;; restore general purpose registers 
+	mov ebx, [ecx + thr_state.ebx]
+	mov esi, [ecx + thr_state.esi]
+	mov edi, [ecx + thr_state.edi]
+	
 	;; switch to our old stack0
+	;; NOTE: When we used soft thread switch
+	;; here we restore our ret address
 	mov ebp, [ecx + thr_state.ebp]
 	mov eax, [ecx + thr_state.esp]
 	mov esp, eax
@@ -198,7 +218,7 @@ _dummy_eip:
 	popf
 	
 	pop ebp
-			
+	xor eax, eax                        ;; in case we were invoked from run_thread_int		
 	ret
 	
 	
@@ -211,7 +231,6 @@ _first_time:
 	xor eax, eax
 	ldmxcsr [arch_caps + 16]
 no_sse:	
-
 	;; setup our stack0
 	xor ebp, ebp
 	mov eax, [ecx + thr_state.esp]
@@ -243,13 +262,99 @@ no_sse:
 	mov es, eax
 	mov eax, [ecx + thr_state.ds]
 	mov ds, eax
-				
+	
 	retf   ;; God help us!!
+			
+	
+%ifdef _SOFTINT_
+;;***************************************************************************************
+;; This function will allow triggering something like an interrupt
+;; on a thread. 
+;;***************************************************************************************
+;; int switch_thread_int(int id, unsigned int cr3, unsigned int eip, unsigned int stack);
+arch_switch_thread_int:
+	mov eax, [ecx + thr_state.sflags]
+	and eax, SFLAG_RUN_INT
+	jz run_thread_int_ok
+	mov eax, 1
+	ret
+run_thread_int_ok:
+	or eax, SFLAG_RUN_INT
+	mov [ecx + thr_state.sflags], eax
+	jmp arch_switch_thread
+	
+	;; On next line, thread state has been 
+	;; preserved for running thread, but state of 
+	;; runned thread has been loaded except
+	;; for registers, flags and stack0
+	;; so we can change everything if we want to
+	;; because upon return we will 
+	;; recover regs as usual
+run_thread_int_cont:
+	;; we still have stack0 from the call, we can
+	;; use ebp
+	;; get stack being used
+	cmp dword [ebp + 20], 0x0
+	je thread_stack	 
+	mov eax, [ebp + 20] 
+	jmp run_int_cont
+thread_stack:
+	mov eax, [ecx + thr_state.esp]
+run_int_cont:
+	;; load eflags register now 
+	mov eax, [ecx + thr_state.eflags]
+	push eax
+	popf
+	
+	;; simulate a far call (return will be performed 
+	;; by ret_from_int
+	push dword [ecx + thr_state.ss]
+	mov eax, esp
+	push eax							;; eax contains stack esp
+	push dword [ecx + thr_state.cs]		
+	push dword [ebp + 16]				;; new eip	
+	retf                                ;; Here we need all help we can get, lets pray 
+										;; this works :S
+	
+		
+;; ret from int will take the task 
+;; to it's original eip...
+;; this is not good because the original 
+;; thread was on sartoris code :(
+;; we cannot go back to priv 0 code
+;; so we create will use ret_from_int syscall
+;; which will perform a priv level switch to 0
+;; and will lead us here if the soft flag 
+;; is set
+
+;; return from a fake interrupt
+; void arch_thread_int_ret()
+;; ret from int should leave curr_state on ecx... 
+;; but lets load it anyway
+arch_thread_int_ret:
+	mov ecx, [curr_state]
+	;; when the target thread int handler 
+	;; made a far call to us, he left on our
+	;; stack 0 his 4 dwords... remove them!!! muahahahah
+	;; when we remove them, we ensure everything is
+	;; ok to come back to state switch (because we left 
+	;; everything ok except for regs, flags and stack)
+	;; We must leave registers like this:
+	;; 
+	mov eax, esp
+	add esp, 16			;; remove far call :)
+	
+	;; Now the thread is as if he has just returned
+	;; to its original state switch
+	jmp _dummy_eip      ;; at last! dummy_eip IS useful!
+%endif
 		
 
+;;***************************************************************************************
 ;; This function will be called when an mmx/fpu instruction is issued
 ;; It will be called from Device Not Available Exception
 ;; Returns 1 if no MMX/FPU support, 0 otherwise
+;;***************************************************************************************
 
 arch_detected_mmxfpu:
 

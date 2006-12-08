@@ -146,6 +146,57 @@ int run_thread(int id)
 	return result;
 }
 
+#ifdef _SOFTINT_
+int run_thread_int(int id, void *eip, void *stack)
+{
+	int x, res;
+	int prev_curr_thread;
+	int result;
+
+	result = FAILURE;
+
+	x = arch_cli(); /* enter critical block */
+
+	if ((0 <= id) && (id < MAX_THR) && (threads[id].task_num >= 0) && VALIDATE_PTR(eip) && VALIDATE_PTR(stack)) 
+	{
+		if (threads[id].invoke_mode != DISABLED) 
+		{
+			if (curr_priv <= threads[id].invoke_level) 
+			{
+				if (!(threads[id].invoke_mode == PERM_REQ && !getbit(run_perms[id], curr_thread))) 
+				{
+					if (id != curr_thread) 
+					{
+						prev_curr_thread = curr_thread;
+
+						curr_thread = id;
+						curr_task = threads[id].task_num;
+						curr_base = tasks[curr_task].mem_adr;
+						curr_priv = tasks[curr_task].priv_level;
+
+						result = arch_run_thread_int(id, eip, stack);
+
+						if ( result !=  SUCCESS ) 
+						{
+							/* rollback: thread creation failed! */
+							curr_thread = prev_curr_thread;
+							curr_task = threads[curr_thread].task_num;
+							curr_base = tasks[curr_task].mem_adr;
+							curr_priv = tasks[curr_task].priv_level;
+						}
+					}
+				}
+			}
+		}
+	}   
+
+	arch_sti(x); /* exit critical block */
+
+	return result;
+}
+#endif
+
+
 int set_thread_run_perm(int thread, enum bool perms) 
 {
 	int x, result;

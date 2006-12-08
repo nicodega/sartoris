@@ -61,12 +61,13 @@ int write_mem(int smo_id, int off, int size, void *src);
 int pass_mem(int smo_id, int target_task);
 int mem_size(int smo_id);
 
+#ifdef _METRICS_
+int get_metrics(struct sartoris_metrics *m);
+#endif
 
-/* 'DO NOT EXIST' BLOCK */
-int get_bytes(int smo_id);                            /* BEING IMPLEMENTED */
-int map_mem(int smo_id, void *target_addr, int size); /* BEING IMPLEMENTED */
-int unmap_mem(int smo_id);                            /* BEING IMPLEMENTED */
-/* END 'DO NOT EXIST' BLOCK */
+#ifdef _SOFTINT_ 
+int run_thread_int(int id, void *eip, void *stack);
+#endif
 
 #ifdef CPLUSPLUS
 }

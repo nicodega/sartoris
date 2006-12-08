@@ -283,3 +283,23 @@ mem_size:
 	call MEM_SIZE : 0x00000000
 	pop ebp
 	ret
+
+%ifdef _METRICS_
+get_metrics:
+	push ebp
+	mov ebp, esp
+	call GET_METRICS : 0x00000000
+	pop ebp
+	ret
+%endif
+
+
+%ifdef _SOFTINT_
+get_metrics:
+	push ebp
+	mov ebp, esp
+	pass_arguments 4
+	call RUN_THREAD_INT : 0x00000000
+	pop ebp
+	ret
+%endif

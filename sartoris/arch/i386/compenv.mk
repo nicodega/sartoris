@@ -1,10 +1,10 @@
 # this file sets up the assemble/compile/link environment
 
 #CC = CC
-CFLAGS = -O2 -D FPU_MMX
+CFLAGS = -O2 -D FPU_MMX -D _METRICS_ -D _SOFTINT_
 #LD = ld
 AS = nasm
-ASFLAGS = -f elf -d FPU_MMX
+ASFLAGS = -f elf -d FPU_MMX -D _METRICS_ -D _SOFTINT_
 
 #CC = /home/guch/lcc/build/lcc
 #CC = /usr/local/gcc-2.95.3/bin/gcc

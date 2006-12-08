@@ -75,7 +75,16 @@ void create_syscall_gates()
 
 	hook_syscall(13, 1, &create_int_handler_c, 4);
 	hook_syscall(14, 1, &destroy_int_handler_c, 2);
+#ifdef _SOFTINT_
+	/* 
+	NOTE: I changed this instruction's 
+	privilege, because we need it in order
+	to return from soft int
+	*/ 
+	hook_syscall(15, 3, &ret_from_int_c, 0);    
+#else
 	hook_syscall(15, 2, &ret_from_int_c, 0);
+#endif
 	hook_syscall(16, 2, &get_last_int_c, 0);
 
 	hook_syscall(17, 3, &open_port_c, 2);
@@ -92,6 +101,14 @@ void create_syscall_gates()
 	hook_syscall(27, 3, &write_mem_c, 4);
 	hook_syscall(28, 3, &pass_mem_c, 2);
 	hook_syscall(29, 3, &mem_size_c, 1);
+
+#ifdef _METRICS_
+	hook_syscall(30, 1, &get_metrics_c, 0);
+#endif
+
+#ifdef _SOFTINT_
+	hook_syscall(31, 1, &run_thread_int_c, 4);
+#endif
 }
 
 void create_init_task() 

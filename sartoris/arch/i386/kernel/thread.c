@@ -55,5 +55,30 @@ int arch_run_thread(int id)
 }
 
 
+#ifdef _SOFTINT_
+int arch_run_thread_int(int id, void *eip, void *stack)
+{
+	unsigned int tsk_sel[2];
+
+#ifdef PAGING
+	int tsk_num;
+	pd_entry *page_dir_base;
+
+	tsk_num = threads[id].task_num;
+	page_dir_base = tsk_pdb[tsk_num];
+
+	if (page_dir_base == NULL) 
+		return FAILURE;
+
+	arch_switch_thread_int(id, (unsigned int)page_dir_base, eip, stack);
+#else
+	arch_switch_thread_int(id, 0, eip, stack);
+#endif
+	return SUCCESS;
+}
+#endif
+
+
+
 
 
