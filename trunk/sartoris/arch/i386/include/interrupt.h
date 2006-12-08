@@ -25,5 +25,8 @@ void enable_int_master(int irq);
 void disable_int_master(int irq);
 void enable_int_slave(int irq);
 void disable_int_slave(int irq);
-
+#ifdef _SOFTINT_ 
+int arch_run_thread_int(int id, void *eip, void *stack);
+int arch_switch_thread_int(int id, unsigned int cr3, void *eip, void *stack);
+#endif
 #endif

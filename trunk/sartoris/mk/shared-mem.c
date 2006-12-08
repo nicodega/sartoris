@@ -12,38 +12,39 @@
 #include "sartoris/kernel.h"
 #include "sartoris/cpu-arch.h"
 #include "sartoris/scr-print.h"
+#include "sartoris/metrics.h"
 #include "lib/message.h"
 #include "lib/shared-mem.h"
 #include "lib/bitops.h"
-
 #include "sartoris/kernel-data.h"
-
-
 
 /* shared memory subsystem implementation */
 
 /* these are the proper system calls: */
 
-int share_mem(int target_task, int addr, int size, int rw) {
-
+int share_mem(int target_task, int addr, int size, int rw) 
+{
     int x, result;
     
     result = FAILURE;
     
-    if (0 <= target_task && target_task < MAX_TSK) {
+    if (0 <= target_task && target_task < MAX_TSK) 
+	{
+		x = arch_cli(); /* enter critical block */
       
-      x = arch_cli(); /* enter critical block */
-      
-      if (tasks[target_task].state == ALIVE) {
-	
-	if (VALIDATE_PTR(addr) && VALIDATE_PTR(addr + size - 1)) {
-    
-	  result =  get_new_smo(&smoc, curr_task, target_task, addr, size, rw);
+		if (tasks[target_task].state == ALIVE) 
+		{
+			if (VALIDATE_PTR(addr) && VALIDATE_PTR(addr + size - 1)) 
+			{
+				result =  get_new_smo(&smoc, curr_task, target_task, addr, size, rw);
+#ifdef _METRICS_
+				if(result == SUCCESS) metrics.smos++;
+#endif
+			}
+		}
+
+		arch_sti(x); /* exit critical block */
 	}
-      }
-      
-      arch_sti(x); /* exit critical block */
-    }
     
     return result;
 }
@@ -54,9 +55,14 @@ int claim_mem(int smo_id) {
     result = FAILURE;
     
     /* no need to block here, smo_id is in my stack */
-    if (0 <= smo_id && smo_id < MAX_SMO) {
-      /* the rest of the validation is in delete_smo */
-      result = delete_smo(&smoc, curr_task, smo_id);
+    if (0 <= smo_id && smo_id < MAX_SMO) 
+	{
+		/* the rest of the validation is in delete_smo */
+		result = delete_smo(&smoc, curr_task, smo_id);
+
+#ifdef _METRICS_
+		if(result == SUCCESS) metrics.smos--;
+#endif
     }
     
     return result;

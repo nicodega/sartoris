@@ -20,7 +20,7 @@
 
 /* limitations and init params */
 
-#define MAX_SCA 32  /* max system calls */
+#define MAX_SCA 34  /* max system calls */
 #define MAX_TSK 64  /* max tasks */
 #define MAX_THR 128 /* max concurrent threads of execution */
 #define MAX_IRQ 64  /* max irqs */

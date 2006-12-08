@@ -2,9 +2,9 @@
 CPPFLAGS +=  -I"../include" -I"../arch/target/include"
 
 objects = main.o task.o thread.o paging.o interrupt.o \
-          message.o shared-mem.o bitops.o
+          message.o shared-mem.o bitops.o metrics.o
 
-dependencies = main.d task.d thread.d paging.d interrupt.d \
+dependencies = main.d task.d thread.d paging.d interrupt.d metrics.d \
                message.d shared-mem.d bitops.d
 
 %.d : %.c

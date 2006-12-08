@@ -51,4 +51,14 @@ extern int mem_size_c(int);
 
 extern int ret_from_int_c(void);
 
+
+#ifdef _METRICS_
+extern int get_metrics_c(void);
+#endif
+
+#ifdef _SOFTINT_
+extern int run_thread_int_c(int, void*,void*);
+#endif
+
+
 #endif

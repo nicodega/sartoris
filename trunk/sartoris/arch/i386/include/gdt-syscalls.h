@@ -35,3 +35,11 @@
 %define WRITE_MEM		(0x1f << 3)
 %define PASS_MEM		(0x20 << 3)
 %define MEM_SIZE                (0x21 << 3)
+
+%ifdef _METRICS_
+%define GET_METRICS     (0x22 << 3)
+%endif
+
+%ifdef _SOFTINT_
+%define RUN_THREAD_INT  (0x23 << 3)
+%endif

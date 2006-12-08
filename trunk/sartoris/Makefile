@@ -1,6 +1,6 @@
 include arch/target/compenv.mk
 
-CPPFLAGS += -D__KERNEL__
+CPPFLAGS += -D__KERNEL__ 
 
 export CC CFLAGS CPPFLAGS LD AS ASFLAGS
 
