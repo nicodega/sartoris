@@ -16,40 +16,46 @@
 #include "lib/shared-mem.h"
 #include "lib/bitops.h"
 #include "sartoris/kernel-data.h"
+#include "lib/salloc.h"
+#include "lib/indexing.h"
 
 /* message subsystem implementation */
 
 /* these are the proper system calls: */
 int open_port(int port, int priv, enum usage_mode mode) 
 {
-    int i, new;
+    int i;
     int x, result;
-    
+	struct task *task;
+	struct port *p;
+	
     result = FAILURE;
 
     if (0 <= mode && mode < MAX_USAGE_MODE) 
 	{
 		if (0 <= port && port <= MAX_TSK_OPEN_PORTS) 
-		{
-	
+		{	
 			x = arch_cli(); /* enter critical block */
 	
-			if (open_ports[curr_task][port] == UNUSED) 
-			{
-	   			new = create_port(&msgc, curr_task); /* look up a free port */
+			task = (struct task*)GET_PTR(curr_task,tsk);
+
+			if (task->open_ports[port] == NULL) 
+			{				
+	   			p = create_port(task); /* look up a free port */
 	  
-				if (new != FAILURE) 
+				if (p != NULL) 
 				{
-					/* check if port was found */
+					/* initialize port permissions */
 					for (i = 0; i < (BITMAP_SIZE(MAX_TSK)); i++) 
 					{
-						msgc.ports[new].perm[i] = 0;
+						p->perms[i] = 0;
 					}
 	    
-					msgc.ports[new].mode = mode;
-					msgc.ports[new].priv = priv;
-	    
-					open_ports[curr_task][port] = new;
+					p->mode = mode;
+					p->priv = priv;
+	    					
+					task->open_ports[port] = p;
+
 #ifdef _METRICS_
 					metrics.ports++;
 #endif
@@ -67,20 +73,22 @@ int open_port(int port, int priv, enum usage_mode mode)
 int close_port(int port) 
 {
     int p, result, x;
-    
+	struct task *task;
+	    
     result = FAILURE;
     
     if (0 <= port && port <= MAX_TSK_OPEN_PORTS) 
 	{
 		x = arch_cli(); /* enter critical block */
-      
-		if (open_ports[curr_task][port] >= 0) 
+    
+		task = (struct task*)GET_PTR(curr_task,tsk);
+
+		if(task->open_ports[port] != NULL) 
 		{
 			result = SUCCESS;
 	
-			p = open_ports[curr_task][port];
-			delete_port(&msgc, curr_task, p);
-			open_ports[curr_task][port] = UNUSED;
+			delete_port(task, task->open_ports[port]);
+			task->open_ports[port] = NULL;
 
 #ifdef _METRICS_
 			metrics.ports--;
@@ -96,6 +104,7 @@ int close_port(int port)
 int set_port_mode(int port, int priv, enum usage_mode mode) 
 {
     int p, x, result;
+	struct task *task;
     
     result = FAILURE;
   
@@ -103,13 +112,13 @@ int set_port_mode(int port, int priv, enum usage_mode mode)
 	{
 		x = arch_cli(); /* enter critical block */
 		
-		p = open_ports[curr_task][port];
-
-		if (p >= 0) 
+		task = (struct task*)GET_PTR(curr_task,tsk);
+		
+		if (task->open_ports[port] != NULL) 
 		{
 			result = SUCCESS;
-			msgc.ports[p].priv = priv;
-			msgc.ports[p].mode = mode;
+			task->open_ports[port]->priv = priv;
+			task->open_ports[port]->mode = mode;
 		}
       
 		arch_sti(x); /* exit critical block */
@@ -118,22 +127,23 @@ int set_port_mode(int port, int priv, enum usage_mode mode)
     return result;
 }
 
-int set_port_perm(int port, int task, int perm) 
+int set_port_perm(int port, int task_id, int perm) 
 {
-	int p, x, result;
-  
+	int x, result;
+	struct task *task;
+    
 	result = FAILURE;
   
-	if (0 <= task && task < MAX_TSK && 0 <= port && port < MAX_TSK_OPEN_PORTS && !(perm & ~(1))) 
+	if (0 <= task_id && task_id < MAX_TSK && 0 <= port && port < MAX_TSK_OPEN_PORTS && !(perm & ~(1))) 
 	{
 	    x = arch_cli(); /* enter critical block */
     
-		p = open_ports[curr_task][port];
-    
-		if ( p >= 0) 
+		task = (struct task*)GET_PTR(curr_task,tsk);
+		    
+		if (task->open_ports[port] != NULL) 
 		{
 			result = SUCCESS;
-			setbit(msgc.ports[p].perm, task, perm);
+			setbit(task->open_ports[port]->perms, task_id, perm);
 		}
     
 		arch_sti(x); /* exit critical block */
@@ -147,24 +157,27 @@ int send_msg(int dest_task_id, int port, int *msg)
 {
     struct port *p;
     int x, result;
+	struct task *task;
     
     result = FAILURE;
     
 	x = arch_cli(); /* enter critical block */
 		
-    if (0 <= dest_task_id && dest_task_id < MAX_TSK && 0 <= port && port < MAX_TSK_OPEN_PORTS) 
+    if (0 <= dest_task_id && dest_task_id < MAX_TSK && TST_PTR(dest_task_id,tsk) && 0 <= port && port < MAX_TSK_OPEN_PORTS) 
 	{		
-		if (tasks[dest_task_id].state == ALIVE && open_ports[dest_task_id][port] >= 0) 
+		task = (struct task*)GET_PTR(dest_task_id,tsk);
+
+		if (task->state == ALIVE && task->open_ports[port] != NULL) 
 		{
 			if (VALIDATE_PTR(msg)) 
 			{
-				p = &msgc.ports[open_ports[dest_task_id][port]];
+				p = task->open_ports[port];
       
-				if (p->mode != DISABLED && !(p->mode == PERM_REQ && !getbit(p->perm, curr_task))) 
+				if (p->mode != DISABLED && p->total < MAX_MSG_ON_PORT && !(p->mode == PERM_REQ && !getbit(p->perms, curr_task))) 
 				{
 				    if ((p->mode == UNRESTRICTED) || (curr_priv <= p->priv)) 
 					{
-						result = enqueue(&msgc, curr_task, open_ports[dest_task_id][port], (int *) MAKE_KRN_PTR(msg));
+						result = enqueue(curr_task, p, (int *) MAKE_KRN_PTR(msg));
 #ifdef _METRICS_
 						if(result == SUCCESS) metrics.messages++;
 #endif
@@ -181,21 +194,24 @@ int send_msg(int dest_task_id, int port, int *msg)
 
 int get_msg(int port, int *msg, int *id) 
 {
-    int p, x, result;
-    
+    struct port *p;
+	struct task *task;
+    int x, result;
+	
     result = FAILURE;
     
     if (0 <= port && port < MAX_TSK_OPEN_PORTS) 
 	{
 		x = arch_cli(); /* enter critical block */
       
-		p = open_ports[curr_task][port];
+		task = (struct task*)GET_PTR(curr_task,tsk);
+		p = task->open_ports[port];
       
-		if (p >= 0) 
+		if (p != NULL) 
 		{
 			if (VALIDATE_PTR(msg) && VALIDATE_PTR(id)) 
 			{
-				result = dequeue(&msgc, (int *) MAKE_KRN_PTR(id), p, (int *) MAKE_KRN_PTR(msg));
+				result = dequeue((int *)MAKE_KRN_PTR(id), p, (int *)MAKE_KRN_PTR(msg));
 #ifdef _METRICS_
 				if(result == SUCCESS) metrics.messages--;
 #endif
@@ -211,13 +227,15 @@ int get_msg(int port, int *msg, int *id)
 int get_msg_count(int port) 
 {
 	int x, res;
+	struct task *task;
 
 	x = arch_cli();
 
-    if (0 > port || port >= MAX_TSK_OPEN_PORTS || open_ports[curr_task][port] == -1) 
-		res = -1;
+	task = (struct task*)GET_PTR(curr_task,tsk);
+    if (0 > port || port >= MAX_TSK_OPEN_PORTS || task->open_ports[port] == NULL) 
+		res = FAILURE;
     else
-		res = msgc.ports[open_ports[curr_task][port]].total;
+		res = task->open_ports[port]->total;
 
 	arch_sti(x);
 
@@ -227,69 +245,23 @@ int get_msg_count(int port)
 
 /* the following functions implement the data structures used above: */
 
-
-/* init_msg is called during kernel initialization, there are no interrupts */
-
-void init_msg(struct msg_container *mc) 
-{
-    int i, j;
-
-    mc->free_first = mc->ports_free_first = 0;
-
-    /* init message repository */
-    i = 0;
-    while (i < MAX_MSG - 1) 
-	{
-		mc->messages[i].next = ++i;
-    }
-
-    mc->messages[MAX_MSG - 1].next = -1;
-
-    /* initialize ports */
-    for (i = 0; i < MAX_OPEN_PORTS; i++) 
-	{
-		mc->ports[i].first = mc->ports[i].last = -1;
-		mc->ports[i].total = 0;
-		mc->ports[i].next = i + 1;	/* set next on the ports list */
-    }
-
-    mc->ports[MAX_OPEN_PORTS - 1].next = -1;
-
-    /* initialize first_port array */
-
-    for (j = 0; j < MAX_TSK; j++) 
-	{
-		mc->task_first_port[j] = -1;	/* the task has no ports assigned */
-    }
-}
-
-
-
 /* this function is called within a critical block */
 /* task is assumed to be in range */
-int create_port(struct msg_container *mc, int task) 
+struct port *create_port(struct task *task) 
 {
     int new, old_first;
     int i;
+	struct port *p;
 
-    new = mc->ports_free_first;
+    p = (struct port*)salloc(0, SALLOC_PRT);
 
-    if (new != -1) 
-	{		/* we have a free port! */
-		mc->ports_free_first = mc->ports[new].next;
-
-		mc->ports[new].next = old_first = mc->task_first_port[task];
-		mc->ports[new].prev = -1;
-
-		if (old_first != -1) 
-		{
-			mc->ports[old_first].prev = new;
-		}
-
-		mc->task_first_port[task] = new;
+    if (p != NULL) 
+	{
+		p->total = 0;
+		p->last = p->first = NULL;		
     }
     
-    return new;
+    return p;
 }
 
 /* 1. this function is called within a critical block */
@@ -297,32 +269,14 @@ int create_port(struct msg_container *mc, int task)
 /* 3. 0 <= port < MAX_OPEN_PORTS is assumed           */
 /* 4. port should be open (i.e. not in the free 
       ports list) */
-void delete_port(struct msg_container *mc, int task, int port) 
+void delete_port(struct task *task, struct port *port) 
 {
 	int prev, next;
 
-    empty(mc, port);		/* first empty the port, move all   */
-                            /* its queued messages to free list */
+    empty(port);		/* first empty the port, move all   */
+                        /* its queued messages to free list */
     
-    prev = mc->ports[port].prev;
-    next = mc->ports[port].next;
-
-    if (mc->task_first_port[task] == port) 
-	{
-		mc->task_first_port[task] = next;
-    }
-
-    if (prev != -1) 
-	{
-		mc->ports[prev].next = next;
-    }
-    if (next != -1) 
-	{
-		mc->ports[next].prev = prev;
-    }
-
-    mc->ports[port].next = mc->ports_free_first;
-    mc->ports_free_first = port;
+    sfree(port, 0, SALLOC_PRT);
     
     return;
 }
@@ -331,27 +285,19 @@ void delete_port(struct msg_container *mc, int task, int port)
 /* 2. 0 <= port < MAX_OPEN_PORTS is assumed           */
 /* 3. port should be open & good (i.e. its queued 
       messages should NOT be in the free list)        */
-void empty(struct msg_container *mc, int port) 
+void empty(struct port *p) 
 {
-    int i, j;
-    int old_free_first;
+    struct message *m, *next;
       
-    i = mc->ports[port].first;
-    mc->ports[port].first = -1;
-    mc->ports[port].last = -1;
-    mc->ports[port].total = 0;
+    m = p->first;
+    p->last = p->first = NULL;
+    p->total = 0;
       
-    if (i != -1) 
+    if (m != NULL) 
 	{
-		old_free_first = mc->free_first;
-		mc->free_first = i;
-      
-		while (i != -1) 
-		{
-			j = i;
-			i = mc->messages[i].next;
-		}
-		mc->messages[j].next = old_free_first;
+		next = m->next;
+		sfree(m, 0, SALLOC_MSG);
+		m = next;
     }
     
     return;
@@ -361,44 +307,39 @@ void empty(struct msg_container *mc, int port)
 /* 2. from_task_id is assumed to be within range      */
 /* 3. 0 <= port < MAX_OPEN_PORTS is assumed           */
 /* 4. port should be open & good                      */
-int enqueue(struct msg_container *mc, int from_task_id, int port, int *msg) 
+int enqueue(int from_task_id, struct port *p, int *msg) 
 {
-    struct port *p;
-    unsigned int free, old_last;
-    int *dst;
-    int i, result;
+	struct message *m;
+    int *dst, result, i;
     
     result = FAILURE;
     
-    if (mc->free_first >= 0) 
+	m = (struct message *)salloc(0, SALLOC_MSG);
+
+    if (m != NULL) 
 	{
 		result = SUCCESS;
       
-		p = &mc->ports[port];
-      
-		free = mc->free_first;	/* this is the first free _message_ */
-		old_last = p->last;
-      
-		p->last = free;
-      
-		mc->free_first = mc->messages[free].next;
-      
-		mc->messages[free].next = -1;
-		mc->messages[free].sender_id = from_task_id;
-		dst = (int*)mc->messages[free].data;
+		dst = (int*)m->data;
 		for (i = 0; i < MSG_LEN; i++) 
 		{
 			dst[i] = msg[i];
 		}
+
+		m->next = NULL;
+		m->sender_id = from_task_id;
       
-		if (!(p->total++)) 
+		/* Insert message at the end of the port */
+      	if(p->first == NULL)
 		{
-			p->first = free;
-		} 
-		else 
-		{
-			mc->messages[old_last].next = free;
+			p->first = m;
 		}
+		else
+		{
+			p->last->next = m;
+			p->last = m;
+		}
+		p->total++;
     }
     
     return result;
@@ -408,67 +349,53 @@ int enqueue(struct msg_container *mc, int from_task_id, int port, int *msg)
 /* 2. pointers are assumed to be good (id and msg)    */
 /* 3. 0 <= port < MAX_OPEN_PORTS is assumed           */
 /* 4. port should be open & good                      */
-int dequeue(struct msg_container *mc, int *id, int port, int *msg) 
+int dequeue(int *id, struct port *p, int *msg) 
 {
-    struct port *p;
     int i, result;
-    unsigned int old_first;
+    struct message *first;
     int *src;
     
     result = FAILURE;
-    
-    p = &mc->ports[port];
+      
+    first = p->first;
 
-    old_first = p->first;
-
-    if (old_first >= 0) 
+    if (first != NULL) 
 	{
 		result = SUCCESS;
       
-		p->first = mc->messages[old_first].next;
-		mc->messages[old_first].next = mc->free_first;
-		mc->free_first = old_first;
-      
-		*id = mc->messages[old_first].sender_id;
+		p->first = first->next;
+		
+		*id = first->sender_id;
 
-		src = (int*)mc->messages[old_first].data;
+		src = (int*)first->data;
 		for (i = 0; i < MSG_LEN; i++) 
 		{
 			msg[i] = src[i];
 		}
       
-		if (!(--p->total)) 
+		p->total--;
+		if (p->total == 0) 
 		{
-			p->last = -1;
+			p->last = NULL;
 		}
     }
     
     return result;
 }
 
-void delete_task_ports(struct msg_container *mc, int task_id) 
+void delete_task_ports(struct task *task) 
 {
     int i, j, x;
     int old_free_first;
 
     x = arch_cli(); /* enter critical block */
 
-    i = mc->task_first_port[task_id];
-    mc->task_first_port[task_id] = -1;
+    i = 0;
 
-    if (i != -1) 
+	while(i < MAX_TSK_OPEN_PORTS)
 	{
-		old_free_first = mc->ports_free_first;
-		mc->ports_free_first = i;
-
-		while (i != -1) 
-		{
-			empty(mc, i);	/* empty the port we are about to delete */
-			j = i;
-			i = mc->ports[i].next;
-		}
-		mc->ports[j].next = old_free_first;
-    }
-
+		if(task->open_ports[i] != NULL) delete_port(task, task->open_ports[i]);
+	}
+        
     arch_sti(x); /* exit critical block */
 }

@@ -1,9 +1,7 @@
 
 #include "sartoris/metrics.h"
 #include "sartoris/kernel.h"
-
-extern struct task tasks[];
-extern int curr_task;
+#include "lib/indexing.h"
 
 #ifdef _METRICS_
 

@@ -10,11 +10,16 @@
 #include "sartoris/cpu-arch.h"
 #include "kernel-arch.h"
 #include "descriptor.h"
+#include "lib/containers.h"
+#include "i386.h"
 
-int arch_create_task(int num, struct task* tsk) 
+int arch_create_task(int num, struct task *tsk) 
 {
-	build_ldt(num, tsk->mem_adr, tsk->size, tsk->priv_level);
-	init_ldt_desc(num, tsk->priv_level);
+	struct i386_task *tinf = (struct i386_task *)CONT_TSK_ARCH_PTR(tsk);
+	
+	tinf->pdb = 0;
+
+	build_ldt(tinf, num, tsk->mem_adr, tsk->size, tsk->priv_level);
 	
 	return 0;
 }

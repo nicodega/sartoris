@@ -1,14 +1,18 @@
+
 #ifndef _KERNEL_ARCH_H_
 #define _KERNEL_ARCH_H_
 
+#include "i386.h"
+
+/* Our state structure size */
+#define ARCH_STATE_SIZE 572   
+/* Size needed for per-task information on arch dependant section */
+#define ARCH_TASK_SIZE (sizeof(struct i386_task))
 
 /* configuration for i386 platform */
-#define PAGING         // remember to define or comment the define on state_switch.s
 #define COMPAT_REL53
 
 /* end of configuration options */
-
-
 #ifdef __KERNEL__
 
 #define BOOTINFO_PHYS	0x100000	/* This is where sartoris loader will copy bootinfo struct and mmap */
@@ -16,8 +20,8 @@
 #define BOOTINFO_PAGES  0x10
 
 #ifndef PAGING
-/* memory layout when paging is disabled */
 
+/* memory layout when paging is disabled */
 #define KRN_OFFSET  0x00000000   /* physical */
 #define KRN_SIZE    0x000a0000   /* physical */
 #define USER_OFFSET 0x00100000   /* linear   */
@@ -25,8 +29,8 @@
 #define INIT_OFFSET 0x00200000   /* physical */
 
 #else
-/* memory layout with paging     */
 
+/* memory layout with paging     */
 #define KRN_OFFSET   0x00000000   /* physical */
 #define KRN_SIZE     0x000a0000   /* physical */
 #define USER_OFFSET  0x00800000   /* virtual  */
@@ -43,6 +47,13 @@
 #define PG_SIZE 0x1000
 #define PG_LEVELS 3
 #define IS_PAGE_FAULT(exc_num) ((char)((exc_num) == 14)) 
+
+/* 
+Used for structures indexing on indexing.h (arch independant section).
+This performs id / (PG_SIZE / 4) and id % (PG_SIZE / 4)
+*/
+#define ARCH_FAST_ID(id)    (id >> 10)
+#define ARCH_FAST_IDREM(id) (id & 0x3FF)
 
 #endif /* PAGING */
 

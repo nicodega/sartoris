@@ -21,7 +21,7 @@ void init_desc_tables()
 	unsigned int l_desc[2];
 
 	/* zero out the gdt */
-	for (i=0; i<GDT_ENT; i++) 
+	for (i=0; i < GDT_ENT; i++) 
 	{
 		gdt[i].dword0 = 0;
 		gdt[i].dword1 = 0;
@@ -50,9 +50,9 @@ void init_desc_tables()
 }
 
 /* size is in bytes, if size is greater than 1Mb then
-   it is rounded down to a 4kb multiple                */
-
-void build_ldt(int task_num, void *mem_adr, unsigned int size, int priv) 
+   it is rounded down to a 4kb multiple                
+*/
+void build_ldt(struct i386_task *tinf, int task_num, void *mem_adr, unsigned int size, int priv) 
 {
 	unsigned int perms;
 	struct seg_desc* ldt;
@@ -74,8 +74,7 @@ void build_ldt(int task_num, void *mem_adr, unsigned int size, int priv)
 
 	perms |= DESC_DPL(priv);
 
-
-	ldt = tsk_ldt[task_num];
+	ldt = tinf->ldt;
 
 	dw0 = D_DW0_BASE(mem_adr) + D_DW0_LIMIT(size);
 	dw1 = D_DW1_BASE(mem_adr) + D_DW1_LIMIT(size) + perms;
@@ -87,7 +86,7 @@ void build_ldt(int task_num, void *mem_adr, unsigned int size, int priv)
 }
 
 /* LDT segment descriptor */
-void init_ldt_desc(int task_num, int priv) 
+void switch_ldt_desc(struct i386_task *tinf, int priv) 
 {
 	int i;
 	unsigned int ldt_adr;
@@ -99,18 +98,18 @@ void init_ldt_desc(int task_num, int priv)
 
 	perms = DESC_32_SMALL + DESC_LDT + DESC_DPL(priv);
 
-	i = GDT_LDT + task_num;
-	ldt_adr = (unsigned int) &tsk_ldt[task_num];
+	i = GDT_LDT + priv;
+	ldt_adr = (unsigned int)tinf->ldt;
 	gdt[i].dword0 = D_DW0_BASE(ldt_adr) + D_DW0_LIMIT(LDT_SIZE);
 	gdt[i].dword1 = D_DW1_BASE(ldt_adr) + D_DW1_LIMIT(LDT_SIZE) + perms;
 }
 
 void inv_ldt_desc(int task_num) 
 {
-	int i = GDT_LDT + task_num;
-
-	gdt[i].dword0 = 0;
-	gdt[i].dword1 = 0;
+	/* 
+	We now use only one LDT per privilege... 
+	do not invalidate *anything*
+	*/
 }
 
 /* Initialize global TSS descriptor on GDT */

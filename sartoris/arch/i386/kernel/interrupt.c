@@ -93,8 +93,8 @@ void init_interrupts()
 	}
 
 	/* zero out the rest */
-
-	for (i=32; i<MAX_IRQ; i++) {
+	for (i=32; i<MAX_IRQ; i++) 
+	{
 		idt[i].dword0 = 0;
 		idt[i].dword1 = 0;
 	}

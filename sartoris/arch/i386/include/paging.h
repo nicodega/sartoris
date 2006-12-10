@@ -34,9 +34,10 @@ typedef unsigned int pd_entry;
 #define PG_SHARED    0x00000200 /* the page belongs to at least one SMOs */
 #define PG_MAPPED    0x00000400 /* this entry was created to map a SMO   */
 
+struct i386_task;
 
 void init_paging(void);
-void start_paging(void);
+void start_paging(struct i386_task *tinf);
 
 int import_page(int task, void *linear);
 void *arch_translate(int task, void *address);

@@ -14,6 +14,7 @@
 #include "lib/message.h"
 #include "lib/shared-mem.h"
 #include "lib/bitops.h"
+#include "lib/indexing.h"
 
 #include "sartoris/kernel-data.h"
 
@@ -44,33 +45,36 @@ int flush_tlb() {
 #endif
 }
 
-int get_page_fault(struct page_fault *pf) {
-  
-  int result;
-  int x;
+int get_page_fault(struct page_fault *pf) 
+{
+	int result;
+	int x;
 
-  result = FAILURE;
+	result = FAILURE;
 
 #ifdef PAGING
-  
-  if (last_page_fault.task_id != -1) {
-    /* no need for atomicity here, if != -1 then always != -1
-       (yeah, it sounds a lot like temporal logic) */
-    
-    x = arch_cli(); /* enter critical block */
-    
-    pf = MAKE_KRN_PTR(pf);
-    
-    if (VALIDATE_PTR(pf) && VALIDATE_PTR(pf + sizeof(struct page_fault) - 1)) {
-      
-      *pf = last_page_fault;
-      result = SUCCESS;
 
-    }
-    
-    arch_sti(x); /* exit critical block */
-    
-  }
+#ifdef _DYNAMIC_
+	if (last_page_fault.task_id != -1 || dyn_pg_lvl != DYN_PGLVL_NONE) 
+#else
+    if (last_page_fault.task_id != -1) 
+#endif
+	{
+		/* no need for atomicity here, if != -1 then always != -1
+		(yeah, it sounds a lot like temporal logic) */
+
+		x = arch_cli(); /* enter critical block */
+
+		pf = MAKE_KRN_PTR(pf);
+
+		if (VALIDATE_PTR(pf) && VALIDATE_PTR(pf + sizeof(struct page_fault) - 1)) 
+		{
+			*pf = last_page_fault;
+			result = SUCCESS;
+		}
+
+		arch_sti(x); /* exit critical block */
+	}
   
 #endif
 
