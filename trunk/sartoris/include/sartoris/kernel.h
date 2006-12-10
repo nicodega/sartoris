@@ -25,6 +25,10 @@
 #define MAX_THR 128 /* max concurrent threads of execution */
 #define MAX_IRQ 64  /* max irqs */
 #define MAX_SMO 1024
+#define MAX_MSG   1024                /* system-wide */
+#define MAX_OPEN_PORTS (32*MAX_TSK)   /* system-wide */
+#define MAX_TSK_OPEN_PORTS 32
+#define MAX_MSG_ON_PORT	32 
 
 #define MAX_NESTED_INT 32
 
@@ -40,7 +44,8 @@ enum task_state { LOADING=0, ALIVE, UNLOADING, DEFUNCT };
 
 /* thread invoke mode options */
 enum usage_mode { PERM_REQ=0, PRIV_LEVEL_ONLY, DISABLED, UNRESTRICTED };
-#define MAX_USAGE_MODE UNRESTRICTED
+
+#define MAX_USAGE_MODE  UNRESTRICTED
 
 /* shared-memory object permissions */
 #define READ_PERM  2 
@@ -55,36 +60,54 @@ enum usage_mode { PERM_REQ=0, PRIV_LEVEL_ONLY, DISABLED, UNRESTRICTED };
 #define SUCCESS    0
 #define FAILURE   -1
 
+/* Structures pre definition */
+struct c_task_unit;
+struct c_thread_unit;
+struct port;
+struct smo;
+
 /* main data structures */
+struct task 
+{
+	void *mem_adr;
+	unsigned int size;
+	int priv_level;
 
-struct task {
-  void *mem_adr;
-  unsigned int size;
-  int priv_level;
 #ifdef __KERNEL__
-  char state;  /* <- see enum task_state above, added 13/05/03 */
-  char ptable_lock; /* unused so far */
-  char padding[2];
-  int thread_count;
+	char state;         /* <- see enum task_state above, added 13/05/03 */
+	char padding[3];
+	int thread_count;
+	/* 
+	Queue  mapping, it binds an open port to a message queue from the 
+    message queue pool 
+	*/
+	struct port *open_ports[MAX_TSK_OPEN_PORTS];
+	struct smo *first_smo;
+	int smos;
+	struct c_task_unit *next_free;		// used only when free	
 #endif
 };
 
-struct thread {
-  int task_num;
-  int invoke_mode;
-  int invoke_level;
-  void *ep;
-  void *stack;
+struct thread 
+{
+	int task_num;
+	int invoke_mode;
+	int invoke_level;
+	void *ep;
+	void *stack;
+
 #ifdef __KERNEL__
-  char page_faulted; /* used to know if we have produced a page fault */
-  char padding[3];
+	char page_faulted;  /* used to know if we have produced a page fault */
+	char padding[3];
+	struct c_thread_unit *next_free;	// used only when free	
 #endif
 };
 
-struct page_fault {
-  int task_id;
-  int thread_id;
-  void *linear;
+struct page_fault 
+{
+	int task_id;
+	int thread_id;
+	void *linear;
 };
 
 #ifdef __KERNEL__
@@ -93,7 +116,7 @@ void handle_int(int number);
 
 /* a default VALIDATE_PTR: */
 #ifndef VALIDATE_PTR
-#define VALIDATE_PTR(x) ((unsigned int) (x) < (unsigned int) tasks[curr_task].size)
+#define VALIDATE_PTR(x) ((unsigned int) (x) < (unsigned int) ((struct task*)GET_PTR(curr_task,tsk))->size)
 #endif
 /* A check for unsigned sum overflow */
 #ifndef SUMOVERFLOW

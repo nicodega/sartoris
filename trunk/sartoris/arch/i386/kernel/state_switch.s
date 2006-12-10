@@ -1,6 +1,5 @@
 
 %define STACK0_SIZE 1024
-%define PAGING
 
 global arch_switch_thread
 global arch_detected_mmxfpu
@@ -10,7 +9,6 @@ global arch_switch_thread_int
 global arch_thread_int_ret
 %endif
 
-extern thr_states
 extern global_tss
 extern stacks
 extern curr_state
@@ -61,7 +59,7 @@ endstruc
 ;;
 ;; Software based task switching support.
 ;;
-;; void arch_switch_thread(int thr_id, unsigned int cr3)
+;; void arch_switch_thread(struct tss *new_thread_state, int thr_id, unsigned int cr3)
 arch_switch_thread:
 
 	;; ebp, ebx, esi, and edi must be preserved
@@ -75,7 +73,7 @@ arch_switch_thread:
 	mov ecx, [curr_state]					;; now ecx contains &thr_states[thread last switched]
 	
 	;; edx will contain cr3 for new thread
-	mov edx, [ebp+12]			            ;; now edx contains cr3 for new thread
+	mov edx, [ebp+16]			            ;; now edx contains cr3 for new thread
 	
 	;; preserve segment selectors (es and ds wont be saved, for they are loaded with kernel selectors)
 	;; ss wont be preserved, because it was already preserved on far call to interrupt or run thread
@@ -158,15 +156,12 @@ restore_state:
 	mov ecx, global_tss
 	add ecx, 4
 	mov eax, STACK0_SIZE
-	mul dword [ebp+8]		   ;; we can still tho this, because we did not recover the stack yet.
+	mul dword [ebp+12]		   ;; we can still tho this, because we did not recover the stack yet.
 	add eax, (stacks+STACK0_SIZE-4)
 	mov [ecx], eax             ;; global_tss.esp0 = (unsigned int)(&stacks[task_id][0]) + STACK0_SIZE - 4;
 	
 	;; ds:ecx will contain thread state 
-	mov eax, THR_STATE_SIZE
-	mul dword [ebp+8]           
-	add eax, thr_states
-	mov ecx, eax               ;; now ecx contains &thr_states[id]
+	mov ecx, [ebp+8]           ;; now ecx contains &thr_states[id]
 	mov [curr_state], ecx      ;; update curr_state to the new one
 	
 	;; restore ldt (no problem again, since we are on kernel segments)
@@ -271,8 +266,9 @@ no_sse:
 ;; This function will allow triggering something like an interrupt
 ;; on a thread. 
 ;;***************************************************************************************
-;; int switch_thread_int(int id, unsigned int cr3, unsigned int eip, unsigned int stack);
+;; int switch_thread_int(struct tss*, int id, unsigned int cr3, unsigned int eip, unsigned int stack);
 arch_switch_thread_int:
+	mov ecx, [ebp+8]
 	mov eax, [ecx + thr_state.sflags]
 	and eax, SFLAG_RUN_INT
 	jz run_thread_int_ok
@@ -294,9 +290,9 @@ run_thread_int_cont:
 	;; we still have stack0 from the call, we can
 	;; use ebp
 	;; get stack being used
-	cmp dword [ebp + 20], 0x0
+	cmp dword [ebp + 24], 0x0
 	je thread_stack	 
-	mov eax, [ebp + 20] 
+	mov eax, [ebp + 24] 
 	jmp run_int_cont
 thread_stack:
 	mov eax, [ecx + thr_state.esp]
@@ -312,7 +308,7 @@ run_int_cont:
 	mov eax, esp
 	push eax							;; eax contains stack esp
 	push dword [ecx + thr_state.cs]		
-	push dword [ebp + 16]				;; new eip	
+	push dword [ebp + 20]				;; new eip	
 	retf                                ;; Here we need all help we can get, lets pray 
 										;; this works :S
 	

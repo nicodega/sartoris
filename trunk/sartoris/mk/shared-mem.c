@@ -17,11 +17,12 @@
 #include "lib/shared-mem.h"
 #include "lib/bitops.h"
 #include "sartoris/kernel-data.h"
+#include "lib/salloc.h"
+#include "lib/indexing.h"
 
 /* shared memory subsystem implementation */
 
 /* these are the proper system calls: */
-
 int share_mem(int target_task, int addr, int size, int rw) 
 {
     int x, result;
@@ -32,13 +33,13 @@ int share_mem(int target_task, int addr, int size, int rw)
 	{
 		x = arch_cli(); /* enter critical block */
       
-		if (tasks[target_task].state == ALIVE) 
+		if (TST_PTR(target_task,tsk) && ((struct task*)GET_PTR(target_task,tsk))->state == ALIVE && ((struct task*)GET_PTR(target_task,tsk))->smos < MAX_TSK_SMO) 
 		{
 			if (VALIDATE_PTR(addr) && VALIDATE_PTR(addr + size - 1)) 
 			{
-				result =  get_new_smo(&smoc, curr_task, target_task, addr, size, rw);
+				result =  get_new_smo(curr_task, target_task, addr, size, rw);
 #ifdef _METRICS_
-				if(result == SUCCESS) metrics.smos++;
+				if(result != FAILURE) metrics.smos++;
 #endif
 			}
 		}
@@ -49,16 +50,17 @@ int share_mem(int target_task, int addr, int size, int rw)
     return result;
 }
 
-int claim_mem(int smo_id) {
+int claim_mem(int smo_id) 
+{
     int result;
  
     result = FAILURE;
     
     /* no need to block here, smo_id is in my stack */
-    if (0 <= smo_id && smo_id < MAX_SMO) 
+    if (0 <= smo_id && smo_id < MAX_SMO && TST_PTR(smo_id,smo)) 
 	{
 		/* the rest of the validation is in delete_smo */
-		result = delete_smo(&smoc, curr_task, smo_id);
+		result = delete_smo(smo_id,curr_task);
 
 #ifdef _METRICS_
 		if(result == SUCCESS) metrics.smos--;
@@ -68,7 +70,8 @@ int claim_mem(int smo_id) {
     return result;
 }
 
-int read_mem(int smo_id, int off, int size, int *dest) {
+int read_mem(int smo_id, int off, int size, int *dest) 
+{
     struct smo *my_smo;
     int src_task;
     char *src;
@@ -76,45 +79,41 @@ int read_mem(int smo_id, int off, int size, int *dest) {
     
     result = FAILURE;
 
-    if (0 <= smo_id && smo_id < MAX_SMO &&
-	off >= 0 && size >= 0) {
+    if (0 <= smo_id && smo_id < MAX_SMO && TST_PTR(smo_id,smo) && off >= 0 && size >= 0) 
+	{
+		x = arch_cli(); /* enter critical block */
+
+		if (VALIDATE_PTR(dest)) 
+		{
+			my_smo = GET_PTR(smo_id,smo);
+
+			while (my_smo->target == curr_task && off + size <= my_smo->len 
+				   && (my_smo->rights & READ_PERM) &&  /* FIXME! that should be < my_smo->len, */
+				   result != SUCCESS)                  /*  but OS relies on <= */
+			{                                          
+				int bytes;
+				
+				src = (char *) ((unsigned int)my_smo->base + off);
+				bytes = arch_cpy_from_task(my_smo->owner, (char*)src, (char*)dest, size);  
+				
+				off += bytes;
+				size -= bytes;
+
+				if (size == 0) 
+				{
+					result = SUCCESS; 
+				}
+			}
+		}
       
-      x = arch_cli(); /* enter critical block */
-
-      if (VALIDATE_PTR(dest)) {
-
-	my_smo = &(smoc.smos[smo_id]);
-
-
-	while (my_smo->valid && my_smo->target == curr_task &&
-	       off + size <= my_smo->len && (my_smo->rights & READ_PERM) &&  /* FIXME! that should be < my_smo->len, */
-	       result != SUCCESS) {                                          /*  but OS relies on <= */
-
-	  int bytes;
-
-	  src = (char *) ((unsigned int)my_smo->base + off);
-
-	  bytes = arch_cpy_from_task(my_smo->owner, (char*)src, (char*)dest, size);  /* FIXME after cpy from task is fixed */
-
-	  off += bytes;
-	  size -= bytes;
-
-	  if (size == 0) {
-	    result = SUCCESS; 
-	  }
-	  
-	}
-	
-      }
-      
-      arch_sti(x); /* exit critical block */
-      
+		arch_sti(x); /* exit critical block */
     }
     
     return result;
 }
 
-int write_mem(int smo_id, int off, int size, int *src) {
+int write_mem(int smo_id, int off, int size, int *src) 
+{
     struct smo *my_smo;
     int src_task;
     char *dest;
@@ -122,181 +121,160 @@ int write_mem(int smo_id, int off, int size, int *src) {
     
     result = FAILURE;
     
-    if (0 <= smo_id && smo_id < MAX_SMO &&
-	off >= 0 && size >= 0) {
-    
-        x = arch_cli(); /* enter critical block */
-    
-	if (VALIDATE_PTR(src)) {
+    if (0 <= smo_id && smo_id < MAX_SMO && TST_PTR(smo_id,smo) && off >= 0 && size >= 0) 
+	{
+		x = arch_cli(); /* enter critical block */
 
-	  my_smo = &(smoc.smos[smo_id]);
+		if (VALIDATE_PTR(src)) 
+		{
+			my_smo = GET_PTR(smo_id,smo);
 
-	  while (my_smo->valid && my_smo->target == curr_task &&
-		 off + size <= my_smo->len && (my_smo->rights & WRITE_PERM) &&  /* FIXME! that should be < my_smo->len, */
-		 result != SUCCESS) {                                           /*  but OS relies on <= */
-	    
-	    int bytes;
-	    
-	    dest = (char *) ((unsigned int)my_smo->base + off);
-	    
-	    bytes = arch_cpy_to_task(my_smo->owner, (char*)src, (char*)dest, size); /* FIXME after cpy to task is fixed */
-	    
-	    off += bytes;
-	    size -= bytes;
-	    
-	    if (size == 0) {
-	      result = SUCCESS;
-	    }
+			while (my_smo->target == curr_task && off + size <= my_smo->len 
+				   && (my_smo->rights & WRITE_PERM) &&  /* FIXME! that should be < my_smo->len, */
+			       result != SUCCESS)                   /*  but OS relies on <= */
+			{                                           
+				int bytes;
 
-	  }
+				dest = (char *) ((unsigned int)my_smo->base + off);
+				bytes = arch_cpy_to_task(my_smo->owner, (char*)src, (char*)dest, size); 
+
+				off += bytes;
+				size -= bytes;
+
+				if (size == 0) 
+				{
+					result = SUCCESS;
+				}
+			}
+		}
+
+		arch_sti(x); /* exit critical block */
 	}
-	
-	arch_sti(x); /* exit critical block */
-    }
-    
+
     return result;
 }
 
-int pass_mem(int smo_id, int target_task) {
+int pass_mem(int smo_id, int target_task) 
+{
     struct smo *smo;
     int x, result;
     
     result = FAILURE;
     
-    if (0 <= smo_id && smo_id < MAX_SMO &&
-	0 <= target_task && target_task < MAX_TSK) {
-   
-       x = arch_cli(); /* enter critical block */
+    if (0 <= smo_id && smo_id < MAX_SMO && TST_PTR(smo_id,smo) && 0 <= target_task && target_task < MAX_TSK) 
+	{
+		x = arch_cli(); /* enter critical block */
        
-       smo = &(smoc.smos[smo_id]);
-       
-       if (smo->valid && smo->target == curr_task) {
-	 
-	  smo->target = target_task;
-	  result = SUCCESS;
-       }
-	 
-       arch_sti(x); /* exit critical block */
-    
+		smo = GET_PTR(smo_id,smo);
+
+		if(smo->target == curr_task) 
+		{
+			smo->target = target_task;
+			result = SUCCESS;
+		}
+
+		arch_sti(x); /* exit critical block */
     }
     
     return result;
 }
 
-int mem_size(int smo_id) {
-    
-  struct smo *smo;
-  int result;
-  
-  result = -1;
+int mem_size(int smo_id) 
+{
+	struct smo *smo;
+	int result;
 
-  if (0 <= smo_id && smo_id < MAX_SMO) {
-    
-    smo = &(smoc.smos[smo_id]);
-       
-    if (smo->valid && smo->target == curr_task) {
-      
-      result = smo->len;
-    
-    }
-  }
-  
-  return result;
-  
+	result = -1;
+
+	if (0 <= smo_id && smo_id < MAX_SMO && TST_PTR(smo_id,smo)) 
+	{
+		smo = GET_PTR(smo_id,smo);
+
+		if (smo->target == curr_task) 
+		{
+			result = smo->len;
+		}
+	}
+
+	return result;
 }
-
-
-
 
 /* the following functions implement the data structures used above: */
 
-void init_smos(struct smo_container *smoc) {
-    int i;
-
-    for (i = 0; i < MAX_TSK; i++) {
-	smoc->task_first_smo[i] = -1;
-	smoc->task_num_smo[i] = 0;
-    }
-
-    smoc->smos[MAX_SMO - 1].next = -1;
-    smoc->smos[MAX_SMO - 1].valid = 0;
-
-    for (i = 0; i < MAX_SMO - 1; i++) {
-	smoc->smos[i].next = i + 1;
-	smoc->smos[i].valid = 0;
-    }
-
-    smoc->free_first = 0;
-}
-
 /* this function is called within a critical block */
-int get_new_smo(struct smo_container *smoc, int task, int target_task,
-		int addr, int size, int perms) {
-    int new, next;
+int get_new_smo(int task_id, int target_task, int addr, int size, int perms) 
+{
+	struct smo *smo = NULL;
+	struct task *task;
+	int id;
+   
+	/* Get a free smo id */
+	id = index_find_free(IDX_SMO);
 
-    new = smoc->free_first; /* first SMO of free list */
-
-    if (new >= 0) { /* list could have been empty... */
-      
-        /* second element (possibly nil) of free list is now first */
-	smoc->free_first = smoc->smos[new].next;
-	
-	/* update task's doubly linked list of SMOs */
-	smoc->smos[new].next = next = smoc->task_first_smo[task];
-	smoc->smos[new].prev = -1;
-	
-	if (next != -1) {
-	    smoc->smos[next].prev = new;
+	if(id == -1)
+	{
+		/* No free smo id's */
+		return FAILURE;
 	}
 
-	smoc->task_first_smo[task] = new;
-	smoc->task_num_smo[task]++;
+	/* allocate a new SMO */
+	smo = salloc(id, SALLOC_SMO);
+
+	if(id == -1)  /* No free smos */
+		return FAILURE;
+	    
+	task = (struct task*)GET_PTR(task_id,tsk);
+
+	smo->next = task->first_smo;
+	smo->prev = NULL;
+	task->first_smo = smo;
+	task->smos++;
 	
 	/* copy new SMO parameters */
-	smoc->smos[new].valid = 1;
-	smoc->smos[new].owner = task;
-	smoc->smos[new].target = target_task;
-	smoc->smos[new].base = addr;
-	smoc->smos[new].len = size;
-	smoc->smos[new].rights = perms;
+	smo->id = id;
+	smo->owner = task_id;
+	smo->target = target_task;
+	smo->base = addr;
+	smo->len = size;
+	smo->rights = perms;
 	
-    }
-    
-    return new;
+    return id;
 }
 
-int delete_smo(struct smo_container *smoc, int task, int id) {
+int delete_smo(int id, int task_id) 
+{
     int x, result;
-    int prev, next;
+    struct smo *prev, *next, *smo;
+	struct task *task;
+	
+	smo = (struct smo*)GET_PTR(id,smo);
     
     result = FAILURE;
     
     x = arch_cli(); /* enter critical block */
 
-    if (smoc->smos[id].owner == task && smoc->smos[id].valid) {
+    if (smo->owner == task_id) 
+	{	
+		result = SUCCESS;
+
+		task = (struct task*)GET_PTR(task_id,tsk);
+
+		prev = smo->prev;
+		next = smo->next;
+
+		if(task->first_smo == smo) 
+		{
+			task->first_smo = smo->next;
+		}
+
+		if (prev != NULL) 
+			smo->prev->next = next;
+		if (next != NULL)
+			smo->next->prev = prev;
 	
-        result = SUCCESS;
-        
-        prev = smoc->smos[id].prev;
-	next = smoc->smos[id].next;
-	
-	if (smoc->task_first_smo[task] == id) {
-	    smoc->task_first_smo[task] = smoc->smos[id].next;
-	}
+		sfree(smo, id, SALLOC_SMO);
 
-	if (prev != -1) {
-	    smoc->smos[prev].next = next;
-	}
-	if (next != -1) {
-	    smoc->smos[next].prev = prev;
-	}
-
-	smoc->smos[id].valid = 0;
-	smoc->smos[id].next = smoc->free_first;
-	smoc->free_first = id;
-
-	smoc->task_num_smo[task]--;
-
+		task->smos--;
     }
 
     arch_sti(x); /* exit critical block */
@@ -304,29 +282,25 @@ int delete_smo(struct smo_container *smoc, int task, int id) {
     return result;
 }
 
-void delete_task_smo(struct smo_container *smoc, int task_id) {
-    int i, j, x;
-    int old_free_first;
+void delete_task_smo(int task_id) 
+{
+	struct smo *smo;
+	struct task *task = (struct task*)GET_PTR(task_id,tsk);
+	int x;
 
     x = arch_cli(); /* enter critical block */
 
-    i = smoc->task_first_smo[task_id];
-    smoc->task_first_smo[task_id] = -1;
-    smoc->task_num_smo[task_id] = 0;
+	while(task->first_smo != NULL)
+	{
+		smo = task->first_smo;
 
-    if (i != -1) {
-	old_free_first = smoc->free_first;
-	smoc->free_first = i;
+		task->first_smo = smo->next;
 
-	while (i != -1) {	/* this loop is entered at least once */
-	    j = i;
-	    smoc->smos[j].valid = 0;
-	    i = smoc->smos[j].next;
+		sfree(smo, smo->id, SALLOC_SMO);		
 	}
 
-	smoc->smos[j].next = old_free_first;
-    }
-
+	task->smos = 0;
+    
     arch_sti(x); /* exit critical block */
 }
 

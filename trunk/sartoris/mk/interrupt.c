@@ -13,21 +13,22 @@
 #include "lib/message.h"
 #include "lib/shared-mem.h"
 #include "lib/bitops.h"
+#include "lib/indexing.h"
 
 #include "sartoris/kernel-data.h"
 
 /* interrupt management implementation */
 
-int create_int_handler(int number, int thread, int nesting, int priority) 
+int create_int_handler(int number, int thread_id, int nesting, int priority) 
 {
     int x;
-    int result;
+    int result;	
     
     result = FAILURE;
     
     x = arch_cli(); /* enter critical block */
     
-    if (0 <= number && number < MAX_IRQ && threads[thread].task_num >= 0 && int_handlers[number] < 0) 
+    if (0 <= number && number < MAX_IRQ && TST_PTR(thread_id,thr) && int_handlers[number] < 0) 
 	{
 		if (arch_create_int_handler(number) == 0) 
 		{
@@ -38,8 +39,8 @@ int create_int_handler(int number, int thread, int nesting, int priority)
 			else
 				int_nesting[number] = 0;
 		
-			int_handlers[number] = thread;
-			int_active[thread] = 0;
+			int_handlers[number] = thread_id;
+			int_active[thread_id] = 0;
 		}
     }
     
@@ -48,7 +49,8 @@ int create_int_handler(int number, int thread, int nesting, int priority)
     return result;
 }
 
-int destroy_int_handler(int number, int thread) {
+int destroy_int_handler(int number, int thread) 
+{
     int x;
     int result;
     
@@ -56,11 +58,13 @@ int destroy_int_handler(int number, int thread) {
     
     x = arch_cli(); /* enter critical block */
 
-    if (number < MAX_IRQ && int_handlers[number] == thread) {
-      if (arch_destroy_int_handler(number) == 0) {
-	result = SUCCESS;
-	int_handlers[number] = -1;
-      }
+    if (number < MAX_IRQ && int_handlers[number] == thread) 
+	{
+		if (arch_destroy_int_handler(number) == 0) 
+		{
+			result = SUCCESS;
+			int_handlers[number] = -1;
+		}
     }
     
     arch_sti(x); /* exit critical block */
@@ -76,14 +80,15 @@ int destroy_int_handler(int number, int thread) {
 void handle_int(int number) 
 {
     int h;
+	struct thread *thread = (struct thread *)GET_PTR(curr_thread, thr);
+	struct task *task = (struct task *)GET_PTR(thread->task_num,tsk);
 
 #ifdef PAGING
     
     if (IS_PAGE_FAULT(number)) 
 	{
 		/* IS_PAGE_FAULT comes from kernel-arch.h */
-
-		threads[curr_thread].page_faulted = 1;
+		thread->page_faulted = 1;
 
 		last_page_fault.task_id = curr_task;
 		last_page_fault.thread_id = curr_thread;
@@ -106,9 +111,9 @@ void handle_int(int number)
 				int_active[h] = 1;
 			}
 			curr_thread = h;
-			curr_task = threads[h].task_num;
-			curr_base = tasks[curr_task].mem_adr;
-			curr_priv = tasks[curr_task].priv_level;
+			curr_task = thread->task_num;
+			curr_base = task->mem_adr;
+			curr_priv = task->priv_level;
 			last_int = number;
 			arch_run_thread(h);
 		}
@@ -119,6 +124,8 @@ int ret_from_int(void)
 {
     int x;
     int result;
+	struct thread *thread = (struct thread *)GET_PTR(curr_thread, thr);
+	struct task *task = (struct task *)GET_PTR(thread->task_num,tsk);
 
     result = FAILURE;
     
@@ -130,9 +137,9 @@ int ret_from_int(void)
 
 		int_active[curr_thread] = false;
 		curr_thread = int_stack[--int_stack_pointer];
-		curr_task = threads[curr_thread].task_num;
-		curr_base = tasks[curr_task].mem_adr;
-		curr_priv = tasks[curr_task].priv_level;
+		curr_task = thread->task_num;
+		curr_base = task->mem_adr;
+		curr_priv = task->priv_level;
 		arch_run_thread(curr_thread);
     }
     
@@ -181,10 +188,14 @@ int push_int(int number)
     
     x = arch_cli(); /* enter critical block */
 
-	if ((h = int_handlers[number]) >= 0) {
-		if (h != curr_thread && int_active[h]) {
-			if (int_nesting[number]) {
-				if (int_stack_pointer == MAX_NESTED_INT) {
+	if ((h = int_handlers[number]) >= 0) 
+	{
+		if (h != curr_thread && int_active[h]) 
+		{
+			if (int_nesting[number]) 
+			{
+				if (int_stack_pointer == MAX_NESTED_INT) 
+				{
 					arch_sti(x); /* exit critical block */
 					return result;
 				}
@@ -206,6 +217,8 @@ int resume_int()
 {
 	int x;
 	int result;
+	struct thread *thread;
+	struct task *task;
 
     result = FAILURE;
     
@@ -214,9 +227,15 @@ int resume_int()
 	if(int_stack_pointer > 0)
 	{
 		curr_thread = int_stack[int_stack_pointer-1];
-		curr_task = threads[curr_thread].task_num;
-		curr_base = tasks[curr_task].mem_adr;
-		curr_priv = tasks[curr_task].priv_level;
+		
+		thread = (struct thread *)GET_PTR(curr_thread, thr);
+
+		curr_task = thread->task_num;
+
+		task = (struct task *)GET_PTR(curr_task,tsk);
+
+		curr_base = task->mem_adr;
+		curr_priv = task->priv_level;
 		arch_run_thread(curr_thread);
 
 		result = SUCCESS;

@@ -12,8 +12,9 @@
 #include "descriptor.h"
 #include "tss.h"
 #include "paging.h"
+#include "lib/indexing.h"
+#include "lib/containers.h"
 
-struct thr_state thr_states[MAX_THR];
 unsigned char stacks[MAX_THR][STACK0_SIZE];
 extern pd_entry *tsk_pdb[MAX_TSK];
 struct tss global_tss;
@@ -32,7 +33,7 @@ void arch_init_global_tss()
 	global_tss.ss2 = 0;
 	global_tss.esp2 = 0;
 	global_tss.io_map = 0;
-	curr_state = thr_states;    // first state on system will be the bogus task one
+	curr_state = (struct thr_state *)CONT_THR_STATE_PTR(GET_PTR(0,thr));    // first state on system will be the bogus task one
 
 	/* 
 	Set thr_states[0] sflags to 0, so mmx/fpu state
@@ -49,56 +50,56 @@ void arch_init_global_tss()
 	:: "m" (desc));
 }
 
-void build_tss(int id, int task_num, int priv, void *ep, void *stack) 
+void build_tss(struct thr_state *thr_state, int id, int task_num, int priv, void *ep, void *stack) 
 { 
-	thr_states[id].sflags = 0;
-	thr_states[id].eip = (unsigned int)ep;
-	thr_states[id].ldt_sel = ((GDT_LDT + task_num) << 3);
-	thr_states[id].gs = 0;
+	thr_state->sflags = 0;
+	thr_state->eip = (unsigned int)ep;
+	thr_state->ldt_sel = ((GDT_LDT + priv) << 3);
+	thr_state->gs = 0;
 	/* esp will be initially, those on our stack 0 */
-	thr_states[id].esp = (unsigned int)(&stacks[id][0]) + STACK0_SIZE - 4;  
+	thr_state->esp = (unsigned int)(&stacks[id][0]) + STACK0_SIZE - 4;  
 	/* 
 	ebp will initially be set to the thread stack, upon
 	first preservation of state, i'll be set to current
 	stack0 ebp.
 	*/
-	thr_states[id].ebp = (unsigned int)stack;
+	thr_state->ebp = (unsigned int)stack;
 
 	if (priv==0) 
 	{
-		thr_states[id].ldt_sel |= 0x1;
-		thr_states[id].cs = PRIV1_CODE_SS;
-		thr_states[id].ds = PRIV1_DATA_SS;
-		thr_states[id].es = PRIV1_DATA_SS;
-		thr_states[id].fs = PRIV1_HIMEM_SS;
-		thr_states[id].ss = PRIV1_DATA_SS;    
+		thr_state->ldt_sel |= 0x1;
+		thr_state->cs = PRIV1_CODE_SS;
+		thr_state->ds = PRIV1_DATA_SS;
+		thr_state->es = PRIV1_DATA_SS;
+		thr_state->fs = PRIV1_HIMEM_SS;
+		thr_state->ss = PRIV1_DATA_SS;    
 	} 
 	else if (priv==1) 
 	{
-		thr_states[id].ldt_sel |= 0x2;
-		thr_states[id].cs = PRIV2_CODE_SS;
-		thr_states[id].ds = PRIV2_DATA_SS;
-		thr_states[id].es = PRIV2_DATA_SS;
-		thr_states[id].fs = PRIV2_HIMEM_SS;
-		thr_states[id].ss = PRIV2_DATA_SS;       
+		thr_state->ldt_sel |= 0x2;
+		thr_state->cs = PRIV2_CODE_SS;
+		thr_state->ds = PRIV2_DATA_SS;
+		thr_state->es = PRIV2_DATA_SS;
+		thr_state->fs = PRIV2_HIMEM_SS;
+		thr_state->ss = PRIV2_DATA_SS;       
 	} 
 	else 
 	{
-		thr_states[id].ldt_sel |= 0x3;
-		thr_states[id].cs = PRIV3_CODE_SS;
-		thr_states[id].ds = PRIV3_DATA_SS;
-		thr_states[id].es = PRIV3_DATA_SS;
-		thr_states[id].fs = 0;
-		thr_states[id].ss = PRIV3_DATA_SS;    
+		thr_state->ldt_sel |= 0x3;
+		thr_state->cs = PRIV3_CODE_SS;
+		thr_state->ds = PRIV3_DATA_SS;
+		thr_state->es = PRIV3_DATA_SS;
+		thr_state->fs = 0;
+		thr_state->ss = PRIV3_DATA_SS;    
 	}
-	thr_states[id].esi = 0;
-	thr_states[id].edi = 0;
-	thr_states[id].ebx = 0;
+	thr_state->esi = 0;
+	thr_state->edi = 0;
+	thr_state->ebx = 0;
 	
 	if (priv < 2) 
-		thr_states[id].eflags = 0x00002002;
+		thr_state->eflags = 0x00002002;
 	else 
-		thr_states[id].eflags = 0x00002202; /* bits 12,13: iopl=2; 
+		thr_state->eflags = 0x00002202; /* bits 12,13: iopl=2; 
 					                           bit 9: int enable; bit 1: reserved */  
 }
 

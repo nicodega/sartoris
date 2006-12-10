@@ -69,14 +69,10 @@ struct thr_state
 #endif
 };
 
-void build_tss(int id, int task_num, int priv, void *ep, void *stack);
+void build_tss(struct thr_state *thr_state, int id, int task_num, int priv, void *ep, void *stack);
 
 /* This will be the only TSS we will use ever. */
 extern struct tss global_tss;
-extern struct thr_state thr_states[MAX_THR];
-
-
-
 
 
 #endif
