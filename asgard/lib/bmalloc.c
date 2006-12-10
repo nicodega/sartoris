@@ -682,6 +682,12 @@ unsigned int free_mem()
 
 int brk(const void *addr) __attribute__ ((weak));
 void *sbrk(int incr) __attribute__ ((weak));
+void _exit(int code) __attribute__ ((weak));
+
+void _exit(int code)
+{
+	for(;;);
+}
 
 /* Compatibility implementations until we have break */
 int brk(const void *addr)

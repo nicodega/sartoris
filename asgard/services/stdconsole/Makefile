@@ -7,7 +7,7 @@ objects = console_entry.o console.o consolestddev.o $(extobjects)
 
 extobjects = ../../klib/kserv.o ../../lib/int.o ../../drivers/keyboard/keyb.o \
 ../../drivers/screen/screen.o ../../lib/structures/list.o \
-../../lib/pm_malloc.o ../../lib/scheduler.o ../../lib/debug.o
+../../lib/pmalloc.o ../../lib/scheduler.o ../../lib/debug.o
 
 dependencies = console.d
 
