@@ -4,7 +4,7 @@ CFLAGS += -I"../../include"
 
 objects = pipes_entry.o pipes_srv.o commands.o preadgen.o pwritegen.o $(extobjects)
 
-extobjects = ../../klib/kserv.o ../../lib/scheduler.o ../../lib/int.o ../../lib/debug.o ../../drivers/screen/screen.o ../../lib/pm_malloc.o ../../lib/rawpiolib.o ../../lib/structures/avltree.o ../../lib/structures/list.o ../../lib/structures/stdlibsim.o ../../lib/structures/string.o
+extobjects = ../../klib/kserv.o ../../lib/scheduler.o ../../lib/int.o ../../lib/debug.o ../../drivers/screen/screen.o ../../lib/pmalloc.o ../../lib/rawpiolib.o ../../lib/structures/avltree.o ../../lib/structures/list.o ../../lib/structures/stdlibsim.o ../../lib/structures/string.o
 
 dependencies = pipes_entry.d pipes_srv.d commands.d preadgen.d pwritegen.d
 
