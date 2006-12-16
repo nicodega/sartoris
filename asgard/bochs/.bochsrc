@@ -185,7 +185,8 @@ floppy_command_delay: 500
 # 200Mhz Pentium with Linux 2.x                   approx 0.5 Mips
 #=======================================================================
 
-ips:  1000000
+cpu: count=1, ips=1000000
+#ips:  1000000
 #ips:   750000
 
 clock: sync=realtime, time0=local 
