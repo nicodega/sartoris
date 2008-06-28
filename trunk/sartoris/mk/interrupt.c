@@ -1,0 +1,301 @@
+/*  
+ *   Sartoris microkernel interrupt handling arch-neutral functions
+ *   
+ *   Copyright (C) 2002, 2003, Santiago Bazerque and Nicolas de Galarreta
+ *
+ *   sbazerqu@dc.uba.ar                   
+ *   nicodega@gmail.com      
+ */
+
+#include "sartoris/kernel.h"
+#include "sartoris/cpu-arch.h"
+#include "sartoris/scr-print.h"
+#include "lib/message.h"
+#include "lib/shared-mem.h"
+#include "lib/bitops.h"
+#include "lib/indexing.h"
+#include <sartoris/critical-section.h>
+#include "sartoris/kernel-data.h"
+
+/* interrupt management implementation */
+
+int create_int_handler(int number, int thread_id, int nesting, int priority) 
+{
+    int x;
+    int result;	
+    
+    result = FAILURE;
+    
+    x = mk_enter(); /* enter critical block */
+    
+    if (0 <= number && number < MAX_IRQ && TST_PTR(thread_id,thr) && int_handlers[number] < 0) 
+	{
+		if (arch_create_int_handler(number) == 0) 
+		{
+			result = SUCCESS;
+	
+			if (nesting) 
+				int_nesting[number] = 1;
+			else
+				int_nesting[number] = 0;
+		
+			int_handlers[number] = thread_id;
+			int_active[thread_id] = 0;
+		}
+    }
+    
+    mk_leave(x); /* exit critical block */
+    
+    return result;
+}
+
+int destroy_int_handler(int number, int thread) 
+{
+    int x;
+    int result;
+    
+    result = FAILURE;
+    
+    x = mk_enter(); /* enter critical block */
+
+    if (number < MAX_IRQ && int_handlers[number] == thread) 
+	{
+		if (arch_destroy_int_handler(number) == 0) 
+		{
+			result = SUCCESS;
+			int_handlers[number] = -1;
+		}
+    }
+    
+    mk_leave(x); /* exit critical block */
+    
+    return result;
+}
+
+/* note: the following function is not invoked from userland, 
+   only from the arch-kernel section */
+
+/* atomicity is assumed */
+
+void handle_int(int number) 
+{
+    int h;
+	struct thread *thread = GET_PTR(curr_thread, thr);
+	struct task *task = GET_PTR(thread->task_num,tsk);
+
+#ifdef PAGING
+    if (IS_PAGE_FAULT(number)) 
+	{		
+		/* IS_PAGE_FAULT comes from kernel-arch.h */
+		thread->page_faulted = 1;
+
+		if(dyn_pg_lvl != DYN_PGLVL_NONE && dyn_pg_nest == 0)
+		{
+			/* This flag will produce, we only send sartoris page fault once */
+			dyn_pg_nest = 2;
+
+			last_page_fault.task_id = -1;
+			last_page_fault.thread_id = curr_thread;
+			last_page_fault.linear = NULL; 
+			last_page_fault.pg_size = PG_SIZE;
+			dyn_pg_thread = curr_thread;	// we will use this to return here 
+											// when grant_page_mk(..) is issued
+		}
+		else if(dyn_pg_ret != 0) // dynamic memory page is being freed?
+		{
+			last_page_fault.task_id = -2;
+			last_page_fault.thread_id = -2;
+			last_page_fault.linear = arch_get_freed_physical();
+			last_page_fault.pg_size = PG_SIZE;
+		}	
+		else
+		{
+			last_page_fault.task_id = curr_task;
+			last_page_fault.thread_id = curr_thread;
+			last_page_fault.linear = arch_get_page_fault(); 
+			last_page_fault.pg_size = PG_SIZE;
+
+			if(last_page_fault.linear < (void*)MAX_ALLOC_LINEAR) // did we pagefault on a kernel dynamic memory page?
+			{
+				if(last_page_fault.linear > (void*)KERN_LMEM_SIZE)
+					k_scr_print("mk/INTERRUPT.C: KERNEL SPACE PAGE FAULT!",12);
+
+				if(last_page_fault.linear > (void*)KERN_LMEM_SIZE && arch_kernel_pf(last_page_fault.linear) != FAILURE)
+				{
+					last_page_fault.linear = (void*)0xFF; 
+					last_page_fault.pg_size = 0;
+					return;
+				}
+			}			
+		}
+    }
+#endif
+
+    if ((h = int_handlers[number]) >= 0) 
+	{
+		if (h != curr_thread && !int_active[h]) 
+		{
+			if (int_nesting[number]) 
+			{
+				if (int_stack_pointer == MAX_NESTED_INT) 
+				{
+					return;
+				}
+				int_stack[int_stack_pointer++] = curr_thread;
+				int_active[h] = 1;
+			}
+			curr_thread = h;
+			curr_task = thread->task_num;
+			curr_base = task->mem_adr;
+			curr_priv = task->priv_level;
+			last_int = number;
+			arch_run_thread(h);
+
+#ifdef PAGING
+			if (IS_PAGE_FAULT(number)) 
+			{
+				if(dyn_pg_lvl != DYN_PGLVL_NONE && dyn_pg_nest == 1)
+				{
+					/* 
+					We returned to the thread which generated sartoris 
+					dynamic mem fault on the first place. Decrement nesting
+					so we can produce another sartoris fault.
+					*/
+					dyn_pg_nest = 0;
+				}
+			}
+#endif
+		}
+    }
+}
+
+int ret_from_int(void) 
+{
+    int x;
+    int result;
+	struct thread *thread = GET_PTR(curr_thread, thr);
+	struct task *task = GET_PTR(thread->task_num,tsk);
+
+    result = FAILURE;
+    
+    x = mk_enter(); /* enter critical block */
+    
+    if (int_stack_pointer > 0) 
+	{
+		result = SUCCESS;
+
+		int_active[curr_thread] = false;
+		curr_thread = int_stack[--int_stack_pointer];
+		curr_task = thread->task_num;
+		curr_base = task->mem_adr;
+		curr_priv = task->priv_level;
+		arch_run_thread(curr_thread);
+    }
+    
+    mk_leave(x); /* exit critical block */
+    
+    return result;
+}
+
+int get_last_int(void) 
+{
+    return last_int;
+}
+
+/* remove a nested int from the stack, but keep it active.
+NOTE: This function should be called only from a non nesting interrupt. */
+int pop_int()
+{
+	int x;
+	int result;
+
+    result = FAILURE;
+    
+    x = mk_enter(); /* enter critical block */
+
+	if (int_stack_pointer > 0) {
+      
+      result = SUCCESS;
+      
+	  // we will leave the interrupt active
+      int_stack_pointer--;
+    }
+
+	mk_leave(x); /* exit critical block */
+    
+    return result;
+}
+
+/* Insert a nested int on the stack.
+NOTE: This function should be called only from a non nesting interrupt.*/
+int push_int(int number)
+{
+	int x, h;
+	int result;
+
+    result = FAILURE;
+    
+    x = mk_enter(); /* enter critical block */
+
+	if ((h = int_handlers[number]) >= 0) 
+	{
+		if (h != curr_thread && int_active[h]) 
+		{
+			if (int_nesting[number]) 
+			{
+				if (int_stack_pointer == MAX_NESTED_INT) 
+				{
+					mk_leave(x); /* exit critical block */
+					return result;
+				}
+				result = SUCCESS;
+				int_stack[int_stack_pointer++] = h;
+				last_int = number;
+			}
+		}
+    }
+
+	mk_leave(x); /* exit critical block */
+    
+    return result;
+}
+
+/* This will continue execution for the first interrupt on the int stack.
+NOTE: This function should be called only from a non nesting interrupt. */
+int resume_int()
+{
+	int x;
+	int result;
+	struct thread *thread;
+	struct task *task;
+
+    result = FAILURE;
+    
+    x = mk_enter(); /* enter critical block */
+
+	if(int_stack_pointer > 0)
+	{
+		curr_thread = int_stack[int_stack_pointer-1];
+		
+		thread = GET_PTR(curr_thread, thr);
+
+		curr_task = thread->task_num;
+
+		task = GET_PTR(curr_task,tsk);
+
+		curr_base = task->mem_adr;
+		curr_priv = task->priv_level;
+		arch_run_thread(curr_thread);
+
+		result = SUCCESS;
+	}
+
+	mk_leave(x); /* exit critical block */
+    
+    return result;
+}
+
+
+
+
+
