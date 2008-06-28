@@ -1,0 +1,279 @@
+     1                                  
+     2                                  ;; 
+     3                                  ;; This will be the Stage 1 bootloader. It will be exactly 512 bytes in size.
+     4                                  ;; Things will be left so that our stage 1.5 boot loader can load itself.
+     5                                  ;; This boot loader stage, wonŽt do much. ItŽs a simple stage 1 loader.
+     6                                  ;; This loader will only load first sector of the stage 1.5 loader.
+     7                                  ;;
+     8                                  
+     9                                  bits 16	
+    10                                  
+    11                                  %include "stages.inc"
+    12                              <1> 
+    13                              <1> ;;
+    14                              <1> ;;	This file contains defines used in both stage 1 and stage 2 loaders.
+    15                              <1> ;;
+    16                              <1> 
+    17                              <1> ;; real-mode segments 
+    18                              <1> %define bootseg16		0x07c0	; BIOS shall drop us there
+    19                              <1> %define	stage1_5seg16		0x0800	; stage 1.5 block will be copied here (this has to be within the range of the boot seg)
+    20                              <1> %define stage1_5bufseg16	0x1000	; 0x10000 to 0x20000 will be used as a buffer for reading from devices (buffer must be physicaly aligned on 64k boundaries for DMA transfers)
+    21                              <1> %define	stage2seg16		0x2000	; stage 2 will be copied here
+    22                              <1> %define stckseg16		0x9000	; stack for real mode operation
+    23                              <1> 
+    24                              <1> %define mbootinfseg16		0x0800	; where we will place Multiboot info on stage 2 until it's copied to it's location
+    25                              <1> 
+    26                              <1> %define mmap_offset		0xFF	; this ofset is within mbootinfseg16 segment
+    27                              <1> 
+    28                              <1> ;; 32 bits physical address
+    29                              <1> %define mbootinfaddr		(mbootinfseg16*0x10)	; Physical address for multiboot
+    30                              <1> %define	stage2addr		0x20000	; stage 2 physical address
+    31                                  
+    32                                  ;; . <- this is the entry point
+    33                                  
+    34                                  	;; this is because of the BIOS parameter block
+    35 00000000 E92400                  	jmp afterBPB
+    36                                  	
+    37 00000003 00<rept>                times (0xB - ($-$$)) db 0x00 ;; pad until BPB
+    38                                  
+    39                                  mode:
+    40 0000000B 00                      	db	0
+    41                                  disk_address_packet:	
+    42                                  sectors:
+    43 0000000C 00000000                	dd	0
+    44                                  heads:
+    45 00000010 00000000                	dd	0
+    46                                  cylinders:
+    47 00000014 0000                    	dw	0
+    48                                  sector_start:
+    49 00000016 00                      	db	0
+    50                                  head_start:
+    51 00000017 00                      	db	0
+    52                                  cylinder_start:
+    53 00000018 0000                    	dw	0
+    54                                  	
+    55 0000001A 00<rept>                times ((24 + 0xB) - ($-$$)) db 0x00
+    56                                  
+    57                                  ;; End of BIOS parameter block.
+    58                                  
+    59                                  ;; stage 2 first sector lba
+    60                                  stage2_sector:
+    61 00000023 01000000                	dd 1
+    62                                  
+    63                                  afterBPB:
+    64                                  	;; some bogus BIOS jump to 07C0:0000 instead of 0000:7C00
+    65 00000027 EA[2C7C]0000            	jmp word 0:((bootseg16<<4)+go)
+    66                                  go:
+    67 0000002C B8C007                  	mov ax, bootseg16
+    68 0000002F 8ED8                    	mov ds, ax
+    69 00000031 31F6                    	xor si, si
+    70                                  
+    71 00000033 B80090                  	mov ax, stckseg16
+    72 00000036 8ED0                    	mov ss, ax
+    73 00000038 B8FBEF                  	mov ax, 0xEFFF - 0x4
+    74 0000003B 89C4                    	mov sp, ax
+    75                                  
+    76 0000003D 8816[2A01]              	mov [drive_num], dl		; get the drive number bios left for us
+    77                                  	
+    78                                  	;; do not probe LBA if the drive is a floppy 
+    79 00000041 80FA80                  	cmp dl, 0x80
+    80 00000044 724E                    	jb chs_mode		
+    81                                  	
+    82                                  	;; check for lba mode
+    83 00000046 B441                    	mov	ah, 0x41
+    84 00000048 BBAA55                  	mov	bx, 0x55aa
+    85 0000004B CD13                    	int	0x13
+    86                                  
+    87                                  	;; use chs mode if failed
+    88 0000004D 7245                    	jc	chs_mode
+    89 0000004F 81FB55AA                	cmp bx,	0xaa55
+    90 00000053 753F                    	jne	chs_mode
+    91                                  	
+    92                                  	;; check if AH=0x42 is supported */
+    93 00000055 81E10100                	and	cx, 1
+    94 00000059 7439                    	jz	chs_mode
+    95                                  	
+    96                                  lba_mode:
+    97                                  
+    98                                  	;; set si to the disk address packet 
+    99 0000005B BE[0C00]                	mov	si, disk_address_packet
+   100                                  
+   101                                  	;; set the mode to non-zero 
+   102 0000005E C606[0B00]01            	mov	byte [mode], 1
+   103                                  	
+   104 00000063 668B1E[2300]            	mov ebx, [stage2_sector]
+   105                                  
+   106                                  	;; set the size and the reserved byte 
+   107 00000068 C7041000                	mov word [si], 0x0010
+   108                                  
+   109                                  	;; blocks 
+   110 0000006C C744020200              	mov word [si + 2], 2		;; we will read up to two blocks
+   111                                  	
+   112                                  	;; the absolute address (low 32 bits) 
+   113 00000071 66895C08                	mov dword [si + 8], ebx
+   114                                  	
+   115                                  	;; destination buffer segment 
+   116 00000075 C744060008              	mov word [si + 6], stage1_5seg16
+   117                                  
+   118 0000007A 6631C0                  	xor	eax, eax
+   119 0000007D 894404                  	mov [si + 4], ax		;; clear the offset for the buffer address
+   120 00000080 6689440A                	mov [si + 10], eax		;; clear high bits of absolute address
+   121                                  	
+   122                                  
+   123                                   ;; BIOS call "INT 0x13 Function 0x42" to read sectors from disk into memory
+   124                                   ;;	Call with	ah = 0x42
+   125                                   ;;				dl = drive number
+   126                                   ;;				ds:si = segment:offset of disk address packet
+   127                                   ;;	Return:
+   128                                   ;;				al = 0x0 on success; err code on failure
+   129                                   
+   130 00000084 8A16[2A01]              	mov dl, [drive_num]
+   131                                   
+   132 00000088 B442                    	mov ah, 0x42
+   133 0000008A CD13                    	int	0x13
+   134                                  
+   135                                  	;; LBA read is not supported, so fallback to CHS.  
+   136 0000008C 7206                    	jc	chs_mode
+   137                                  
+   138 0000008E BB0008                  	mov bx, stage1_5seg16
+   139 00000091 E98A00                  	jmp	load_done
+   140                                  	
+   141                                  chs_mode:
+   142                                  		
+   143                                  	;; first things first. get BIOS disk geometry.
+   144 00000094 B408                    	mov ah, 8
+   145 00000096 CD13                    	int 0x13
+   146                                  	
+   147                                  	;; set mode to 0
+   148 00000098 BE[0C00]                	mov si, sectors
+   149                                  	
+   150 0000009B C644FF00                	mov byte [si - 1], 0
+   151                                  		
+   152                                  	;; save number of heads 
+   153 0000009F 6631C0                  	xor	eax, eax
+   154 000000A2 88F0                    	mov	al, dh
+   155 000000A4 40                      	inc	ax
+   156 000000A5 66894404                	mov	[si + 4], eax
+   157                                  
+   158 000000A9 31D2                    	xor	dx, dx
+   159 000000AB 88CA                    	mov	dl, cl
+   160 000000AD C1E202                  	shl dx, 2
+   161 000000B0 88E8                    	mov al, ch
+   162 000000B2 88F4                    	mov ah, dh
+   163                                  
+   164                                  	;; save number of cylinders
+   165 000000B4 40                      	inc	ax
+   166 000000B5 894408                  	mov [si + 8], ax
+   167                                  
+   168 000000B8 31C0                    	xor	ax, ax
+   169 000000BA 88D0                    	mov	al, dl
+   170 000000BC C0E802                  	shr al, 2
+   171                                  
+   172                                  	;; save number of sectors 
+   173 000000BF 668904                  	mov [si], eax
+   174                                  
+   175                                  translate_to_chs:
+   176                                  	;; translate stage 2 lba to chs
+   177                                  	
+   178 000000C2 66A1[2300]              	mov eax, [stage2_sector]
+   179                                  
+   180 000000C6 6631D2                  	xor	edx, edx
+   181                                  
+   182                                  	;; divide by number of sectors 
+   183 000000C9 66F734                  	div dword [si]
+   184                                  
+   185                                  	;; save sector start 
+   186 000000CC FEC2                    	inc dl						;; sectors goes from 1..N
+   187 000000CE 88540A                  	mov	[si + 10], dl
+   188                                  
+   189 000000D1 6631D2                  	xor	edx, edx	
+   190 000000D4 66F77404                	div dword [si + 4]			;; divide by number of heads
+   191                                  
+   192                                  	;; save head start 
+   193 000000D8 88540B                  	mov [si + 11], dl
+   194                                  
+   195                                  	;; save cylinder start 
+   196 000000DB 89440C                  	mov [si + 12], ax
+   197                                  
+   198                                  load_track:
+   199                                  
+   200 000000DE C606[2B01]00            	mov byte [tries], 0
+   201                                  	
+   202 000000E3 B402                    	mov ah, 2	; function: read
+   203                                  	
+   204 000000E5 B001                    	mov al, 1	; sectors to read
+   205                                  		
+   206 000000E7 8B4C0C                  	mov cx, [si + 12]		; sector & track
+   207 000000EA 88CA                    	mov dl, cl
+   208 000000EC C1E902                  	shr cx, 2
+   209 000000EF 80E1C0                  	and cl, 0xc0
+   210 000000F2 0A4C0A                  	or cl, [si + 10]
+   211 000000F5 88D5                    	mov ch, dl	
+   212                                  
+   213 000000F7 8A16[2A01]              	mov dl, [drive_num]
+   214 000000FB 8A740B                  	mov dh, [si + 11]
+   215                                  	
+   216 000000FE BB0008                  	mov bx, stage1_5seg16
+   217 00000101 8EC3                    	mov es , bx
+   218 00000103 31DB                    	xor bx, bx
+   219                                  
+   220                                  reload:
+   221 00000105 60                      	pusha
+   222                                  	
+   223                                  ;; BIOS call "INT 0x13 Function 0x2" to read sectors from disk into memory
+   224                                  ;;	Call with	ah = 0x2
+   225                                  ;;			al = number of sectors
+   226                                  ;;			ch = cylinder
+   227                                  ;;			cl = sector (bits 6-7 are high bits of "cylinder")
+   228                                  ;;			dh = head
+   229                                  ;;			dl = drive (0x80 for hard disk, 0x0 for floppy disk)
+   230                                  ;;			es:bx = segment:offset of buffer
+   231                                  ;;	Return:
+   232                                  ;;			al = 0x0 on success; err code on failure
+   233                                  	
+   234 00000106 CD13                    	int 0x13
+   235 00000108 61                      	popa
+   236                                  	
+   237 00000109 730D                    	jnc load_ok
+   238 0000010B 803E[2B01]03            	cmp byte [tries], 3
+   239                                  	
+   240                                  bad_media:
+   241 00000110 73FE                    	jae bad_media
+   242 00000112 FE06[2B01]              	inc byte [tries]
+   243 00000116 EBED                    	jmp reload
+   244                                  	
+   245                                  load_ok:
+   246                                  	
+   247 00000118 BB0008                  	mov bx, stage1_5seg16
+   248 0000011B E90000                  	jmp	load_done
+   249                                  
+   250                                  
+   251                                  load_done:
+   252                                  
+   253 0000011E 8A16[2A01]              	mov dl, [drive_num]
+   254 00000122 B90100                  	mov cx, 1
+   255                                  
+   256                                  	;; at this point we should have:
+   257                                  	;; ds:si = segment:offset of disk address packet/sectors
+   258                                  	;; dl = drive num
+   259                                  	;; cx = 1 (blocks loaded)
+   260                                  
+   261                                  	;; exec stage 2
+   262 00000125 EA00000008              	jmp stage1_5seg16:0
+   263                                  	
+   264                                  
+   265                                  ;; Stage 1 data 
+   266                                  
+   267                                  ;; loading variables
+   268                                  		
+   269                                  drive_num:			; BIOS drive number
+   270 0000012A 00                      	db 0
+   271                                  tries:
+   272 0000012B 00                      	db 0
+   273                                  
+   274                                  ;; some useful far pointers.
+   275                                  
+   276                                  	
+   277                                  ;; complete with 0's and the signature
+   278 0000012C 00<rept>                times (510-($-$$)) db 0x00
+   279 000001FE 55AA                    	dw 0xaa55		; signature
