@@ -1,4 +1,0 @@
-- update the documentation.
-- update Li386 emu (and say something about it in the docs!).
-- make security checks in paging functions.
-- implement mapped SMOs.
