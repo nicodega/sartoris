@@ -1,0 +1,19 @@
+#How to Create an OS on top of Sartoris
+
+= Create an OS =
+
+This will be an introduction on how-to create an OS on top of Sartoris. With time it will probably change onto a full tutorial.
+
+== Tutorial ==
+
+For this tutorial, you'll need to prepare a [Compiling Sartoris compile environment]. If you are on Windows you'll need to download this [toolchain].
+
+  * [OSChapter1 Chapter1]: Sartoris concepts.
+
+  * [OSChapter2 Chapter2]: Sartoris _boot_ process explained.
+
+  * [OSChapter3 Chapter3]: Creating Task and Threads.
+
+  * [OSChapter4 Chapter4]: How do I create a scheduler?
+
+  * [OSChapter5 Chapter5]: Inter process communication.
