@@ -1,4 +1,4 @@
-#How-to compile Sartoris.
+#summary How-to compile Sartoris.
 
 = Introduction =
 
