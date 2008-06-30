@@ -4,7 +4,7 @@
 
 A Task on Sartoris, represents a process. Not the running state of a process but it's code, data, and all static concepts of it. 
 
-A task is composed of a [Paging virtual address space], with its physical mappings defined by a set of pages, and also contains a set of [Ports] and [SMO Shared Memory Objects] assigned.
+A task is composed of a [Paging virtual address space], with its physical mappings defined by a set of pages, and also contains a set of [Messaging Ports] and [SMO Shared Memory Objects] assigned.
 
 = Task Creation =
 
