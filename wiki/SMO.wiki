@@ -8,7 +8,7 @@ Although the Page Mapping method seemes quite interesting, it would require the 
 
 Shared Memory Objects (SMOs) are the way Sartoris implements inter-task memory access. When a Task wants to let another task read a memory portion of it's address space, it will create a shared memory object with read permissions for the other task. Using that SMO, the other task will be able to read the contents of that region.
 
-= SMO Syscalls =
+= Using SMOs =
 
 The system call `int share_mem(int target_task, void *addr, int size, int perms)` creates a SMO of size `size` bytes at offset `addr` of the current task's address space, that can be accessed by the task (What is meant here is that it can be accessed by any thread of the corresponding task.) `target_task`. The parameter `perms` indicates if access is granted for reading, writing, or both. The function returns an `id` number that identifies the SMO just created, or `-1` in case of failure. 
 
