@@ -25,3 +25,9 @@ When Paging is disabled, `mem_adr` indicates the physical address where this tas
 Tasks are destroyed using the similar function `destroy_task`, which receives the *id* of the task being destroyed.
 
 It should be noted that System Calls to create and destroy tasks are restricted to tasks running in privilege level zero.
+
+= x86 Implementation =
+
+Each task on the i386 architecture, is composed of an LDT segment, a page directory and a set of pages assigned to the task address space. 
+
+Sartoris defines only 4 LDT segment descriptors on the GDT, each one with a different privilege level set from 0 to 3. When switching to a given Task Thread, sartoris will modify the corresponding LDT segment descriptor so it points to the new Threads Task LDT. This turns to be useful for [DynamicMemory dynamic memory].
