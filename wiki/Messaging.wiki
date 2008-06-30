@@ -1,4 +1,4 @@
-#Sartoris Messaging system
+#summary Sartoris Messaging system
 
 = Messages =
 
