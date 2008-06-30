@@ -32,13 +32,6 @@ Once you've verified you have all the proper tools installed you must follow the
         implementation we are maintaining nowadays.
 
   * Run `make` while at sartoris base directory.
-        GNU make scripts located on sartoris directories will invoke the C compiler 
-        and the assembler generating sartoris architecture dependant and independant 
-        objects, and linking them onto `sartoris.img` located on
-        `sartoris/arch/i386/sartoris`. 
-
-        The compilation process will also create two user librares `kserv.o` and 
-        `kserv-user.o` containing a C interface to Sartoris System Calls. `kserv.o`
-        contains system calls utilizad by Operating System services while `kserv-user.o`
-        only contains those System Calls with privilege level 3 (i.e User programs).
+        * GNU make scripts located on sartoris directories will invoke the C compiler and the assembler generating sartoris architecture dependant and independant objects, and linking them onto `sartoris.img` located on `sartoris/arch/i386/sartoris`.         
+        * The compilation process will also create two user librares `kserv.o` and `kserv-user.o` containing a C interface to Sartoris System Calls. `kserv.o` contains system calls utilizad by Operating System services while `kserv-user.o` only contains those System Calls with privilege level 3 (i.e User programs).
         
