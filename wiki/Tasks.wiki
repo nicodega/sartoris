@@ -1,4 +1,4 @@
-#Tasks
+#summary Sartoris Tasks
 
 = What is a Task? =
 
