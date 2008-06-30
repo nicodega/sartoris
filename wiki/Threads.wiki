@@ -1,4 +1,4 @@
-#summary One-sentence summary of this page.
+#summary Sartoris Threads.
 
 = What is a Thread? =
 
