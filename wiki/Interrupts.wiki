@@ -6,7 +6,7 @@ An interrupt is a piece of code, that gets executed by the processor in an async
 
 Each architecture usualy has a way to mask interrupts, so a given piece of code can be executed in an atomic fashion. However, most of the time, there are some interrupts which cannot be masked (like Page Fault interrupts on x86 architecture). 
 
-== Sartoris and Interrupt Handling ==
+= Sartoris and Interrupt Handling =
 
 Initially Sartoris sets up the system so no interrupts are serviced by the user. A System service runing at privilege 0 can attach a given thread to one or more interrupts, issuing a call to `create_int_handler` System Call. This system call will ensure (if successful) that each time the processor rises (if not masked) the interrupt, the given thread will be runned. 
 
