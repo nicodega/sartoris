@@ -9,6 +9,8 @@ Therefore, it seems reasonable to encapsulate the routines that interact directl
 
 == What Can I do With it? ==
 
+Sartoris is ment as the base for creating an Operating System, abstracting itself from CPU control o even used to create a single aplication running alone on top of a processor, with full control of it. 
+
 Functionality provided by Sartoris can be grouped as follows:
 
   * *Task and thread management.* sartoris provides a set of system calls, which cover the creation of processor tasks and threads. Sartoris does not, however, load processes from disk or perform any scheduling of the CPU. These chores are to be performed by services running on top of the microkernel (usually, a process-manager task). Under Sartoris, an interrupt handler is just a special thread that is invoked by the microkernel every time the corresponding interrupt request line is raised. Hence, the scheduling thread may be created by binding an ordinary thread to the timer interrupt.
