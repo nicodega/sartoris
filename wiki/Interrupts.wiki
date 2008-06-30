@@ -18,6 +18,6 @@ When invoking `create_int_handler` System Call, a thread `id` must be provided a
 
 Each time a nesting interrupt is rised by the processor before performing a switch to the handler thread, sartoris will push onto an internal stack the id of the current running thread. When the interrupt handler invokes `ret_from_int` Sartoris will return execution to the first thread on the stack, poping it. 
 
-This mechanism ensures that if an interrutp handler is interrupted by a higher privilege interrupt handler, when the later completes, execution will be returned the the other handler. It's important however, to notice, that if a nesting interrupt is running, it unmasks interrupts, and a non-nesting interrupt handler is executed, execution the the former handler wont return, until a new nesting interrupt is generated or a call to `resume_int` is issued.
+This mechanism ensures that if an interrupt handler is interrupted by a higher privilege interrupt handler, when the later completes, execution will be returned the the other handler. It's important however, to notice, that if a nesting interrupt is running, it unmasks interrupts, and a non-nesting interrupt handler is executed, execution the the former handler wont return, until a new nesting interrupt is generated or a call to `resume_int` is issued.
 
 From version 2 of the microkernel, there's also a way to manually operate with the interrupt stack. This can be used only by privilege 0 services and must be used with caution.
