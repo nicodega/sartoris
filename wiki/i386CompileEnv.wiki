@@ -1,4 +1,4 @@
-#Configure i386 compilation tools.
+#summary Configure i386 compilation tools.
 
 = Introduction =
 
