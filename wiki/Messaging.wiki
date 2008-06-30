@@ -6,7 +6,9 @@ The kernel provides an asynchronous inter-task message system through the `send_
 
 Messages can be Sent to Ports. Each task is allowed to open ports numbered from 0 to a maximum value which is implementation defined.
 
-When a message is sent using the function `send_msg(int to_task, int port, void *msg)`, the contents of the message pointed by `msg` are copied to the queue for port number `port` of task `to_address`. The receiving of messages is done in an analogous fashion using the function `get_msg(int port, void *msg, int *id)`, which removes the fist message in the supplied Port's queue and copies it's contents to the address `msg`. The variable `id` is used to return the id of the sender task. Both functions return 0 on success. 
+When a message is sent using the function `send_msg(int to_task, int port, void *msg)`, the contents of the message pointed by `msg` are copied to the queue for port number `port` of task `to_task`. 
+
+The receiving of messages is done in an analogous fashion using the function `get_msg(int port, void *msg, int *id)`, which removes the fist message in the supplied Port's queue and copies it's contents to the address `msg`. The variable `id` is used to return the id of the sender task. Both functions return 0 on success. 
 
 The function `get_msg_count(int port)` returns the amount of messages waiting in the queue of the supplied port.
 
