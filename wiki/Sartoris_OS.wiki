@@ -7,7 +7,7 @@ This will be an introduction on how-to create an OS on top of Sartoris. With tim
 
 == Tutorial ==
 
-For this tutorial, you'll need to prepare a [Compiling Sartoris compile environment]. If you are on Windows you'll need to download this [toolchain].
+For this tutorial, you'll need to prepare a [Compiling Sartoris compile environment]. If you are on Windows you'll need to download this [http://sartoris.googlecode.com/files/toolchain.zip toolchain].
 
   * [OSChapter1 Chapter1]: Sartoris concepts.
 
