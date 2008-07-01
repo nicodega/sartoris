@@ -70,11 +70,41 @@ It's important to notice, that until now, we have been running on 16 bit (real) 
 
 This stage is where most interesting things happen. Current Implementation is contained on `arch/i386/boot/stage2mem.s`.
 
+When executed, Stage 1.5 will have left the following:
+
+  * ds Pointing to `bootseg16`
+  * ds:si = segment:offset of disk address packet/drive geometry
+  * dl = Boot drive num
+  * ax = Stage 2 image size
+
 This stage will perform the following actions:
 
+  * Check Multiboot header 
+       As you will see on next section, starting at the end of
+       Stage 2, is Sartoris Multiboot Header. Stage 2 will verify
+       the multiboot magic number (`0x1BADB002`).
   * Enable A20
+       You can google for this, but basically what it does here 
+       is enable the A20 line on the processor, in order to 
+       remove the 1MB limit set by the processor for backward
+       compatibility with _really_ older systems.
   * Calculate Memory Size
-  * 
+       Memory size will be calculated using the BIOS interrupt `0x12` or 
+       `0x15` function `0x88`.
+       Here it will also ask the BIOS to provide a memory map issuing
+       interrupt `0x15` Function `0xE820`.
+  * Switch to Protected Mode
+       In order to switch to protected mode the bootloader defines a GDT
+       table and an LDT table.
+
+       GDT table will have the following structure:
+
+       || Dummy descriptor required by architecture || 0 ||
+       || Code segment descriptor || limit=ffff base_adress=0 p-flag=1, dpl=0, s-flag=1 (non-system segment), type code exec/read g-flag=1, d/b bit=1 (limit mult by 4096, default 32-bit opsize), limit upper bits F ||
+       || Data segment descriptor || limit=ffff, base_adress=0, p-flag=1, dpl=0, s-flag=1, type read/write, g-flag=1, d/b bit=1, limit upper bits F ||
+
+      
+  * Fill the Multiboot structure
 
 Its important to notice Machine State left from this stage is conformig to Multiboot specification as defined [http://www.gnu.org/software/grub/manual/multiboot/html_node/Machine-state.html#Machine-state here].
 
