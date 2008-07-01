@@ -2,12 +2,33 @@
 
 = Introduction =
 
-Add your content here.
+On last chapter, we explained the boot process in a technical perspective. Now let us create the clasic _Hello World!_ example! (if you have not setup a sartoris compilation environment I suggest you do now. [Compiling Here] explains how to do it).
 
+*SETUP*: You can download this example sources here:  [http://sartoris.googlecode.com/files/hello_world.zip hello_world.zip]
 
-= Details =
+*IMPORTANT*: Make sure you extract the contents of the zip files so that sartoris folder can be located by using `../sartoris` from the example code directory (where the Makefile is).
 
-Add your content here.  Format your content with:
-  * Text in *bold* or _italic_
-  * Headings, paragraphs, and lists
-  * Automatic links to other wiki pages
+As we explained before, the first [Threads Thread] executed on the system is the Init Thread. 
+
+For this example we will create a C file named `start.c` with the following code:
+
+{{{
+#include "screen.h"
+#include <sartoris/syscall.h>
+
+int main() 
+{
+	clear_screen();
+	cursor_off();
+
+	string_print("hola, mundo!", 0, 0x7);
+
+	while(1);
+}
+}}}
+
+We'll want this code will be the one executed as the Init Thread, and that's why it has to end with `while(1)` (if it didn't, it would attempt to return from init, and that's not right).
+
+`screen.h` and `screen.c` are VGA text printing routines necesary 
+
+Next step on this tutorial is [OSChapter4 Creating Task and Threads]
