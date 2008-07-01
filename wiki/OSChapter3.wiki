@@ -27,8 +27,71 @@ int main()
 }
 }}}
 
-We'll want this code will be the one executed as the Init Thread, and that's why it has to end with `while(1)` (if it didn't, it would attempt to return from init, and that's not right).
+We want this code to be executed as the Init Thread, and that's why it has to end with `while(1)` (if it didn't, it would attempt to return from init, and that's not right).
 
-`screen.h` and `screen.c` are VGA text printing routines necesary 
+Since Sartoris copies itself over the BIOS and interrupts are not mapped to BIOS functions anymore, we need a way to display our nice spanish "Hello World!" message. `screen.h` and `screen.c` are VGA text printing routines which will access the VGA IO registers and using the Hi-Mem segment thei'll print the text. 
+
+In order to generate our example, you'll have to compile Sartoris first. You should type `make` on sartoris directory to generate `sartoris.img` containg the microkernel image. Once Sartoris is compiled, you must run `make` this time on `hello_world` directory.
+
+This is the output you should get:
+
+{{{
+gcc -c -I"../sartoris/include" -O2 -ffreestanding -nostdinc -nostdlib -nostartfiles -s start.c -o start.o
+nasm -f elf screen.s
+ld --oformat binary --entry 0x00000000 --Ttext 0x00000000 -N -o bin/code.img start.o screen.o
+cp ../sartoris/arch/i386/sartoris/sartoris.img bin/boot.img
+cat bin/code.img >> bin/boot.img
+cp bin/boot.img bochs/1.44a
+./bochs/fill bochs/1.44a -m 1474048
+Size: 32186 bytes
+1441862 bytes will be added
+1+0 records in
+1+0 records out
+1441862 bytes (1.4 MB) copied, 0.011 s, 131 MB/s
+}}}
+
+This will generate a file named `1.44a` on `hello_world/bochs` which you can run on bochs. If you do, this will be the output:
+
+[http://sartoris.googlecode.com/svn/images/hello_world.jpg]
+
+As you can see, our little "Hello world!" example worked as a charm, and with no effort at all!
+
+== Behind the Scenes ==
+
+Ok... that was good!... but, how did we get sartoris to load our function as a thread?!
+
+Lets look closer at the compilation output. 
+
+First we have a `gcc` invocation:
+{{{
+gcc -c -I"../sartoris/include" -O2 -ffreestanding -nostdinc -nostdlib -nostartfiles -s start.c -o start.o
+}}}
+The -O2 switch tells `gcc` to optimize the code generated for the example and is not rare to use it when compiling other projects, so if you are a programmer you should understand what this does. 
+
+The other switches tell `gcc` that the code will run independant from any library (`-ffreestanding`), without using the Standard Includes (`-nostdinc`) nor the Standard C Library (`-nostdlib`) and last but not least, we tell `gcc` not to use Start Files like `cr0` (`-nostartfiles`).
+
+These switches are necesary, because none of these things can be used when runing a standalone process like this one, since all these things are OS dependant.
+
+If we look at the linker output:
+{{{
+ld --oformat binary --entry 0x00000000 --Ttext 0x00000000 -N -o bin/code.img start.o screen.o
+}}}
+
+Since the Init thread will be run directly, we cant handle ELF or COFF formated executable code, and that's why we use `--oformat binary`, so the output is just plain binary code. 
+
+On [OSChapter2 Chapter 2] of this tutorial, you saw Sartoris creates the Init Thread with entry point on byte 0 of the Init Task, and that's why we tell `ld` to generate the entry point at possition 0 of the Text segment, and place that segment also starting at 0x0. 
+
+With this, the result is a compiled image of our code, where `main` function starts at position 0x0 of the image.
+
+The remaining lines on the compilation script:
+{{{
+cp ../sartoris/arch/i386/sartoris/sartoris.img bin/boot.img
+cat bin/code.img >> bin/boot.img
+cp bin/boot.img bochs/1.44a
+./bochs/fill bochs/1.44a -m 1474048
+}}}
+Will copy Sartoris Microkernel image onto a file named boot.img and append our generated image for this little process at the end of it.
+
+Since the Init Task code starts where the kernel image finishes, our code will be the one loaded, and runned at position 0x0, where `main` function begins.
 
 Next step on this tutorial is [OSChapter4 Creating Task and Threads]
