@@ -1,4 +1,4 @@
-#summary Sartoris Basic Concepts
+#summary Creating Your OS on top of Sartoris Chapter 2: Basic Concepts
 #labels Phase-Implementation
 
 = What is Sartoris? =
@@ -22,6 +22,8 @@ Functionality provided by Sartoris can be grouped as follows:
 Next step on this tutorial is [Chapter2 Sartoris boot process explained.]
 
 == See also ==
+
+These are the wiki pages for each of the Basic Concepts of Sartoris:
 
   * [Tasks]
   * [Threads]
