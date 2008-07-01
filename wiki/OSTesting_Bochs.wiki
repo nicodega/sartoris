@@ -16,4 +16,4 @@ boot: floppy
 }}}
 When installing bochs, it will generate a demo `.bochsrc` configuration file, on which you can modify these parameters.
 
-Once these is changed, all you have to do is run bochs `bochs_dir/bochs`.
+Once these is changed, all you have to do is run bochs `bochs_install_dir/bochs`.
