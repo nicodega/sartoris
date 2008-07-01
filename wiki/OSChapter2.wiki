@@ -198,19 +198,11 @@ This function will perform the following steps:
 }}}
 
    *  Once Init Task and Thread are created, paging will be initialized by:
-
      * Build Kernel Page Table (0x0 to 0xA0000)
-
      * Set 0xA0000 to 0xFFFFF as present, setting `PG_CACHE_DIS` to disable cache on the video memory area.
-
      * Set up a page directory for the init Task
-
      * Set first Page table on the directory to the Kernel Page Table
-
      * Create a Page table, mapping init Physical Memory to `USER_OFFSET`. 
-
      * Map last 64Kb to BootInfo Structure on the table.
-
      * Set the Table on the directory.
-
      * Set cr3 to the Physical address of the new Page directory, and enable Paging on CR0 by setting PG bit.
