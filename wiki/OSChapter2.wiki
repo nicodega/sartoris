@@ -1,6 +1,6 @@
 #summary Creating Your OS on top of Sartoris Chapter 2: The boot Process
 
-== What is the Boot Process? ==
+= What is the Boot Process? =
 
 We OS freaks (and mostly everyone) refer to the process of starting up a System as The _boot_ process. This process is made up of all the steps performed by the BIOS program and the Operating System in order to start the System.
 
@@ -8,7 +8,7 @@ Once the BIOS set's up most of the hardware and stuff, it will load the first 51
 
 Sartoris takes care of loading itself by providing a two-stage boot loader which will locate the kernel on position 0 of memory and begin the microkernel initialization. Once it has loaded itself, sartoris will create a first [Tasks Task] called the Init Task, whose _id_ will be `INIT_TASK_NUM`, defined on `kernel.h`. 
 
-== The Init Task == 
+== The Init Task ==
 
 The Init Task, is the first task created on the system. Init Task memory will be initialized with the contents of the first megabyte next to the microkernel image on memory, and will be placed on a specific location on physical memory, defined by implementation. Sartoris will then create a [Threads Thread] for that Task with _id_ `INIT_THREAD_NUM`, whose entry point will be position 0 of the Init Task memory, and begin execution of that thread.
 
@@ -16,7 +16,7 @@ It's important to notice that once the init thread has been loaded Sartoris will
 
 When _Paging_ is enabled, the Init Task will be initially fully paged, up to the size specified by `INIT_SIZE` defined on the architecture dependant section of the Microkernel code.
 
-== Boot Process Detailed (x86) ==
+= Boot Process Detailed (x86) =
 
 On the i386 implementation, Sartoris provides a two-stage boot loader which complies to the Multiboot specification. 
 
@@ -80,32 +80,65 @@ When executed, Stage 1.5 will have left the following:
 This stage will perform the following actions:
 
   * Check Multiboot header 
+
        As you will see on next section, starting at the end of
        Stage 2, is Sartoris Multiboot Header. Stage 2 will verify
        the multiboot magic number (`0x1BADB002`).
   * Enable A20
+
        You can google for this, but basically what it does here 
        is enable the A20 line on the processor, in order to 
        remove the 1MB limit set by the processor for backward
        compatibility with _really_ older systems.
   * Calculate Memory Size
+
        Memory size will be calculated using the BIOS interrupt `0x12` or 
        `0x15` function `0x88`.
        Here it will also ask the BIOS to provide a memory map issuing
        interrupt `0x15` Function `0xE820`.
   * Switch to Protected Mode
-       In order to switch to protected mode the bootloader defines a GDT
-       table and an LDT table.
 
+       In order to switch to protected mode the bootloader defines a GDT
+       table and an IDT table.
+
+       The loader will Disable Interrupts, and IDT table will be loaded with only one record with 0.
+    
        GDT table will have the following structure:
 
-       || Dummy descriptor required by architecture || 0 ||
-       || Code segment descriptor || limit=ffff base_adress=0 p-flag=1, dpl=0, s-flag=1 (non-system segment), type code exec/read g-flag=1, d/b bit=1 (limit mult by 4096, default 32-bit opsize), limit upper bits F ||
-       || Data segment descriptor || limit=ffff, base_adress=0, p-flag=1, dpl=0, s-flag=1, type read/write, g-flag=1, d/b bit=1, limit upper bits F ||
+|| Dummy Descriptor || 0 ||
+|| Code segment descriptor || limit=ffff base_adress=0 p-flag=1, dpl=0, s-flag=1 (non-system segment), type code exec/read g-flag=1, d/b bit=1 (limit mult by 4096, default 32-bit opsize), limit upper bits F ||
+|| Data segment descriptor || limit=ffff, base_adress=0, p-flag=1, dpl=0, s-flag=1, type read/write, g-flag=1, d/b bit=1, limit upper bits F ||
+ 
 
-      
-  * Fill the Multiboot structure
+       Once the IDT and GDT are loaded with `lidt` and `lgdt`, `PE` bit (bit 0) of `CR0` will be set to 1 in order to switch to protected mode.
 
-Its important to notice Machine State left from this stage is conformig to Multiboot specification as defined [http://www.gnu.org/software/grub/manual/multiboot/html_node/Machine-state.html#Machine-state here].
+  * Move the Kernel
 
-= Sartoris Multiboot Loader =
+    The Kernel will be moved to the location specified on the Multiboot header. 
+
+    Once the kernel is moved Machine will be left like this:
+
+  * EAX contains the magic value 0x2BADB002
+  * EBX contains the 32-bit physical address of the Multiboot information structure provided by the boot loader. 
+  * CS is a 32-bit read/execute code segment with an ofeset of 0 and a limit of 0xFFFFFFFF. The exact value is undefined. 
+  * DS,ES,es,GS,SS are 32-bit read/write data segment with an ofeset of 0 and a limit of 0xFFFFFFFF. The exact values are all undefined. 
+  * A20 gate is enabled. 
+  * CR0 Bit 31 (PG) is cleared. Bit 0 (PE) is set. Other bits are all undefined. 
+  * EFLAGS Bit 17 (VM) is cleared. Bit 9 (IF) is cleared. Other bits are all undefined. 
+  * All other processor registers and flag bits are undefined. 
+
+Its important to notice this Machine State is conformig to Multiboot specification as defined [http://www.gnu.org/software/grub/manual/multiboot/html_node/Machine-state.html#Machine-state here].
+
+== Sartoris Multiboot Loader ==
+
+Sartoris Multiboot loader, is defined on `/arch/i386/boot/sartoris_loader.s`, and is the last step on the boot process, before jumping to Sartoris initialization. 
+
+Even though the other stages can be replaced by a Multiboot compliant boot loader, this is the first stage which cannot be replaced. It will check `eax` register contains the Multiboot Magic Number and die if it does not.
+
+The second step, will be to load once more the GDT and IDT, because Multiboot does not guarantee they'll be loaded with something we can use. IDT and GDT used are the same we set on Stage 2 of the loader.
+
+Third step of the loader is to move Multiboot info structure to the address defined by `multiboot_info_address`, and place the Memory Map (if present) next to it, updating its pointer on the structure after relocation. 
+
+Last steps are to move the Kernel image to address 0 (this is an important step, since doing this will kill the system BIOS) and the Init Task Image to `init_address`.
+
+after the last step, stack register `esp` will be set to `stack_address` and the loader will jump to possition 0 on physical memory, that happens to be where the Kernel Image begins, and it's entry point.
