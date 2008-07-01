@@ -203,6 +203,6 @@ This function will perform the following steps:
      * Set up a page directory for the init Task
      * Set first Page table on the directory to the Kernel Page Table
      * Create a Page table, mapping init Physical Memory to `USER_OFFSET`. 
-     * Map last 64Kb to BootInfo Structure on the table.
+     * Map last 64Kb to !BootInfo Structure on the table.
      * Set the Table on the directory.
      * Set cr3 to the Physical address of the new Page directory, and enable Paging on CR0 by setting PG bit.
