@@ -2,7 +2,7 @@
 
 = What is an SMO? =
 
-On Sartoris, each [Tasks Task] has it's unique Linear Address Space, and it's memory regions cannot be seen by other tasks, unless the operating system manually maps some part of the task address space onto another Task Address Space, using paging overlapping.
+On Sartoris, each [Tasks Task] has it's unique Linear Address Space, and it's memory regions cannot be seen by other tasks, unless the operating system manually maps some part of the task address space onto another Task Address Space, using page aliasing.
 
 Although the Page Mapping method seemes quite interesting, it would require the microkernel to control paging of memory areas for user and system services. Since Sartoris is ment to be as unobtrusive as it can, it only supports memory sharing by copying, instead of pages mapping.
 
