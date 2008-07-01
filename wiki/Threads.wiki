@@ -67,6 +67,6 @@ On the first case, its easy to see that upon state switching we will always retu
 
 Current version of sartoris, will also keep MMX/FPU/SSEn state on demmand. 
 
-When a thread uses an MMX instruction (it the same for FPU/SSEn instructions) sartoris will check if another thread has already used it, and if so, it will preserve MMX state for that thread and load the new thread MMX state.
+When a thread uses an MMX instruction (it's the same for FPU/SSEn instructions) sartoris will check if another thread has already used it, and if so, it will preserve MMX state for that thread and load the new thread MMX state.
 
 This actions are performed by setting the TS flag on CR0 of the processor, each time we perform a thread switch only if current thread is not the _owner_ of MMX state and setting EM to 0. When a thread uses MMX, if TS = 1 and EM = 0, an interrupt will be issued and sartoris will perform the MMX state switch, and acknowledge the new thread as the MMX state owner.
