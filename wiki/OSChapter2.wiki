@@ -16,6 +16,8 @@ It's important to notice that once the init thread has been loaded Sartoris will
 
 When _Paging_ is enabled, the Init Task will be initially fully paged, up to the size specified by `INIT_SIZE` defined on the architecture dependant section of the Microkernel code.
 
+Bare in mind, the next section on this page, is a very (very) technical one, concerning the boot process. If you are only interested on creating an OS and let Sartoris boot loader take care, without any understanding of what's happening under the hood, then you might want to go on an read the next chapter of the tutorial [OSChapter3 Hello World!].
+
 = Boot Process Detailed (x86) =
 
 On the i386 implementation, Sartoris provides a two-stage boot loader which complies to the Multiboot specification. 
