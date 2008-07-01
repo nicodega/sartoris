@@ -47,9 +47,9 @@ The encoded blocklist format will be:
 
 || Memory location || Name || Size || Default Value ||
 || `0x187` || `block_list_len` || `1 byte` || 1 ||
-|| `0x188` || `block_list_start` || 6 * Block list nodes || Initial Node || 
+|| `0x188` || `block_list_start` || `6 x Block list nodes` || Initial Node || 
 
-Starting at `block_list_start` there will be a list of up to 20 nodes with the folloging structure:
+Starting at `block_list_start` there will be a list of up to 20 nodes with the following structure:
 
 {{{
 struct list_node{
@@ -61,5 +61,13 @@ struct list_node{
 By default Sartoris will complete the list with only one node, telling stage 1.5 loader to copy starting at lba 2 with a length of (7*128)+2 512 bytes blocks.
 
 As the blocklist is located at a known possition on Sartoris image, this could be changed to point to a different _Stage 2_ Loader, even when the Microkernel is compiled.
+
+Copy procedure destination on memory, will be taken from `nextstage_seg`, which is set to `stage2seg16:0x0000`.
+
+It's important to notice, that until now, we have been running on 16 bit (real) mode.
+
+=== Stage 2 ===
+
+
 
 = Sartoris Multiboot Loader =
