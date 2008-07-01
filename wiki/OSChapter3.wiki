@@ -50,7 +50,7 @@ Size: 32186 bytes
 1441862 bytes (1.4 MB) copied, 0.011 s, 131 MB/s
 }}}
 
-This will generate a file named `1.44a` on `hello_world/bochs` which you can run on bochs. If you do, this will be the output:
+This will generate a file named `1.44a` on `hello_world/bochs` which you can [OSTesting_Bochs run on bochs]. If you do, this will be the output:
 
 [http://sartoris.googlecode.com/svn/images/hello_world.jpg]
 
