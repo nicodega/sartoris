@@ -206,3 +206,5 @@ This function will perform the following steps:
      * Map last 64Kb to !BootInfo Structure on the table.
      * Set the Table on the directory.
      * Set cr3 to the Physical address of the new Page directory, and enable Paging on CR0 by setting PG bit.
+
+Next step on this tutorial is [OSChapter3 Hello World!]
