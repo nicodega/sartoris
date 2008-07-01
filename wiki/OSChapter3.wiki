@@ -29,9 +29,9 @@ int main()
 
 We want this code to be executed as the Init Thread, and that's why it has to end with `while(1)` (if it didn't, it would attempt to return from init, and that's not right).
 
-Since Sartoris copies itself over the BIOS and interrupts are not mapped to BIOS functions anymore, we need a way to display our nice spanish "Hello World!" message. `screen.h` and `screen.c` are VGA text printing routines which will access the VGA IO registers and using the Hi-Mem segment thei'll print the text. 
+Since Sartoris copies itself over the BIOS and interrupts are not mapped to BIOS functions anymore, we need a way to display our nice spanish "Hello World!" message. `screen.h` and `screen.c` are VGA text printing routines which will access the VGA IO registers and using the Hi-Mem segment they'll print the text. 
 
-In order to generate our example, you'll have to compile Sartoris first. You should type `make` on sartoris directory to generate `sartoris.img` containg the microkernel image. Once Sartoris is compiled, you must run `make` this time on `hello_world` directory.
+In order to generate our example, you'll have to compile Sartoris first. You should type `make` on sartoris directory to generate `sartoris.img` containing the microkernel image. Once Sartoris is compiled, you must run `make` this time on `hello_world` directory.
 
 This is the output you should get:
 
@@ -50,7 +50,7 @@ Size: 32186 bytes
 1441862 bytes (1.4 MB) copied, 0.011 s, 131 MB/s
 }}}
 
-This will generate a file named `1.44a` on `hello_world/bochs` which you can [OSTesting_Bochs run on bochs]. If you do, this will be the output:
+This will generate a file named `1.44a` on `hello_world/bochs` which you can [OSTesting_Bochs run on bochs]. If you do, you'll see this:
 
 [http://sartoris.googlecode.com/svn/images/hello_world.jpg]
 
@@ -58,7 +58,7 @@ As you can see, our little "Hello world!" example worked as a charm, and with no
 
 == Behind the Scenes ==
 
-Ok... that was good!... but, how did we get sartoris to load our function as a thread?!
+Ok... that was good!... but, how did we get Sartoris to load our function as a thread?!
 
 Lets look closer at the compilation output. 
 
@@ -70,7 +70,7 @@ The -O2 switch tells `gcc` to optimize the code generated for the example and is
 
 The other switches tell `gcc` that the code will run independant from any library (`-ffreestanding`), without using the Standard Includes (`-nostdinc`) nor the Standard C Library (`-nostdlib`) and last but not least, we tell `gcc` not to use Start Files like `cr0` (`-nostartfiles`).
 
-These switches are necesary, because none of these things can be used when runing a standalone process like this one, since all these things are OS dependant.
+These switches are necesary, because none of these things can be used when runing a standalone process like this one, since all of them are OS dependant.
 
 If we look at the linker output:
 {{{
