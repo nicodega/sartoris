@@ -13,8 +13,10 @@ For this tutorial, you'll need to prepare a [Compiling Sartoris compile environm
 
   * [OSChapter2 Chapter2]: Sartoris _boot_ process explained.
 
-  * [OSChapter3 Chapter3]: Creating Task and Threads.
+  * [OSChapter3 Chapter3]: Hello world!
 
-  * [OSChapter4 Chapter4]: How do I create a scheduler?
+  * [OSChapter4 Chapter4]: Creating Task and Threads.
 
-  * [OSChapter5 Chapter5]: Inter process communication.
+  * [OSChapter5 Chapter5]: How do I create a scheduler?
+
+  * [OSChapter6 Chapter6]: Inter process communication.
