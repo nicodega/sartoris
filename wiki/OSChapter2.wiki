@@ -68,6 +68,14 @@ It's important to notice, that until now, we have been running on 16 bit (real) 
 
 === Stage 2 ===
 
+This stage is where most interesting things happen. Current Implementation is contained on `arch/i386/boot/stage2mem.s`.
 
+This stage will perform the following actions:
+
+  * Enable A20
+  * Calculate Memory Size
+  * 
+
+Its important to notice Machine State left from this stage is conformig to Multiboot specification as defined [http://www.gnu.org/software/grub/manual/multiboot/html_node/Machine-state.html#Machine-state here].
 
 = Sartoris Multiboot Loader =
