@@ -20,7 +20,7 @@ When _Paging_ is enabled, the Init Task will be initially fully paged, up to the
 
 On the i386 implementation, Sartoris provides a two-stage boot loader which complies to the Multiboot specification. 
 
-= The Bootloader =
+== The Bootloader ==
 
 === Stage 1 ===
 
@@ -142,3 +142,75 @@ Third step of the loader is to move Multiboot info structure to the address defi
 Last steps are to move the Kernel image to address 0 (this is an important step, since doing this will kill the system BIOS) and the Init Task Image to `init_address`.
 
 after the last step, stack register `esp` will be set to `stack_address` and the loader will jump to possition 0 on physical memory, that happens to be where the Kernel Image begins, and it's entry point.
+
+== Kernel Initialization ==
+
+Architecture specific Kernel initialization will begin when the architecture Independant code invokes `arch_init_cpu` function defined on `/arch/i386/kernel/main.c`.
+
+This function will perform the following steps:
+
+  * Program PIC controler
+  
+  PIC interrupts will be mapped to 0x20-0x27 (master PIC) and 0x28-0x2f (slave PIC). It will also set the PICs to expect software EOIs and disable interupts on both PICs by masking them.
+
+  * Initialize GDT
+
+  Kernel GDT will contain the following data:
+
+|| Kernel Code Segment || This segment begins at 0x0 and ends at 0xFFFFFFFF ||
+|| Kernel Data Segment || This segment begins at 0x0 and ends at 0xFFFFFFFF ||
+|| High Memory segment || This is a segment for memory addresses 0xA0000 to 0xFFFFF ||
+|| System Calls || Call gate descriptors for System Calls (`MAX_SCA`) ||
+|| LDTs || LDT descriptors (4) ||
+|| Global TSS || This will hold the global TSS descriptor ||
+
+  * Get Capabilities
+
+  Capabilities for the processor will be obtained using the CPUID instruction.
+
+  * Initialize Interrupts
+
+  The Microkernel will initialize a new IDT table, mapping Intel exceptions to a predefined procedure which will dump CPU contents ans halt. All other interrupts will be disabled.
+
+  * Create a Global TSS segment 
+
+  Sartoris will initialize the `global_tss` structure, setting `curr_state` to task 0 state. It will also set `esp0` to `KRN_DATA_SS`.
+
+  * Create Init Task/Thread and Initialize Paging
+
+  Init Task will be setup as follows:
+
+{{{
+	tsk.size = INIT_SIZE;  
+	tsk.mem_adr = USER_OFFSET;
+	tsk.priv_level = 0;
+}}}
+
+   Init thread:
+
+{{{
+	thr.task_num = INIT_TASK_NUM;
+	thr.invoke_mode = PRIV_LEVEL_ONLY;
+	thr.invoke_level = 1;
+	thr.ep = 0x00000000;
+
+	thr.stack = (INIT_SIZE - BOOTINFO_SIZE - 0x4);
+}}}
+
+   *  Once Init Task and Thread are created, paging will be initialized by:
+
+     * Build Kernel Page Table (0x0 to 0xA0000)
+
+     * Set 0xA0000 to 0xFFFFF as present, setting `PG_CACHE_DIS` to disable cache on the video memory area.
+
+     * Set up a page directory for the init Task
+
+     * Set first Page table on the directory to the Kernel Page Table
+
+     * Create a Page table, mapping init Physical Memory to `USER_OFFSET`. 
+
+     * Map last 64Kb to BootInfo Structure on the table.
+
+     * Set the Table on the directory.
+
+     * Set cr3 to the Physical address of the new Page directory, and enable Paging on CR0 by setting PG bit.
