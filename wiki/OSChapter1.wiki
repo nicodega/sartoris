@@ -9,7 +9,7 @@ Therefore, it seems reasonable to encapsulate the routines that interact directl
 
 == What Can I do With it? ==
 
-Sartoris is ment as the base for creating an Operating System, abstracting itself from CPU control o even used to create a single aplication running alone on top of a processor, with full control of it. 
+Sartoris is ment as the base for creating an Operating System, abstracting itself from CPU control o even used to create a single _real-time_ aplication running alone on top of a processor, with full control of it. 
 
 Functionality provided by Sartoris can be grouped as follows:
 
