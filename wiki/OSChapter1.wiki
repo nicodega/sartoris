@@ -19,7 +19,7 @@ Functionality provided by Sartoris can be grouped as follows:
 
   * *Message passing.* The kernel provides an asynchronous messaging system, in the form of a set of ports assigned to each task. Each port functions as a mailbox where fixed-sized messages from other tasks are received. These system calls cover the creation, deletion and management of ports.
 
-Next step on this tutorial is [Chapter2 Sartoris boot process explained.]
+Next step on this tutorial is [OSChapter2 Sartoris boot process explained.]
 
 == See also ==
 
