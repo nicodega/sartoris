@@ -19,7 +19,7 @@ For example, Under Debian (or Ubuntu), all you need are the build-essential, nas
 
 == Windows ==
 
-On windows, theres no easy way (or at least we did not try hard enough ;)) to compile Satoris on Visual Studio IDE. However, it's quite simple to do so on a cygwin environment, with a proper elf toolchain for cross-compilation.
+On windows, theres no easy way (or at least we did not try hard enough ;)) to compile Satoris on Visual Studio IDE. However, it's quite simple to do so on a cygwin environment, with a proper elf toolchain for cross-compilation (you can download a toolchain [http://sartoris.googlecode.com/files/toolchain.zip here]).
 
 In order to specify the name of the compiler and linker sartoris must use to compile, you *must* modify `compenv.mk` located on `sartoris/arch/i386` as suggested [i386CompileEnv here].
 
