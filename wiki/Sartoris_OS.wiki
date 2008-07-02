@@ -1,5 +1,5 @@
+#summary How to Create an OS on top of Sartoris
 #labels Featured,Phase-Implementation
-#How to Create an OS on top of Sartoris
 
 = Create an OS =
 
