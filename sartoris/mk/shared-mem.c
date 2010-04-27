@@ -270,13 +270,13 @@ int delete_smo(int id, int task_id)
     int x, result;
     struct smo *prev, *next, *smo;
 	struct task *task;
-	
-	smo = GET_PTR(id,smo);
-    
+		
     result = FAILURE;
     
     x = mk_enter(); /* enter critical block */
 
+	smo = GET_PTR(id,smo);
+    
     if (smo->owner == task_id) 
 	{	
 		result = SUCCESS;
