@@ -18,12 +18,6 @@
 
 #include "sartoris/scr-print.h"
 
-/* 
-Flag used when we are on a sartoris 
-dynamic memory page fault 
-*/
-extern int rq_int;
-
 #ifdef PAGING
 
 /* the kernel page table(s) for mapping, shared by everybody */
@@ -37,8 +31,6 @@ void init_paging()
 	unsigned int physical;
 	int i;
 	struct i386_task *tinf = GET_TASK_ARCH(INIT_TASK_NUM);
-	
-	rq_int = 0;
 
 	/* build the kernel (0 to a0000) page table */
 	physical = 0;
