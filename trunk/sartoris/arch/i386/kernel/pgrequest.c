@@ -15,11 +15,6 @@ pd_entry dyn_tables[(MAX_ALLOC_LINEAR / 0x400000) - KERN_TABLES];
 
 #define DYN_TBL_INDEX(a) (a - KERN_TABLES)
 
-/* 
-Flag used when we are on a sartoris 
-dynamic memory page fault 
-*/
-int rq_int;
 /* Page granted by OS */
 void *rq_physical;
 
@@ -36,8 +31,6 @@ This will grant a page to sartoris. (Used by the OS when whe generate a sartoris
 */
 int arch_grant_page_mk(void *physical) 
 {
-	if(!rq_int) return FAILURE;
-
 	rq_physical = physical;
 
     return SUCCESS;
@@ -106,7 +99,7 @@ int arch_request_page(void *laddr)
 		if(dyn_tables[DYN_TBL_INDEX(PG_LINEAR_TO_DIR(laddr))] == NULL)
 		{
 			rq_physical == NULL;
-
+			
 			/* Request a page for the table using a page fault */
 			arch_issue_page_fault();
 
@@ -126,10 +119,10 @@ int arch_request_page(void *laddr)
 	}
 	
 	rq_physical = NULL;
-
+	
 	/* Request the page */
 	arch_issue_page_fault();
-
+	
 	if(rq_physical == NULL)
 			return FAILURE;
 
