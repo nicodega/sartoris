@@ -135,4 +135,6 @@ int get_page_fault(struct page_fault *pf)
   
 #endif
 
+	return result;
+
 }
