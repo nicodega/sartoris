@@ -9,7 +9,7 @@ void dyn_free_page(void *linear, int lvl);
 /* 
 f_alloc = allocated dynamic pages (free)
 */
-#define DYN_THRESHOLD     4         // max free pages will we keep (must be divisible by 2)
+#define DYN_THRESHOLD     4         // max free pages kept (must be divisible by 2)
 #define DYN_GRACE_PERIOD  10        // How many free/allocs will we wait 
                                     // until we free some pages. (this is 
                                     // done this way so we are not allocating 
