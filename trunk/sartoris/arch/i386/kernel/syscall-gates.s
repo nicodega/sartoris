@@ -114,8 +114,12 @@ global push_int_c
 extern resume_int
 global resume_int_c
 
+extern grant_page_mk
+global grant_page_mk_c
+
 extern curr_state
 extern arch_thread_int_ret
+
 
 %define SFLAG_RUN_INT           0x4
 
@@ -194,6 +198,12 @@ flush_tlb_c:
 
 get_page_fault_c:
 	mov ecx, get_page_fault
+	mov edx, 1
+	call do_syscall
+	retf 4
+			
+grant_page_mk_c:
+	mov ecx, grant_page_mk
 	mov edx, 1
 	call do_syscall
 	retf 4

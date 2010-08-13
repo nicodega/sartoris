@@ -17,6 +17,8 @@
 #include "paging.h"
 #include "caps.h"
 
+#include "sartoris/scr-print.h"
+
 /* init_cpu initializes de system gdt (desc 0-3 are system desc: [dummy, 
  * kcode, kdata, himem]) and creates the init service.
  */
@@ -28,7 +30,7 @@ void arch_init_cpu(void)
 {	
 	/* remap the interrupts                               */
 	reprog_pics();
-
+	
 	/* initialize gdt                                     */
 	init_desc_tables();
 	
@@ -43,14 +45,14 @@ void arch_init_cpu(void)
 
 	/* Initialize global tss */
 	arch_init_global_tss();
-	
+
 	arch_init_dynmem();
-	
+
 	create_init_task();  
-		
+
 #ifdef PAGING
 	init_paging();
-#endif	
+#endif
 	/* the system is almost up! the rest is done back in the initalize_kernel 
 		function, namely actually firing the init thread. */
 }
@@ -73,36 +75,37 @@ void create_syscall_gates()
 	hook_syscall(10, 1, &page_in_c, 5);
 	hook_syscall(11, 1, &page_out_c, 3);
 	hook_syscall(12, 1, &flush_tlb_c, 0);
-	hook_syscall(13, 2, &get_page_fault_c, 1);
+	hook_syscall(13, 2, &get_page_fault_c, 1);	
+	hook_syscall(14, 1, &grant_page_mk_c, 1);
 
-	hook_syscall(14, 1, &create_int_handler_c, 4);
-	hook_syscall(15, 1, &destroy_int_handler_c, 2);
+	hook_syscall(15, 1, &create_int_handler_c, 4);
+	hook_syscall(16, 1, &destroy_int_handler_c, 2);
 	
-	hook_syscall(16, 3, &ret_from_int_c, 0);    
-	hook_syscall(17, 2, &get_last_int_c, 0);
+	hook_syscall(17, 3, &ret_from_int_c, 0);    
+	hook_syscall(18, 2, &get_last_int_c, 0);
 
-	hook_syscall(18, 3, &open_port_c, 3);
-	hook_syscall(19, 3, &close_port_c, 1);
-	hook_syscall(20, 3, &set_port_perm_c, 3);
-	hook_syscall(21, 3, &set_port_mode_c, 3);
-	hook_syscall(22, 3, &send_msg_c, 3);
-	hook_syscall(23, 3, &get_msg_c, 3);
-	hook_syscall(24, 3, &get_msg_count_c, 1);
+	hook_syscall(19, 3, &open_port_c, 3);
+	hook_syscall(20, 3, &close_port_c, 1);
+	hook_syscall(21, 3, &set_port_perm_c, 3);
+	hook_syscall(22, 3, &set_port_mode_c, 3);
+	hook_syscall(23, 3, &send_msg_c, 3);
+	hook_syscall(24, 3, &get_msg_c, 3);
+	hook_syscall(25, 3, &get_msg_count_c, 1);
 
-	hook_syscall(25, 3, &share_mem_c, 4);
-	hook_syscall(26, 3, &claim_mem_c, 1);
-	hook_syscall(27, 3, &read_mem_c, 4);
-	hook_syscall(28, 3, &write_mem_c, 4);
-	hook_syscall(29, 3, &pass_mem_c, 2);
-	hook_syscall(30, 3, &mem_size_c, 1);
-	hook_syscall(31, 1, &run_thread_int_c, 4);
+	hook_syscall(26, 3, &share_mem_c, 4);
+	hook_syscall(27, 3, &claim_mem_c, 1);
+	hook_syscall(28, 3, &read_mem_c, 4);
+	hook_syscall(29, 3, &write_mem_c, 4);
+	hook_syscall(30, 3, &pass_mem_c, 2);
+	hook_syscall(31, 3, &mem_size_c, 1);
+	hook_syscall(32, 1, &run_thread_int_c, 4);
 
-	hook_syscall(32, 1, &pop_int_c, 4);
-	hook_syscall(33, 1, &push_int_c, 4);
-	hook_syscall(34, 1, &resume_int_c, 4);
+	hook_syscall(33, 1, &pop_int_c, 4);
+	hook_syscall(34, 1, &push_int_c, 4);
+	hook_syscall(35, 1, &resume_int_c, 4);
 
 #ifdef _METRICS_
-	hook_syscall(35, 1, &get_metrics_c, 0);
+	hook_syscall(36, 1, &get_metrics_c, 0);
 #endif	
 }
 
@@ -135,7 +138,15 @@ void create_init_task()
 
 	/* Don't put the stack over bootinfo */
 	thr.stack = (void*)(INIT_SIZE - BOOTINFO_SIZE - 0x4);
-	
-	if (create_task(INIT_TASK_NUM, &tsk) < 0) while(1);
-	if (create_thread(INIT_THREAD_NUM, &thr) < 0) while(1);	
+		
+	if (create_task(INIT_TASK_NUM, &tsk) < 0) 
+	{
+		k_scr_print("INIT TASK CREATION FAILED\n", 0x4);
+		while(1);
+	}
+	if (create_thread(INIT_THREAD_NUM, &thr) < 0)
+	{
+		k_scr_print("INIT THREAD CREATION FAILED\n", 0x4);
+		while(1);
+	}
 }

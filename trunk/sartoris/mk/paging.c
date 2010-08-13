@@ -19,14 +19,13 @@
 #include "sartoris/kernel-data.h"
 
 /* paging implementation */
-
 int grant_page_mk(void *physical)
 {
 	int ret = FAILURE;
 #ifdef PAGING
 	int x = mk_enter();
 
-	if(dyn_pg_lvl != DYN_PGLVL_NONE && dyn_pg_nest != 0)
+	if(dyn_pg_lvl == DYN_PGLVL_NONE && dyn_pg_nest == DYN_NEST_ALLOCATING)
 	{
 		ret = arch_grant_page_mk(physical);
 		/* 
@@ -36,7 +35,11 @@ int grant_page_mk(void *physical)
 			If interrupt is nesting, pop it from the stack, if not, just 
 			issue run_thread
 		*/
-		dyn_pg_nest = 1;				 // set pg_nest to 1 so run_thread wont fail
+		dyn_remaining--;
+
+		if(dyn_remaining == 0)
+			dyn_pg_nest = DYN_NEST_ALLOCATED; // set pg_nest to DYN_NEST_ALLOCATED so run_thread wont fail
+
 		if(int_nesting[PAGE_FAULT_INT])  // PAGE_FAULT_INT comes from ARCH
 			ret_from_int();
 		else

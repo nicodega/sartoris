@@ -29,10 +29,11 @@ struct dyn_free_page
 
 int dyn_pg_lvl;			// If DYN_PGLVL_NONE, no dynamic memory operations are being performed, otherwise
 						// it will contain a value indicating which memory need is being served.
-int dyn_pg_nest;		// Dynamic memory nesting. 0 = none, 1 = already alocated waiting to run thread, 2 = waiting for alocation.
+int dyn_pg_nest;		// Dynamic memory nesting. 0 = none, 1 = already allocated waiting to run thread, 2 = waiting for allocation.
+						// When nesting is 0 we can allocate dynamic memory, if not, there's already a dynamic memory allocation going on.
 int dyn_pg_thread;		// Thread where dynamic memory request originated
+int dyn_remaining;		// how many pages must the OS still provide. 
 int dyn_pg_ret;			// If 0 no page is being returned to the OS.
-void *dyn_pg_ret_addr;  // Address returned from page fault handler on memory request
 
 /*
 Bitmap used for memory allocation
@@ -49,7 +50,6 @@ void dyn_init()
 	dyn_pg_nest = 0;
 	dyn_pg_thread = 0;
 	dyn_pg_ret = 0;
-	dyn_pg_ret_addr = NULL;
 	dyn_free_first = NULL;
 	f_alloc = 0;
 	f_count = DYN_GRACE_PERIOD;
@@ -61,7 +61,7 @@ void dyn_init()
 void dyn_free_queued();
 /*
 Get a page from OS (be careful on outher functions... this breaks atomicity)
-This will return linear address of the page we got from OS.
+This will return the linear address of the page we got from the underlying OS.
 NOTE: We count on atomicity here, until we invoke arch_request_page().
 */
 void *dyn_alloc_page(int lvl)
@@ -89,7 +89,7 @@ void *dyn_alloc_page(int lvl)
 	if(dyn_pg_lvl != DYN_PGLVL_NONE) return NULL;
 
 	/*
-	Find a free page on sartoris linear using the bitmap
+	Find a free page on sartoris linear space using the bitmap
 	*/
 	int i,j;
 	for(i=0; i < DYN_BITMAPSIZE; i++)
@@ -110,7 +110,7 @@ void *dyn_alloc_page(int lvl)
 
 	if(i == DYN_BITMAPSIZE) return NULL;
 	
-	dyn_pg_lvl = lvl;			// indicate we are on a dynamic memory PF
+	dyn_pg_lvl = lvl;	// indicate we are on a dynamic memory PF
 
 	int ret = arch_request_page(laddr);
 	
@@ -156,7 +156,7 @@ void dyn_free_page(void *linear, int lvl)
 		pg->prev = NULL;
 	}
 	dyn_free_first = pg;
-			
+
 	/* Check if some other thread is busy freeing. */
 	if(dyn_pg_ret != 0)
 	{
@@ -185,7 +185,7 @@ void dyn_free_page(void *linear, int lvl)
 		}
 	}
 	
-	dyn_pg_ret = 0; 
+	dyn_pg_ret--; 
 }
 
 void dyn_free_queued(int count)
@@ -202,7 +202,6 @@ void dyn_free_queued(int count)
 		pg = dyn_free_first;
 		dyn_free_first = pg->next;
 
-		dyn_pg_ret_addr = pg;
 		ret = arch_return_page(pg);
 
 		/* Atomicity might have been broken here, be careful */

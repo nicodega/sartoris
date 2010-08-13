@@ -20,6 +20,8 @@
 #include "sartoris/kernel-data.h"
 #include <sartoris/critical-section.h>
 
+#include "sartoris/scr-print.h"
+
 /* multi-tasking implementation */
 int create_task(int id, struct task *tsk) 
 {
@@ -35,7 +37,9 @@ int create_task(int id, struct task *tsk)
 	x = mk_enter();  /* enter critical block */
 
 	if (VALIDATE_PTR(tsk)) 
-	{			
+	{
+		k_scr_print("VALID PTR\n", 0x9);
+
 		tsk = (struct task *) MAKE_KRN_PTR(tsk);
 		cached_mem_adr = tsk->mem_adr;        /* if we will pagefault, we must do it now */
 		cached_size = tsk->size;              /* (before the sanity checks) */
@@ -43,12 +47,11 @@ int create_task(int id, struct task *tsk)
 
 		/* no page fault may occur after this point,
 		the rest is truly atomic */
-
 		if (0 <= id && id < MAX_TSK && !TST_PTR(id,tsk) && (unsigned int)cached_mem_adr >= USER_OFFSET) 
-		{			
+		{
 			/* check if the received task struct is ok */
 			if (cached_priv_level >= 0) 
-			{				
+			{
 				/* allocate a task (might break atomicity) */
 				task = (struct task *)salloc(id, SALLOC_TSK);
 
@@ -59,7 +62,7 @@ int create_task(int id, struct task *tsk)
 				}
 			}
 		}
-	}    
+	}
 
 	mk_leave(x); /* exit critical block */
 

@@ -317,7 +317,7 @@ print_dot:
 loading_msg:
 	db 'Loading'
 boot_msg:
-	db 'Sartoris Bootloader 2.0'
+	db 'Sartoris Bootloader 2.1'
 
 ;; Data for stage 1.5
 tries:
@@ -348,3 +348,4 @@ block_list_start:
 		
 ;; complete with 0's 
 times (512-($-$$)) db 0x00
+

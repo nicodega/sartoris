@@ -112,7 +112,9 @@ nommap:
 	movsd
 
 	;; place init img where it should be
-	mov ecx, ( (img_sectors - (kern_sectors + loader_sectors)) * 512) >> 2	;; ignore kernel and loader sectors
+	mov ecx, [realaddress(img_size)]
+	sub ecx, ((kern_sectors + loader_sectors) * 512)
+	shr ecx, 2
 	mov esi, image_phys_pos + (kern_sectors + loader_sectors)*512
 	mov edi, init_address
 	rep
@@ -153,5 +155,7 @@ _idt_pseudo_descr:
 	dw 0x0000, 0x0000   ; the real system tables are ready.
 	
 	
-times (512-($-$$)) db 0x0 	;; fill with 0's
+times (508-($-$$)) db 0x0 	;; fill with 0's
+
+img_size: dd (7*128*512)
 

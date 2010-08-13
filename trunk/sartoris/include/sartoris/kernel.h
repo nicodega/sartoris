@@ -23,7 +23,7 @@
 #define MAX_TSK						64  /* max tasks */
 #define MAX_THR						128 /* max concurrent threads of execution */
 #define MAX_IRQ						64  /* max irqs */
-#define MAX_SMO						1024
+#define MAX_SMO						1024 /* system-wide */
 #define MAX_MSG						1024 /* system-wide */
 #define MAX_OPEN_PORTS				(32*MAX_TSK)   /* system-wide */
 #define MAX_TSK_OPEN_PORTS			32
@@ -106,7 +106,13 @@ struct page_fault
 	int thread_id;
 	void *linear;
 	int pg_size;	    // used if our architecture provides multiple page sizes.
+	int flags;			// flags for the page fault
 };
+
+#define PF_FLAG_NONE 0  // a normal page fault interrupt.
+#define PF_FLAG_FREE 1  // a page fault returning a page from the kernel.
+#define PF_FLAG_PG 2    // a page fault for a kernel page need.
+#define PF_FLAG_PGS(a) (a-1) // a page fault for the kernel asking for X-1 pages
 
 #ifdef __KERNEL__
 
