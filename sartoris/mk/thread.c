@@ -136,7 +136,7 @@ int run_thread(int id)
 
 	x = mk_enter(); /* enter critical block */
 
-	if( dyn_pg_lvl != DYN_PGLVL_NONE && dyn_pg_nest == 2 && dyn_pg_thread == id )
+	if( dyn_pg_lvl != DYN_PGLVL_NONE && dyn_pg_nest == DYN_NEST_ALLOCATING && dyn_pg_thread == id )
 	{
 		mk_leave(x);
 		/* we cannot return to this thread... it's waiting for a page. */
@@ -204,7 +204,7 @@ int run_thread_int(int id, void *eip, void *stack)
 
 	x = mk_enter(); /* enter critical block */
 
-	if( dyn_pg_lvl != DYN_PGLVL_NONE && dyn_pg_nest == 2 && dyn_pg_thread == id )
+	if( dyn_pg_lvl != DYN_PGLVL_NONE && dyn_pg_nest == DYN_NEST_ALLOCATING && dyn_pg_thread == id )
 	{
 		mk_leave(x);
 		/* we cannot return to this thread... it's waiting for a page. */

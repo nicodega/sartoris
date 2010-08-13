@@ -28,9 +28,12 @@ unsigned char static_idx_mem [IDX_PREALLOC_BYTES] __attribute__ ((aligned (PG_SI
 void init_indexes()
 {
 	int id = 0;
+	int i = 0;
+
+	for(;i < IDX_PREALLOC_BYTES;i++) static_idx_mem[i] = 0;
 
 	/*
-	Initially all indexes will be non allocated (except preallocated)
+	Initially all indexes will be non allocated
 	*/
 
 	for(id = 0; id < IDX_TSK_COUNT; id++)

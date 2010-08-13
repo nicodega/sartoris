@@ -31,6 +31,8 @@
 #include "sartoris/metrics.h"
 #endif
 
+#include "sartoris/scr-print.h"
+
 /* important interrupt handling data */
 
 int int_handlers[MAX_IRQ];            /* int number -> thread handler id           */
@@ -117,7 +119,7 @@ int initialize_kernel(void)
 		and create init task/thread according to
 		architectural needs.
 	*/
-
+	
 	arch_init_cpu();
 	
 	/* Free pseudo task/thread.

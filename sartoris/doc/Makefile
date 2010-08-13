@@ -1,4 +1,4 @@
-all : isma.pdf isma.ps sartoris.ps
+all : isma.pdf isma.ps sartoris.ps sma.pdf
 
 sartoris.ps : sartoris.dvi
 	dvips sartoris.dvi -o
@@ -16,9 +16,24 @@ isma.ps : isma.dvi
 isma.dvi : isma.tex
 	latex isma.tex
 	latex isma.tex
+	
+sma.pdf : sma.dvi
+	dvipdfm sma.dvi
+
+sma.ps : sma.dvi
+	dvips sma.dvi -o
+
+sma.dvi : sma.tex
+	latex sma.tex
+	latex sma.tex
 
 .PHONY : clean
 clean :
+	rm -f sma.log
+	rm -f sma.aux
+	rm -f sma.dvi
+	rm -f sma.ps
+	rm -f sma.toc
 	rm -f isma.log
 	rm -f isma.aux
 	rm -f isma.dvi

@@ -66,10 +66,9 @@ Get physical address for the page being freed by arch_return_page.
 void *arch_get_freed_physical();
 
 /*
-Returns how many interrupts will be issued on order to
-free the pages.
+Returns 0 if page granting/return finished.
 */
-int arch_get_ret_count();
+int arch_req_pages();
 
 #endif
 

@@ -76,7 +76,6 @@ int destroy_int_handler(int number, int thread)
    only from the arch-kernel section */
 
 /* atomicity is assumed */
-
 void handle_int(int number) 
 {
     int h;
@@ -89,37 +88,47 @@ void handle_int(int number)
 		/* IS_PAGE_FAULT comes from kernel-arch.h */
 		thread->page_faulted = 1;
 
-		if(dyn_pg_lvl != DYN_PGLVL_NONE && dyn_pg_nest == 0)
-		{
-			/* This flag will produce, we only send sartoris page fault once */
-			dyn_pg_nest = 2;
+		/*
+		If dynamic memory request level is not NONE and it's not nested, or 
+		we are in the middle of a 
+		*/
+		if(dyn_pg_lvl != DYN_PGLVL_NONE && dyn_pg_nest == DYN_NEST_NONE)
+		{			
+			dyn_pg_nest = DYN_NEST_ALLOCATING;
 
 			last_page_fault.task_id = -1;
 			last_page_fault.thread_id = curr_thread;
 			last_page_fault.linear = NULL; 
 			last_page_fault.pg_size = PG_SIZE;
+			dyn_remaining = arch_req_pages();
+			last_page_fault.flags = PF_FLAG_PGS(arch_req_pages(dyn_remaining));
 			dyn_pg_thread = curr_thread;	// we will use this to return here 
 											// when grant_page_mk(..) is issued
 		}
 		else if(dyn_pg_ret != 0) // dynamic memory page is being freed?
 		{
-			last_page_fault.task_id = -2;
-			last_page_fault.thread_id = -2;
+			last_page_fault.task_id = -1;
+			last_page_fault.thread_id = -1;
 			last_page_fault.linear = arch_get_freed_physical();
 			last_page_fault.pg_size = PG_SIZE;
+			last_page_fault.flags = PF_FLAG_FREE;
 		}	
 		else
 		{
+			// a common page fault
 			last_page_fault.task_id = curr_task;
 			last_page_fault.thread_id = curr_thread;
 			last_page_fault.linear = arch_get_page_fault(); 
 			last_page_fault.pg_size = PG_SIZE;
-
-			if(last_page_fault.linear < (void*)MAX_ALLOC_LINEAR) // did we pagefault on a kernel dynamic memory page?
+			last_page_fault.flags = PF_FLAG_NONE;
+			
+			// did we pagefault on a kernel dynamic memory page?
+			if(last_page_fault.linear < (void*)MAX_ALLOC_LINEAR)
 			{
-				if(last_page_fault.linear > (void*)KERN_LMEM_SIZE)
+				if(last_page_fault.linear < (void*)KERN_LMEM_SIZE)
 					k_scr_print("mk/INTERRUPT.C: KERNEL SPACE PAGE FAULT!",12);
 
+				// try to map an existing kernel table onto the task
 				if(last_page_fault.linear > (void*)KERN_LMEM_SIZE && arch_kernel_pf(last_page_fault.linear) != FAILURE)
 				{
 					last_page_fault.linear = (void*)0xFF; 
@@ -154,14 +163,14 @@ void handle_int(int number)
 #ifdef PAGING
 			if (IS_PAGE_FAULT(number)) 
 			{
-				if(dyn_pg_lvl != DYN_PGLVL_NONE && dyn_pg_nest == 1)
+				if(dyn_pg_lvl != DYN_PGLVL_NONE && dyn_pg_nest == DYN_NEST_ALLOCATED)
 				{
 					/* 
 					We returned to the thread which generated sartoris 
 					dynamic mem fault on the first place. Decrement nesting
 					so we can produce another sartoris fault.
 					*/
-					dyn_pg_nest = 0;
+					dyn_pg_nest = DYN_NEST_NONE;
 				}
 			}
 #endif

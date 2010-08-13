@@ -23,6 +23,7 @@ global set_thread_run_mode
 global run_thread
 global get_current_thread
 
+global grant_page_mk
 global page_in
 global page_out
 global flush_tlb
@@ -326,6 +327,14 @@ resume_int:
 	pop ebp
 	ret
 
+grant_page_mk:
+	push ebp
+	mov ebp, esp
+	pass_arguments 1
+	call GRANT_PAGE_MK : 0x00000000
+	pop ebp
+	ret
+	
 %ifdef _METRICS_
 get_metrics:
 	push ebp

@@ -13,7 +13,7 @@
 /* Size needed for per-task information on arch dependant section */
 #define ARCH_TASK_SIZE (sizeof(struct i386_task))
 /* kernel page table(s) for mapping, shared by everybody */
-#define KERN_LMEM_SIZE  (0x100000 + (MAX_THR * PG_SIZE))  /* 1 page per thread + 1MB */
+#define KERN_LMEM_SIZE  (0x100000 + (MAX_THR * PG_SIZE))  /* Size of sartoris Low Memory block (does not include dynamic memory): 1 page per thread + 1MB */
 #define KERN_TABLES     ((KERN_LMEM_SIZE + (0x400000 - (KERN_LMEM_SIZE % 0x400000))) / 0x400000 )
 
 #ifdef __KERNEL__

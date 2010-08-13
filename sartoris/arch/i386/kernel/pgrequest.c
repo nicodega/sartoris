@@ -6,11 +6,14 @@
 #include "lib/indexing.h"
 #include "sartoris/kernel.h"
 
+// Address being freed (physical)
 void *free_addr;
-int int_count;
 
 #ifdef PAGING
 
+// tables used for dynamic memory by the kernel.
+// It'll hold a physical pointer to each table created for the kernel for
+// dynamic memory.
 pd_entry dyn_tables[(MAX_ALLOC_LINEAR / 0x400000) - KERN_TABLES];
 
 #define DYN_TBL_INDEX(a) (a - KERN_TABLES)
@@ -18,6 +21,9 @@ pd_entry dyn_tables[(MAX_ALLOC_LINEAR / 0x400000) - KERN_TABLES];
 /* Page granted by OS */
 void *rq_physical;
 
+/*
+This function will initialize the dynamic memory subsystem on sartoris.
+*/
 void arch_init_dynmem()
 {
 	int i;
@@ -39,7 +45,9 @@ int arch_grant_page_mk(void *physical)
 
 /*
 This function will map a kernel address if it page faulted
-because page table had not been updated.
+because page table had not been updated. (this is used in order
+to avoid loading every kernel dynamic memory page on each task directory,
+and load them on demand)
 */
 int arch_kernel_pf(void *laddr)
 {
@@ -52,7 +60,8 @@ int arch_kernel_pf(void *laddr)
 	map_page(tinf->pdb);
 
 	/* Check its a table, its created and its not present */
-	if((pdir_map[PG_LINEAR_TO_DIR(laddr)] & PG_PRESENT) == 1 || dyn_tables[DYN_TBL_INDEX(PG_LINEAR_TO_DIR(laddr))] == NULL)
+	if((pdir_map[PG_LINEAR_TO_DIR(laddr)] & PG_PRESENT) == 1 
+		|| dyn_tables[DYN_TBL_INDEX(PG_LINEAR_TO_DIR(laddr))] == NULL)
 		return FAILURE;
 
 	pdir_map[PG_LINEAR_TO_DIR(laddr)] = dyn_tables[DYN_TBL_INDEX(PG_LINEAR_TO_DIR(laddr))];
@@ -62,9 +71,9 @@ int arch_kernel_pf(void *laddr)
 
 
 /*
-This function must request a page from the operating system. It *must*
+This function must request a page from the operating system. It will
 do so by issuing a Page Fault interrupt.
-It must return a linear sartoris address already mapped.
+IMPORTANT: It will return a linear sartoris address already mapped.
 NOTE: This function will break atomicity.
 */
 int arch_request_page(void *laddr)
@@ -81,12 +90,12 @@ int arch_request_page(void *laddr)
 	*/
 
 	/* 
-	We have 200 MB at our disposal. We will need 50 page tables for mapping 
-	them all. (substracting KERN_TABLES)
+	We have MAX_ALLOC_LINEAR MB at our disposal. We will need MAX_ALLOC_LINEAR / 0x400000 
+	page tables for mapping them all. (substracting KERN_TABLES)
 	Page tables will be allocated on demand for the MK, and returned when no 
 	more entries are used (except for the mapping zone ones). This means
 	we will have to update *every* existing task page directory, with new tables.
-	If you think of something better let me know.
+	To improve performance this update will only be performed on demand, when a process pagefaults.
 	*/
 
 	/* Check if page table for this address is present on current task. */
@@ -98,7 +107,7 @@ int arch_request_page(void *laddr)
 	{
 		if(dyn_tables[DYN_TBL_INDEX(PG_LINEAR_TO_DIR(laddr))] == NULL)
 		{
-			rq_physical == NULL;
+			rq_physical = NULL;
 			
 			/* Request a page for the table using a page fault */
 			arch_issue_page_fault();
@@ -107,7 +116,7 @@ int arch_request_page(void *laddr)
 				return FAILURE;
 			
 			/*
-			we will put the table only on current task. On other tasks 
+			we will put the table only on the current task page directory. (On other tasks it'll be loaded on demand)
 			*/
 			pdir_map[PG_LINEAR_TO_DIR(laddr)] = PG_ADDRESS(rq_physical) | PG_USER | PG_PRESENT | PGATT_WRITE_ENA;
 			dyn_tables[DYN_TBL_INDEX(PG_LINEAR_TO_DIR(laddr))] = PG_ADDRESS(rq_physical) | PG_USER | PG_PRESENT | PGATT_WRITE_ENA;
@@ -117,7 +126,7 @@ int arch_request_page(void *laddr)
 			pdir_map[PG_LINEAR_TO_DIR(laddr)] = dyn_tables[DYN_TBL_INDEX(PG_LINEAR_TO_DIR(laddr))];
 		}
 	}
-	
+
 	rq_physical = NULL;
 	
 	/* Request the page */
@@ -129,7 +138,7 @@ int arch_request_page(void *laddr)
 	map_page((pt_entry *)PG_ADDRESS(pdir_map[PG_LINEAR_TO_DIR(laddr)]));
 	
 	/* 
-	Since directories share the same page table, we can
+	Since directories share the same page table for kernel addresses, we can
 	safely change it only once.
 	*/
 	ptab_map[PG_LINEAR_TO_TAB(laddr)] = PG_ADDRESS(rq_physical) | PG_USER | PG_PRESENT | PGATT_WRITE_ENA;
@@ -165,15 +174,6 @@ int arch_return_page(void *laddr)
 
 		free_addr = (void*)PG_ADDRESS(ptab_map[PG_LINEAR_TO_TAB(laddr)]);
 		ptab_map[PG_LINEAR_TO_TAB(laddr)] = 0;
-
-		/* 
-		If table has only one entry, we will return the table as well.
-		Interrupt count will be 2. 
-		*/
-		if(count == 1) 
-			int_count = 2;
-		else
-			int_count = 1;
 
 		/* First page fault will free the page */
 		arch_issue_page_fault();
@@ -212,11 +212,22 @@ void *arch_get_freed_physical()
 }
 
 /*
-Returns how many interrupts will be issued on order to free the page.
+Returns the ammount of pages necessary to fullfill the dynamic memory request.
 */
-int arch_get_ret_count()
+int arch_req_pages(void *laddr)
 {
-	return int_count;
+	struct i386_task *tinf;
+	pd_entry *pdir_map = AUX_PAGE_SLOT(curr_thread);
+
+	/* Check if page table for this address is present on current task. */
+	tinf = GET_TASK_ARCH(curr_task);
+	map_page(tinf->pdb);
+
+	if((pdir_map[PG_LINEAR_TO_DIR(laddr)] & PG_PRESENT) == 0 || dyn_tables[DYN_TBL_INDEX(PG_LINEAR_TO_DIR(laddr))] == NULL)
+	{
+		return 2;
+	}
+	return 1;
 }
 
 #endif

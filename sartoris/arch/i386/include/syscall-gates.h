@@ -29,6 +29,7 @@ extern int page_in_c(int task, void *linear, void *physical, int level, int attr
 extern int page_out_c(int task, void *linear, int level);
 extern int flush_tlb_c(void);
 extern void *get_page_fault_c(void);
+extern int grant_page_mk_c(void *physical);
 
 extern int create_int_handler_c(int number, int thread, int nesting, int priority);
 extern int destroy_int_handler_c(int number, int thread);

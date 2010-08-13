@@ -49,9 +49,14 @@ is not DYN_PGLVL_NONE then the given call *must* fail.
 #define DYN_PGLVL_MSG      0x5      // handling a Message dynamic memory need
 #define DYN_PGLVL_IDX      0x6      // handling index dynamic memory need
 
+#define DYN_NEST_NONE 0
+#define DYN_NEST_ALLOCATING 2
+#define DYN_NEST_ALLOCATED 1
+
 extern int dyn_pg_lvl;
 extern int dyn_pg_nest;
 extern int dyn_pg_thread;
+extern int dyn_remaining;
 
 extern int dyn_pg_ret;
 extern void *dyn_pg_ret_addr;
