@@ -14,13 +14,15 @@
 #define ARCH_TASK_SIZE (sizeof(struct i386_task))
 /* kernel page table(s) for mapping, shared by everybody */
 #define KERN_LMEM_SIZE  (0x100000 + (MAX_THR * PG_SIZE))  /* Size of sartoris Low Memory block (does not include dynamic memory): 1 page per thread + 1MB */
+#define KERN_MAPPINGS_START 0x100000
 #define KERN_TABLES     ((KERN_LMEM_SIZE + (0x400000 - (KERN_LMEM_SIZE % 0x400000))) / 0x400000 )
 
-#ifdef __KERNEL__
-
-#define BOOTINFO_PHYS	0x100000	/* This is where sartoris loader will copy bootinfo struct and mmap */
+/* Boot information and MMAP will be placed next to the mapping */
 #define BOOTINFO_SIZE	0x10000		/* This is the maximum size bootinfo and mmap will have (64kb) */
+#define BOOTINFO_PHYS	0x100000	/* This is where sartoris loader will copy bootinfo struct and mmap */
 #define BOOTINFO_PAGES  0x10
+
+#ifdef __KERNEL__
 
 #ifndef PAGING
 
@@ -44,7 +46,7 @@
 	*/
 #	define USER_OFFSET  MAX_ALLOC_LINEAR   /* linear (200MB of virtual space available for dynamic memory needs)  */
 
-#	define INIT_SIZE    0x00400000   /* physical */ // 4MB size (last 64kb will hold bootinfo)
+#	define INIT_SIZE    0x00400000   /* physical */ /* last 64kb will contain bootinfo struct and mmap */
 #	define INIT_OFFSET  0x00800000   /* physical */
 #	define BOOTINFO_MAP (INIT_SIZE - BOOTINFO_SIZE)   /* virtual  */
 #	define INIT_PAGES (INIT_SIZE / 0x1000)

@@ -50,12 +50,9 @@ void init_paging()
 	/* 
 		We just built a kernel page table that self-maps megabytes 0-3 of memory.
 		it will be shared by everyone. 
-	*/
-
-	/* we set up a page directory for the init-thread. it links to the
+	
+		We set up a page directory for the init-thread. it links to the
 		kernel page table, and to the user page table that we will build next. */
-
-	/* (don't you just love anthropomorphizing your operating system?) */
 
 	/* IMPORTANT: it is crafted this way because page_in does not
 		work without paging enabled. */
@@ -92,7 +89,7 @@ void init_paging()
 	{		
 		if(page_in(INIT_TASK_NUM, linear, physical, 2, PGATT_WRITE_ENA) == FAILURE)
 		{
-			k_scr_print("FAIL1",0x7);
+			k_scr_print("Paging.c: Failed mapping Init image",0x7);
 			for(;;);
 		}
 		linear += PG_SIZE;
@@ -107,7 +104,7 @@ void init_paging()
 	{		
 		if(page_in(INIT_TASK_NUM, linear, physical, 2, PGATT_WRITE_ENA) == FAILURE)
 		{
-			k_scr_print("FAIL2",0x7);
+			k_scr_print("Paging.c: Failed mapping BootInfo and MMAP",0x7);
 			for(;;);
 		}
 		linear += PG_SIZE;

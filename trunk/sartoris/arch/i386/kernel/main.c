@@ -75,7 +75,7 @@ void create_syscall_gates()
 	hook_syscall(10, 1, &page_in_c, 5);
 	hook_syscall(11, 1, &page_out_c, 3);
 	hook_syscall(12, 1, &flush_tlb_c, 0);
-	hook_syscall(13, 2, &get_page_fault_c, 1);	
+	hook_syscall(13, 1, &get_page_fault_c, 1);	
 	hook_syscall(14, 1, &grant_page_mk_c, 1);
 
 	hook_syscall(15, 1, &create_int_handler_c, 4);
@@ -135,9 +135,7 @@ void create_init_task()
 	thr.invoke_mode = PRIV_LEVEL_ONLY;
 	thr.invoke_level = 1;
 	thr.ep = 0x00000000;
-
-	/* Don't put the stack over bootinfo */
-	thr.stack = (void*)(INIT_SIZE - BOOTINFO_SIZE - 0x4);
+	thr.stack = (void*)(INIT_SIZE - 0x4);
 		
 	if (create_task(INIT_TASK_NUM, &tsk) < 0) 
 	{

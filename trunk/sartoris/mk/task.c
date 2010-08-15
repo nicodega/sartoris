@@ -38,8 +38,6 @@ int create_task(int id, struct task *tsk)
 
 	if (VALIDATE_PTR(tsk)) 
 	{
-		k_scr_print("VALID PTR\n", 0x9);
-
 		tsk = (struct task *) MAKE_KRN_PTR(tsk);
 		cached_mem_adr = tsk->mem_adr;        /* if we will pagefault, we must do it now */
 		cached_size = tsk->size;              /* (before the sanity checks) */

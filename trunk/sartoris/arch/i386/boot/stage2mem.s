@@ -11,7 +11,7 @@
 %include "multiboot.inc"
 %include "stages.inc"
 
-%define stage_2_blocks 2 ;; MODIFIED BY NICO
+%define stage_2_blocks 2
    
 %define realaddress(x) (x + (stage2seg16*0x10-bootseg16*0x10))
 
@@ -214,7 +214,7 @@ get_mem_size:
 	mov di, mmap_offset
 	xor ebx, ebx
 	mov ebp, 0				;; ebp will hold length
-	;jmp getmmap_finished	;; FIXME: I'm testing if this function is failing
+	
 getmmap_loop:
 	call get_mmap
 	cmp ebx, 0
@@ -284,53 +284,51 @@ get_msize_done:
 ;; ebx: continuation value
 ;; this function will not preserve ax, bx, cx, dx
 get_mmap:
-
 	mov eax, 0x0000e820
 	mov edx, 0x534D4150 ;; 'SMAP'	
 	mov ecx, 0x14
 	;; ebx already has the cont value
-	;; es:di already points at the buffer, bu we will add size to it
+	;; es:di already points at the buffer, but we will add size to it 
+	;; because the BIOS won't return it
 	mov dword [es:di], 0
+	mov [es:di], dword 0x18    ;; set the size on the buffer
 	add di, 4
-
+	
 	int 0x15
 
 	;; if this is not the first attempt (meaning esp != 0)
-	;; if carry is returned or ebx = 0 we must count the last entry
 	cmp ebp, 0
 	jne get_mmap_not_first
-	
-	;; Not first time, perform common checks
+		
+	;; First time, perform common checks
 	jc nommap
 
 	cmp eax, 0x534D4150 ;; 'SMAP'	
 	jne nommap
 
 	cmp ecx, 0x14
-	jne nommap
+	jne nommap 
 	
 	add ebp, 0x18	;; increment here for it's the first
 	
-	jmp get_mmap_cont
+	jmp mmapok
 get_mmap_not_first:
 	add ebp, 0x18		;; increment counter on 1
 	
 	;; if carry or ebx = 0, this is the last record
 	jc nommap
 	
+	cmp ebx, 0x0
+	je nommap
+	
 	cmp ecx, 0x14
 	jne nommap
-	
-get_mmap_cont:
-	add ecx, 4 		;; include size on the size :S
 
-mmapok:			
+mmapok:
 	sub di, 4	;; return buffer pointer as it was
-	mov [es:di], ecx
 	ret
 nommap:
 	mov ebx, 0x0
-	mov ecx, 0
 	sub di, 4	;; return buffer pointer as it was
 	ret
 	

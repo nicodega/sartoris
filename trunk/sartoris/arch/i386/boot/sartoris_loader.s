@@ -88,15 +88,14 @@ ep2:
 
 copymmap_entry:
 	mov ecx, [esi]	;; get member size
+	sub ebp, ecx
 	
 	cld
 	rep
 	movsb
 	
 	;; esi and edi are now at the begining of the next map item
-
-	dec ebp
-	cmp ebp,0
+	cmp ebp, 0
 	jne copymmap_entry
 
 	mov ebx, multiboot_info_address
