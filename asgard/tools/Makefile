@@ -1,9 +1,6 @@
-all : mkbinit mkofs sld mkbinit2
+all : mkofs sld mkbinit2
 
 CC = gcc
-
-mkbinit : mkbinit.c ../services/p-manager/initfs.h
-	$(CC) -I"../include" -o mkbinit mkbinit.c
 
 mkbinit2 : mkbinit2.c ../services/p-manager2/formats/initfs2.h
 	$(CC) -I"../include" -o mkbinit2 mkbinit2.c

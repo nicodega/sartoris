@@ -4,4 +4,4 @@
 
 %.d : %.cpp
 	@echo making deps for $< ...
-	@$(CC) -E -MD $(CXXFLAGS) $< > /dev/null
+	@$(CXX) -E -MD $(CXXFLAGS) $< > /dev/null

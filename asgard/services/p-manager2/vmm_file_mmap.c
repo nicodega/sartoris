@@ -47,7 +47,6 @@ INT32 vmm_fmap_read_callback(struct fsio_event_source *iosrc, INT32 ioret);
 INT32 vmm_fmap_closed_callback(struct pm_task *task, INT32 ioret);
 
 /* Functions Implementation */
-
 BOOL vmm_page_filemapped(struct pm_task *task, struct pm_thread *thread, ADDR page_laddr)
 {
 	struct vmm_memory_region *mreg = NULL;

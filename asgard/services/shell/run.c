@@ -170,7 +170,7 @@ int ispiped(char *cmd_line)
 		{
 			brk = !brk;
 		}
-		else if(cmd_line[i] == '|' && !brk)   // FIXED: pipes where considering || instead of |
+		else if(cmd_line[i] == '|' && !brk)
 		{
 			cmd_line[i] = '\0';
 			return i + 1; // return start of second command

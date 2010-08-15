@@ -17,6 +17,7 @@
 *
 */
 
+#include <sartoris/kernel.h>
 
 #ifndef MEMLAYOUTH
 #define MEMLAYOUTH
@@ -34,13 +35,13 @@ Memory Layout Defines
 
 #define PMAN_DEFAULT_MEM_SIZE		0x2000000                   // Default memory size = 32 MB 
 
-#define SARTORIS_PROCBASE_LINEAR	0x800000                    // base linear address used by sartoris
+#define SARTORIS_PROCBASE_LINEAR	USER_OFFSET                 // base linear address used by sartoris
 
 /* Task defines */
-#define PMAN_TASK_SIZE				(0xFFFFFFFF - SARTORIS_PROCBASE_LINEAR)    // 4GB less base
+#define PMAN_TASK_SIZE				(0xFFFFFFFF - SARTORIS_PROCBASE_LINEAR)
 #define PMAN_THREAD_STACK_BASE		0x7FFFFFFF   				// 2GB 
 #define PMAN_MAPPING_BASE			0x80000000					// 2GB this is where we will start mapping libs or other stuff
-#define PMAN_TSK_MAX_ADDR			(0xFFFFFFFF - SARTORIS_PROCBASE_LINEAR) //(0x40000000 + SARTORIS_PROCBASE_LINEAR)	   // 1 GB
+#define PMAN_TSK_MAX_ADDR			(0xFFFFFFFF - SARTORIS_PROCBASE_LINEAR) //(0x40000000 + SARTORIS_PROCBASE_LINEAR)	   // 1.2 GB
 
 /* Memory regions size */
 #define PMAN_CODE_SIZE				0x200000					// 2 MB for pman code

@@ -95,6 +95,7 @@ struct taken_directory
 #define TAKEN_PG_FLAG_PMAN		0x8
 
 /* eflags */
+#define TAKEN_EFLAG_NONE		0x0
 #define TAKEN_EFLAG_IOLOCK		0x1
 #define TAKEN_EFLAG_SERVICE		0x2
 #define TAKEN_EFLAG_PF			0x4

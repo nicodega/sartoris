@@ -35,9 +35,9 @@ megs: 64
 #   floppya: 1_2=path, status=ejected              (1.2M  5.25" floppy)
 #   floppya: 720k=path, status=inserted            (720K  3.5" floppy)
 #=======================================================================
-floppya: 1_44=1.44a.ofs, status=inserted
+#floppya: 1_44=1.44a.ofs, status=inserted
 #floppya: 1_44=ofsfloppy.img, status=inserted
-#floppya: 1_44=1.44a, status=inserted
+floppya: 1_44=1.44a, status=inserted
 
 #=======================================================================
 # FLOPPYB:
@@ -60,7 +60,7 @@ floppya: 1_44=1.44a.ofs, status=inserted
 
 #ata0-master: type=disk, path=2M.hdb, mode=flat, cylinders=32, heads=8, spt=16, translation=none
 #ata0-slave: type=disk, path=2M.hdb, mode=undoable, cylinders=4, heads=16, spt=63, translation=lba
-ata0-master: type=disk, path=2M.hdb.ofs, mode=flat, cylinders=32, heads=8, spt=32, translation=none
+#ata0-master: type=disk, path=2M.hdb.ofs, mode=flat, cylinders=32, heads=8, spt=32, translation=none
 
 
 #diskc: file="2M.hda", cyl=32, heads=4, spt=32
@@ -70,8 +70,8 @@ ata0-master: type=disk, path=2M.hdb.ofs, mode=flat, cylinders=32, heads=8, spt=3
 # BOOT:
 # This defines your boot drive.  You can either boot from 'a' or 'c'.
 # Examples:
-#   boot: a
-   boot: disk
+   boot: a
+#   boot: disk
 
 #=======================================================================
 # LOG:
@@ -168,7 +168,7 @@ keyboard_serial_delay: 200
 #   floppy_command_delay: 50000
 #=======================================================================
 
-floppy_command_delay: 500
+#floppy_command_delay: 500
 
 #=======================================================================
 # IPS:
@@ -221,6 +221,7 @@ mouse: enabled=0
 
 private_colormap: enabled=0
 
+display_library: win32, options="gui_debug"
 
 i440fxsupport: enabled=0
 

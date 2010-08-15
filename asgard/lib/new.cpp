@@ -9,7 +9,7 @@ extern "C" void free(void *ptr);
 Support for New/Delete and virtual functions.
 */
 
-/* Used when puere virtual functions are not defined */
+/* Used when pure virtual functions are not defined */
 extern "C" void __cxa_pure_virtual()
 {
     _exit(-20); // finish the program with an exception

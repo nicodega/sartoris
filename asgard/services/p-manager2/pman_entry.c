@@ -37,7 +37,7 @@ void pman_init()
 	struct thread thr;
 	UINT32 i;
 	INT32 *dest, *src;
-	
+	pman_print_and_stop("HOLA SOY PMAN");
 	/* Clear Interrupts */
 	__asm__ ("cli" : :) ;
 
@@ -108,7 +108,8 @@ void pman_init()
 	srv.size    = 0xFFFFFFFF - SARTORIS_PROCBASE_LINEAR; 
 	srv.priv_level = 0;			// service
 	
-	if(create_task(PMAN_TASK, &srv, (ADDR) 0, PMAN_SIZE) < 0) STOP;
+	if(create_task(PMAN_TASK, &srv) < 0) STOP;
+	if(init_task(PMAN_TASK, (ADDR) 0, PMAN_SIZE)) STOP;
 
 	/* Create the thread */
 	thr.task_num = PMAN_TASK;
