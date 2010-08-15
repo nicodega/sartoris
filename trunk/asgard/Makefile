@@ -1,6 +1,7 @@
-#CC = gcc
-#CXX = g++
-#LD = ld
+CC = /opt/crosstool/gcc-4.1.0-glibc-2.3.6/i686-unknown-linux-gnu/bin/i686-unknown-linux-gnu-gcc
+CXX = /opt/crosstool/gcc-4.1.0-glibc-2.3.6/i686-unknown-linux-gnu/bin/i686-unknown-linux-gnu-g++
+LD = /opt/crosstool/gcc-4.1.0-glibc-2.3.6/i686-unknown-linux-gnu/bin/i686-unknown-linux-gnu-ld
+
 CFLAGS = -O2 -ffreestanding -nostdinc -nostdlib -nostartfiles 
 CXXFLAGS = -O2 -nostdinc -nostdlib -nostartfiles -fno-rtti -fno-exceptions -D CPLUSPLUS
 AS = nasm

@@ -38,8 +38,6 @@ static struct mutex malloc_mutex;	// for safe threading malloc
 #endif
 static unsigned int m_free_mem;
 
-// TODO: There seemes to be a problem when malloc is called with size 0. FIXIT.
-
 void init_mem(void *buffer, unsigned int size)
 {
 	struct mem_desc *mdes;
@@ -70,6 +68,7 @@ void *ecalloc(size_t nelem, size_t elsize, int zero);
 
 void *malloc(size_t size)
 {
+	if(size == 0) return NULL;
 	// perhaps m_malloc could be implemented in a different way than calloc //
 	return ecalloc(size, 1, 0);
 }

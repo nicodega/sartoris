@@ -79,7 +79,7 @@ UINT32 loader_create_task(struct pm_task *task, char *path, UINT32 plength, UINT
 	mk_task.size = PMAN_TASK_SIZE;						/* task size is 4GB - kernel space size (0x800000) */
 	mk_task.priv_level = tsk_priv[type];       
 
-	if(create_task(task->id, &mk_task, NO_TASK_INIT, 0))
+	if(create_task(task->id, &mk_task))
 		pman_print_and_stop("Could not create task %i ", task->id);
 
 	/* Pagein the Page directory on task address space */

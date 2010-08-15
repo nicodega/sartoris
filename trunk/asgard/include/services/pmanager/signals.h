@@ -20,7 +20,7 @@
 /* 
 Signaling on pmanager will allow a given thread to sleep 
 until a signal arrives. (this will be extended when stdsignals is
-implmented)
+implemented)
 
 NOTE: A given thread won't be allowed to wait for the same signal, coming
 from the same task twice. When a signal times out, or an event arrives 

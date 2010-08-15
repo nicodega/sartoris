@@ -277,7 +277,7 @@ void calc_mem(struct multiboot_info *mbinf)
 		vmm.pysical_mem = mmap_mem_size;
 	}
 	
-	/* substract from available physical memory what we will use for pman */
+	/* substract from available physical memory used by sartoris */
 	vmm.pysical_mem -= PMAN_POOL_PHYS;
 
 	// now lets calculate pool megabytes
@@ -382,7 +382,12 @@ ADDR vmm_get_tblpage(UINT16 task_id, UINT32 proc_laddress)
 
 	return page;
 }
-// Get a page for a process 
+
+/*
+This function will return a page, but won't remove it from PMAN
+address space. This should only be used for pages which cannot be 
+sent to swap, or invoke vmm_unmap_page after this function.
+*/
 ADDR vmm_get_page(UINT16 task_id, UINT32 proc_laddress)
 {
 	return vmm_get_page_ex(task_id, proc_laddress, FALSE);
@@ -392,7 +397,7 @@ ADDR vmm_get_page_ex(UINT16 task_id, UINT32 proc_laddress, BOOL low_mem)
 	struct pm_task *tsk = NULL;
 	struct taken_entry *tentry = NULL;
 
-	/* Get a page from High Stack */
+	/* Get a page */
 	ADDR page = pop_page(((low_mem)? &vmm.low_pstack : &vmm.pstack));
 
 	if(page == NULL) return NULL;
@@ -409,7 +414,7 @@ ADDR vmm_get_page_ex(UINT16 task_id, UINT32 proc_laddress, BOOL low_mem)
 	tentry->data.b = 0;
 	tentry->data.b_pg.taken = 1;
 	tentry->data.b_pg.tbl_index = PM_LINEAR_TO_TAB(proc_laddress);
-	tentry->data.b_pg.eflags = (tsk->flags & TSK_FLAG_SERVICE)? TAKEN_EFLAG_SERVICE : TAKEN_EFLAG_SERVICE;
+	tentry->data.b_pg.eflags = ((tsk->flags & TSK_FLAG_SERVICE) || (tsk->flags & TSK_FLAG_SYSSERVICE))? TAKEN_EFLAG_SERVICE : TAKEN_EFLAG_NONE;
 	
 	vmm.available_mem--;
 
@@ -621,9 +626,9 @@ BOOL vmm_can_load(struct pm_task *tsk)
 	/* Available pages will be calculated by using SWAP available pages + Available Pool Memory */
 	UINT32 available_pages = vmm.swap_available + vmm.available_mem;
 	
-	/* Begin close */
 	if(available_pages < tsk->vmm_inf.expected_working_set)
 	{
+		/* Begin close */
 		if(tsk != NULL && tsk->state != TSK_NOTHING) 
 		{
 			tsk->state = TSK_KILLING;
