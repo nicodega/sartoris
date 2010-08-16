@@ -54,7 +54,7 @@ struct ifs2_header
 /* Service descriptor */
 struct ifs2srv_header
 {
-	unsigned int image_size;	  // size of the image (without counting header size)
+	unsigned int image_size;	  // size of the image (without the header size)
 	unsigned int image_pos;		  // image location from the begining of images
 	unsigned short flags;		  // flags
 	unsigned short pman_type;	  // service type (used and defined by pmanager)

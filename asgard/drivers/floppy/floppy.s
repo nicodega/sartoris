@@ -1,17 +1,17 @@
 
-;;	Copyright (C) 2002, 2003, 2004, 2005
+;;    Copyright (C) 2002, 2003, 2004, 2005
 ;;       
-;;	Santiago Bazerque 	sbazerque@gmail.com			
-;;	Nicolas de Galarreta	nicodega@gmail.com
+;;    Santiago Bazerque     sbazerque@gmail.com            
+;;    Nicolas de Galarreta    nicodega@gmail.com
 ;;
-;;	
-;;	Redistribution and use in source and binary forms, with or without 
-;; 	modification, are permitted provided that conditions specified on 
-;;	the License file, located at the root project directory are met.
+;;    
+;;    Redistribution and use in source and binary forms, with or without 
+;;     modification, are permitted provided that conditions specified on 
+;;    the License file, located at the root project directory are met.
 ;;
-;;	You should have received a copy of the License along with the code,
-;;	if not, it can be downloaded from our project site: sartoris.sourceforge.net,
-;;	or you can contact us directly at the email addresses provided above.
+;;    You should have received a copy of the License along with the code,
+;;    if not, it can be downloaded from our project site: sartoris.sourceforge.net,
+;;    or you can contact us directly at the email addresses provided above.
 
 
 bits 32
@@ -35,41 +35,41 @@ global disk_present
 %define FDC_DIR  (0x3f7)   ;/* Digital Input Register (input) */
 %define FDC_CCR  (0x3f7)   ;/* Configuration Control Register (output) */
  
-	
+    
 ;***********************************
 ; void send_data(int d)
 ;***********************************
 
 send_data:
-	push ebp
-	mov ebp, esp
-	push edx
-	
-	mov eax, [ebp + 8]
+    push ebp
+    mov ebp, esp
+    push edx
+    
+    mov eax, [ebp + 8]
 
-	mov dx, FDC_DATA
-	out dx, al
+    mov dx, FDC_DATA
+    out dx, al
 
-	pop edx
-	pop ebp
-	ret	
+    pop edx
+    pop ebp
+    ret    
 
 ;***********************************
 ; int get_data()
 ;***********************************
 
 get_data:
-	push ebp
-	mov ebp, esp
-	push edx
+    push ebp
+    mov ebp, esp
+    push edx
 
-	xor eax, eax
-	mov dx, FDC_DATA
-	in al, dx
+    xor eax, eax
+    mov dx, FDC_DATA
+    in al, dx
 
-	pop edx
-	pop ebp
-	ret
+    pop edx
+    pop ebp
+    ret
 
 
 ;***********************************
@@ -77,103 +77,103 @@ get_data:
 ;***********************************
 
 on_command:
-	push ebp
-	mov ebp, esp
-	push edx
+    push ebp
+    mov ebp, esp
+    push edx
 
-	xor eax, eax	
-	mov dx, FDC_MSR
-	in al, dx
-	and al, 0x10	; nonzero if on command
+    xor eax, eax    
+    mov dx, FDC_MSR
+    in al, dx
+    and al, 0x10    ; nonzero if on command
 
-	pop edx
-	pop ebp
-	ret
+    pop edx
+    pop ebp
+    ret
 
 ;***********************************
 ; int busy()
 ;***********************************
 
 busy:
-	push ebp
-	mov ebp, esp
-	push edx
+    push ebp
+    mov ebp, esp
+    push edx
 
-	xor eax, eax	
-	mov dx, FDC_MSR
-	in al, dx
-	and al, 0xc0		
-	cmp al, 0x80
-	je busy1
-	mov al, 1
-	jmp busy2
+    xor eax, eax    
+    mov dx, FDC_MSR
+    in al, dx
+    and al, 0xc0        
+    cmp al, 0x80
+    je busy1
+    mov al, 1
+    jmp busy2
 busy1:
-	mov al, 0
+    mov al, 0
 busy2:
-	pop edx
-	pop ebp
-	ret
+    pop edx
+    pop ebp
+    ret
 
 ;***********************************
 ; int req()
 ;***********************************
 req:
-	push ebp
-	mov ebp, esp
-	push edx
+    push ebp
+    mov ebp, esp
+    push edx
 
-	xor eax, eax	
-	mov dx, FDC_MSR
-	in al, dx
-	and al, 0xd0		
-	cmp al, 0xd0
-	je req1
-	mov al, 0
-	jmp req2
+    xor eax, eax    
+    mov dx, FDC_MSR
+    in al, dx
+    and al, 0xd0        
+    cmp al, 0xd0
+    je req1
+    mov al, 0
+    jmp req2
 req1:
-	mov al, 1
+    mov al, 1
 req2:
-	pop edx
-	pop ebp
-	ret
+    pop edx
+    pop ebp
+    ret
 
 ;***********************************
 ; void set_floppy(int flags)
 ;***********************************
 
 set_floppy:
-	push ebp
-	mov ebp, esp
-	push edx
-	
-	; get flags
-	
-	mov eax, [ebp + 8]	
+    push ebp
+    mov ebp, esp
+    push edx
+    
+    ; get flags
+    
+    mov eax, [ebp + 8]    
 
-	mov dx, FDC_DOR
- 	out dx, al
+    mov dx, FDC_DOR
+     out dx, al
 
-	pop edx
-	pop ebp
-	ret
+    pop edx
+    pop ebp
+    ret
 
 ;**********************************
 ; void set_data_rate(int flags)
 ;**********************************
 
 set_data_rate:
-	push ebp
-	mov ebp, esp
-	push edx
-	
-	mov eax, [ebp + 8]
+    push ebp
+    mov ebp, esp
+    push edx
+    
+    mov eax, [ebp + 8]
 
-	mov dx, FDC_CCR		; program data rate
-	out dx, al
+    mov dx, FDC_CCR        ; program data rate
+    out dx, al
 
-	pop edx
-	pop ebp
-	ret
+    pop edx
+    pop ebp
+    ret
 
 ;**********************************
 ; int disk_change() 
@@ -181,19 +181,19 @@ set_data_rate:
 ; ret: 1 true or 0 false
 ;
 ; NOTE: motor has to be on to call 
-;	this function
+;    this function
 ;**********************************
 
 disk_change:
-	push ebp
-	mov ebp, esp
-	push edx
-	
-	xor eax, eax
-	mov dx, FDC_DIR
-	in al, dx
-	shr al, 7
-	
-	pop edx
-	pop ebp
-	ret 
+    push ebp
+    mov ebp, esp
+    push edx
+    
+    xor eax, eax
+    mov dx, FDC_DIR
+    in al, dx
+    shr al, 7
+    
+    pop edx
+    pop ebp
+    ret 
