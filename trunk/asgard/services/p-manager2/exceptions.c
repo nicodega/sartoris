@@ -22,6 +22,7 @@
 #include "task_thread.h"
 #include "command.h"
 #include "signals.h"
+#include "layout.h"
 
 /*
 Finish a task with an exception.
@@ -42,7 +43,9 @@ void fatal_exception(UINT16 task_id, INT32 ret_value)
 		io_begin_close( &tsk->io_event_src );
 	}
 }
-
+/*
+Send an exception signal.
+*/
 void exception_signal(UINT16 task_id, UINT16 thread_id, UINT16 exception)
 {
 	struct pm_task *tsk = tsk_get(task_id);
@@ -50,7 +53,10 @@ void exception_signal(UINT16 task_id, UINT16 thread_id, UINT16 exception)
 	struct thr_signal signal;
 	
 	if(tsk->exeptions.exceptions_port == 0xFFFF)
+    {
 		fatal_exception(task_id, exception);
+        return;
+    }
 	
 	if(tsk != NULL && tsk->state != TSK_NOTHING) 
 	{

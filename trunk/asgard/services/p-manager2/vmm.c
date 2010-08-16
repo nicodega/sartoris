@@ -414,7 +414,7 @@ ADDR vmm_get_page_ex(UINT16 task_id, UINT32 proc_laddress, BOOL low_mem)
 	tentry->data.b = 0;
 	tentry->data.b_pg.taken = 1;
 	tentry->data.b_pg.tbl_index = PM_LINEAR_TO_TAB(proc_laddress);
-	tentry->data.b_pg.eflags = ((tsk->flags & TSK_FLAG_SERVICE) || (tsk->flags & TSK_FLAG_SYSSERVICE))? TAKEN_EFLAG_SERVICE : TAKEN_EFLAG_NONE;
+	tentry->data.b_pg.eflags = ((tsk->flags & TSK_FLAG_SERVICE) || (tsk->flags & TSK_FLAG_SYS_SERVICE))? TAKEN_EFLAG_SERVICE : TAKEN_EFLAG_NONE;
 	
 	vmm.available_mem--;
 

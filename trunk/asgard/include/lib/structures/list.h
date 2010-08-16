@@ -1,18 +1,18 @@
 /*
 *
-*	Copyright (C) 2002, 2003, 2004, 2005
+*    Copyright (C) 2002, 2003, 2004, 2005
 *       
-*	Santiago Bazerque 	sbazerque@gmail.com			
-*	Nicolas de Galarreta	nicodega@gmail.com
+*    Santiago Bazerque     sbazerque@gmail.com            
+*    Nicolas de Galarreta    nicodega@gmail.com
 *
-*	
-*	Redistribution and use in source and binary forms, with or without 
-* 	modification, are permitted provided that conditions specified on 
-*	the License file, located at the root project directory are met.
+*    
+*    Redistribution and use in source and binary forms, with or without 
+*    modification, are permitted provided that conditions specified on 
+*    the License file, located at the root project directory are met.
 *
-*	You should have received a copy of the License along with the code,
-*	if not, it can be downloaded from our project site: sartoris.sourceforge.net,
-*	or you can contact us directly at the email addresses provided above.
+*    You should have received a copy of the License along with the code,
+*    if not, it can be downloaded from our project site: sartoris.sourceforge.net,
+*    or you can contact us directly at the email addresses provided above.
 *
 *
 */
@@ -27,17 +27,17 @@
 typedef unsigned long CPOSITION;
 
 struct slist_node{
-	void *data;
-	struct slist_node *next;
-	struct slist_node *prev;
+    void *data;
+    struct slist_node *next;
+    struct slist_node *prev;
 };
 
 typedef struct slist_node list_node;
 
 struct slist{
-	list_node *first;
-	list_node *last;
-	unsigned long total;
+    list_node *first;
+    list_node *last;
+    unsigned long total;
 };
 
 typedef struct slist list;

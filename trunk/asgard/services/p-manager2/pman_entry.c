@@ -37,7 +37,7 @@ void pman_init()
 	struct thread thr;
 	UINT32 i;
 	INT32 *dest, *src;
-	pman_print_and_stop("HOLA SOY PMAN");
+
 	/* Clear Interrupts */
 	__asm__ ("cli" : :) ;
 
@@ -52,13 +52,14 @@ void pman_init()
 	*/
 
 	/*
-		Sartoris left thigs this way:
-			- 0x100000 end of microkernel space (sartoris loader left bootinfo struct right here!)
-			- 0x800000 this is were we are running
+		Sartoris left thigs this way (physical memory):
+			- PMAN_SARTORIS_MMAP_PHYS end of microkernel space (sartoris loader left bootinfo struct right here!)
+			- PMAN_SARTORIS_INIT_PHYS this is were we are running
 
 		What we will do is:
 
-			- Create a page directory on 0x100000 (1 MB boundary)
+			- Move bootinfo from PMAN_SARTORIS_MMAP_PHYS to PMAN_MULTIBOOT_PHYS
+			- Create a page directory on PMAN_PDIR_PHYS (1 MB boundary)
 			- Create a table for the pman process to fit in. (4MB)
 			- Create a new task, for the process manager main.
 			- Create a new thread for the pman, with ep to pmain_init_stage2().
@@ -80,7 +81,7 @@ void pman_init()
 		, PGATT_WRITE_ENA
 		, 2);
 
-	/* Now copy boot info :) */
+	/* Now copy boot info and MMAP :) */
 	dest = (INT32*)PMAN_STAGE1_MAPZONE;
 	src = (INT32*)PMAN_SARTORIS_MMAP_LINEAR;
 
@@ -95,7 +96,7 @@ void pman_init()
 	*/
 	page_in(PMAN_TASK, (ADDR)SARTORIS_PROCBASE_LINEAR, (ADDR)(PMAN_PTBL_PHYS), 1, PGATT_WRITE_ENA);
 
-	/* Now the pages, starting at 0x100000 + 0x2000 */
+	/* Now map the pages, starting at PMAN_CODE_PHYS */
 	map_pages(PMAN_TASK
 		, SARTORIS_PROCBASE_LINEAR
 		, PMAN_CODE_PHYS
@@ -104,12 +105,12 @@ void pman_init()
 		, 2);
 
 	/* Create the task */
-	srv.mem_adr = (ADDR)SARTORIS_PROCBASE_LINEAR;       // virtual
-	srv.size    = 0xFFFFFFFF - SARTORIS_PROCBASE_LINEAR; 
-	srv.priv_level = 0;			// service
+	srv.mem_adr = (ADDR)SARTORIS_PROCBASE_LINEAR;         // virtual
+	srv.size    = 0xFFFFFFFF - SARTORIS_PROCBASE_LINEAR;  // the whole memory is available to PMAN
+	srv.priv_level = 0;			                          // service
 	
 	if(create_task(PMAN_TASK, &srv) < 0) STOP;
-	if(init_task(PMAN_TASK, (ADDR) 0, PMAN_SIZE)) STOP;
+	if(init_task(PMAN_TASK, (ADDR) 0, PMAN_SIZE)) STOP;   // Initialize the new task with PMAN
 
 	/* Create the thread */
 	thr.task_num = PMAN_TASK;

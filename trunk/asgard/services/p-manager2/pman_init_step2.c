@@ -35,7 +35,7 @@
 #include "formats/initfs2.h"
 
 void process_manager();
-void init_reloc();
+int init_reloc();
 
 /*
 	ok, this is pman init stage two. we will execute this code, and then jump to the process 
@@ -50,6 +50,7 @@ void pman_init_stage2()
 	struct pm_thread *pmthr = NULL;
 	struct pm_task *pmtsk = NULL;
 	int i = 0;
+    int init_size = 0;
 
 	/*
 		//////////////// IMPORTANT NOTE ///////////////
@@ -84,14 +85,14 @@ void pman_init_stage2()
 	map_pages(PMAN_TASK, linear, physical, PMAN_MULTIBOOT_PAGES, PGATT_WRITE_ENA, 2);
 
 	/* Reallocate init image */
-	init_reloc();
+	init_size = init_reloc();
 
 	/* NOTE: Now it's safe to print, for we moved the init image */
-
 	pman_print("Mapping Malloc %i pages", PMAN_MALLOC_PAGES);
 		
 	/* Pagein remaining pages for kmalloc */
-	linear = PMAN_MALLOC_LINEAR + SARTORIS_PROCBASE_LINEAR; // place after multiboot
+	linear = PMAN_MALLOC_LINEAR + SARTORIS_PROCBASE_LINEAR; // place after multiboot (this will invalidate the map src/dest linear address, 
+                                                            // we cannot use that area anymore, but it's ok, we used it for init copy only.)
   	physical = PMAN_MALLOC_PHYS; 
 
 	map_pages(PMAN_TASK, linear, physical, PMAN_MALLOC_PAGES, PGATT_WRITE_ENA, 2);
@@ -101,6 +102,7 @@ void pman_init_stage2()
 	tsk_init();
 	thr_init();
 
+    /* Show MMAP information */
 	if(((struct multiboot_info*)PMAN_MULTIBOOT_LINEAR)->flags & MB_INFO_MMAP && ((struct multiboot_info*)PMAN_MULTIBOOT_LINEAR)->mmap_length > 0)
 	{
 		/* 
@@ -129,7 +131,7 @@ void pman_init_stage2()
 	}
 	
 	/* Initialize vmm subsystem */
-	vmm_init((struct multiboot_info*)PMAN_MULTIBOOT_LINEAR, PMAN_INIT_RELOC_PHYS, PMAN_INIT_RELOC_PHYS + PMAN_INITIMG_SIZE);
+	vmm_init((struct multiboot_info*)PMAN_MULTIBOOT_LINEAR, PMAN_INIT_RELOC_PHYS, PMAN_INIT_RELOC_PHYS + init_size);
 	
 	/* Mark SCHED_THR as taken! */
 	pmthr = thr_get(SCHED_THR);
@@ -162,7 +164,7 @@ void pman_init_stage2()
 	/* Put now unused Init-Fs pages onto vmm managed address space again. */
 	vmm_add_mem((struct multiboot_info*)PMAN_MULTIBOOT_LINEAR
 				,PHYSICAL2LINEAR(PMAN_INIT_RELOC_PHYS)
-				,PHYSICAL2LINEAR(PMAN_INIT_RELOC_PHYS + PMAN_INITIMG_SIZE));
+				,PHYSICAL2LINEAR(PMAN_INIT_RELOC_PHYS + init_size));
 	
 	pman_print("Signals Initialization...");
 
@@ -185,7 +187,7 @@ void pman_init_stage2()
 	process_manager();
 }
 
-void init_reloc()
+int init_reloc()
 {
 	UINT32 i, physical, left, physicaldest; 
 	char *dest, *src;
@@ -211,18 +213,16 @@ void init_reloc()
 	}
 	else
 	{
-		pman_print("Uncompressed InitFS2 Found: Size: %d (hardcoded)", PMAN_INITIMG_SIZE);
-
-		// uncompressed IFS
-		left = PMAN_INITIMG_SIZE;
+        // uncompressed IFS
+		left = h->size;
 
 		/* Sartoris left the image at position PMAN_SARTORIS_INIT_PHYS 
 		and we want it on PMAN_INIT_RELOC_PHYS. PMAN_INIT_RELOC_PHYS is greater
 		than PMAN_SARTORIS_INIT_PHYS. we will copy 4kb at the time from 
 		bottom up, this means PMAN_INIT_RELOC_PHYS - PMAN_SARTORIS_INIT_PHYS has to be
 		greater or equal than 0x1000. */
-		physical = PMAN_SARTORIS_INIT_PHYS + PMAN_SIZE + PMAN_INITIMG_SIZE - 0x1000;	// start copy at the last page
-		physicaldest = PMAN_INIT_RELOC_PHYS + PMAN_INITIMG_SIZE - 0x1000;				// destination
+		physical = PMAN_SARTORIS_INIT_PHYS + PMAN_SIZE + h->size - 0x1000;	// start copy at the last page
+		physicaldest = PMAN_INIT_RELOC_PHYS + h->size - 0x1000;				// destination
 		
 		dest = (char*)PMAN_STAGE2_MAPZONE_DEST;
 		src = (char*)PMAN_STAGE2_MAPZONE_SOURCE;
@@ -243,6 +243,7 @@ void init_reloc()
 			physical -= PAGE_SIZE;
 			
 		}while(left > 0);
-	}	
+	}
+    return h->size;
 }
 

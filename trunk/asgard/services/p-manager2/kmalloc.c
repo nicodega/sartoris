@@ -81,7 +81,7 @@ UINT32 get_free(struct kmem_directory_page *des_dir)
 	return 0xFFFFFFFF;
 }
 
-/* Alloca a Directory page */
+/* Gets a Directory page */
 struct kmem_directory_page *create_directory(UINT16 bucket_size)
 {
 	struct kmem_directory_page *p = NULL;
