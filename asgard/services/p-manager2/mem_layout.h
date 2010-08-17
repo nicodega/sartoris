@@ -41,7 +41,7 @@ Memory Layout Defines
 #define PMAN_TASK_SIZE              (0xFFFFFFFF - SARTORIS_PROCBASE_LINEAR)
 #define PMAN_THREAD_STACK_BASE      0x7FFFFFFF                  // 2GB 
 #define PMAN_MAPPING_BASE           0x80000000                  // 2GB this is where we will start mapping libs or other stuff
-#define PMAN_TSK_MAX_ADDR           (0xFFFFFFFF - SARTORIS_PROCBASE_LINEAR) //(0x40000000 + SARTORIS_PROCBASE_LINEAR)       // 1.2 GB
+#define PMAN_TSK_MAX_ADDR           (0xFFFFFFFF - SARTORIS_PROCBASE_LINEAR) //(0x40000000 + SARTORIS_PROCBASE_LINEAR)      
 
 /* Memory regions size */
 #define PMAN_CODE_SIZE              0x200000                    // 2 MB for pman code
