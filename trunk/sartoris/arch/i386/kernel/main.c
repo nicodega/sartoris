@@ -135,7 +135,7 @@ void create_init_task()
 	thr.invoke_mode = PRIV_LEVEL_ONLY;
 	thr.invoke_level = 1;
 	thr.ep = 0x00000000;
-	thr.stack = (void*)(INIT_SIZE - 0x4);
+	thr.stack = (void*)(INIT_SIZE - BOOTINFO_SIZE - 0x4); // remember bootinfo is mapped at the end of INIT image
 		
 	if (create_task(INIT_TASK_NUM, &tsk) < 0) 
 	{

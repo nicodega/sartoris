@@ -24,7 +24,6 @@ extern pd_entry *tsk_pdb[MAX_TSK];
 #ifndef PAGING
 
 /* the simple version: paging is disabled */
-
 int arch_cpy_to_task(int task, char* src, char* dst, unsigned int len, int x) 
 {
 	arch_mem_cpy_bytes(MAKE_KRN_PTR(src), MAKE_KRN_SHARED_PTR(task, dst), len);
@@ -78,11 +77,6 @@ int arch_cpy_to_task(int task, char* src, char* dst, unsigned int len, int x)
 	local_res = verify_present(src, false);
   	
 	import_res = import_page(task, dst);
-
-	//k_scr_print("OK",0x7);
-	
-	//k_scr_hex(size,0x7);
-	
 
 	for(i = 0; i < len; i++) 
 	{

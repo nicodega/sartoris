@@ -157,7 +157,7 @@ int write_mem(int smo_id, int off, int size, int *src)
 
 				if (!(0 <= smo_id && smo_id < MAX_SMO && off >= 0 && size >= 0 && TST_PTR(smo_id,smo) 
 					&& my_smo->target == curr_task && off + size <= my_smo->len 
-				    && (my_smo->rights & READ_PERM) && result != SUCCESS))
+				    && (my_smo->rights & READ_PERM)))
 				{
 					mk_leave(x);
 					return FAILURE;

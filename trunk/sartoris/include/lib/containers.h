@@ -7,6 +7,10 @@
 #ifndef _CONTAINERSH_
 #define _CONTAINERSH_
 
+#ifndef PAD
+#define PAD(a,b) (a + (b - (a % b)))
+#endif
+
 /*
 Definition of different per page containers.
 */
@@ -22,6 +26,19 @@ Definition of different per page containers.
 #define CONT_MSG_PER_CONT     (CONT_AVAILABLE / sizeof(struct message))
 #define CONT_PRT_PER_CONT     (CONT_AVAILABLE / sizeof(struct port))
 
+#define STATIC_THR 128
+#define STATIC_TSK 64
+#define STATIC_SMO 1024
+#define STATIC_MSG 1024
+#define STATIC_PRT (MAX_TSK_OPEN_PORTS*STATIC_TSK)
+
+/* Next defines are expressed on container ammounts */
+#define CONT_STATIC_THR      (PAD(STATIC_THR, CONT_THR_PER_CONT) / CONT_THR_PER_CONT)
+#define CONT_STATIC_TSK      (PAD(STATIC_TSK, CONT_TSK_PER_CONT) / CONT_TSK_PER_CONT)
+#define CONT_STATIC_SMO      (PAD(STATIC_SMO, CONT_SMO_PER_CONT) / CONT_SMO_PER_CONT)
+#define CONT_STATIC_MSG      (PAD(STATIC_MSG, CONT_MSG_PER_CONT) / CONT_MSG_PER_CONT)
+#define CONT_STATIC_PRT      (PAD(STATIC_PRT, CONT_PRT_PER_CONT) / CONT_PRT_PER_CONT)
+
 /* 
 Maximum structures to keep before returning a container.
 */
@@ -30,13 +47,6 @@ Maximum structures to keep before returning a container.
 #define CONT_MAX_PREALLOC_SMO     (CONT_STATIC_SMO * CONT_SMO_PER_CONT * 2 / 3)
 #define CONT_MAX_PREALLOC_MSG     (CONT_STATIC_MSG * CONT_MSG_PER_CONT * 2 / 3)
 #define CONT_MAX_PREALLOC_PRT     (CONT_STATIC_PRT * CONT_PRT_PER_CONT * 2 / 3)
-
-/* Next defines are expressed on container ammounts */
-#define CONT_STATIC_THR      (128 / CONT_THR_PER_CONT)
-#define CONT_STATIC_TSK      (64 / CONT_TSK_PER_CONT)
-#define CONT_STATIC_SMO      (1024 / CONT_SMO_PER_CONT)
-#define CONT_STATIC_MSG      (1024 / CONT_MSG_PER_CONT)
-#define CONT_STATIC_PRT      ((MAX_TSK_OPEN_PORTS*64) / CONT_SMO_PER_CONT)
 
 #define CONT_STATIC_CONTAINERS  (CONT_STATIC_THR + CONT_STATIC_TSK + CONT_STATIC_SMO + CONT_STATIC_MSG + CONT_STATIC_PRT)
 
@@ -67,11 +77,13 @@ struct c_thread_unit
 
 #define CONT_THR_STATE_PTR(thr) ((void*)&((struct c_thread_unit*)thr)->arch)
 
+#define PADDING(s,count) (PG_SIZE - sizeof(struct s) * count - sizeof(struct c_header))
+
 struct c_thread
 {
 	struct c_header header;
 	struct c_thread_unit threads[CONT_THR_PER_CONT];
-	unsigned char padding[PG_SIZE - CONT_THR_PER_CONT - sizeof(struct c_header)];
+	unsigned char padding[PADDING(c_thread_unit,CONT_THR_PER_CONT)];
 };
 
 /* 
@@ -93,7 +105,7 @@ struct c_task
 {
 	struct c_header     header;
 	struct c_task_unit  tasks[CONT_TSK_PER_CONT];
-	unsigned char       padding[PG_SIZE - CONT_TSK_PER_CONT - sizeof(struct c_header)];
+	unsigned char       padding[PADDING(c_task_unit,CONT_TSK_PER_CONT)];
 };
 
 
@@ -102,7 +114,7 @@ struct c_smo
 {
 	struct c_header		header;
 	struct smo			smos[CONT_SMO_PER_CONT];
-	unsigned char		padding[PG_SIZE - CONT_SMO_PER_CONT - sizeof(struct c_header)];
+	unsigned char		padding[PADDING(smo,CONT_SMO_PER_CONT)];
 };
 
 /* Message container */
@@ -110,7 +122,7 @@ struct c_message
 {
 	struct c_header		header;
 	struct message		msgs[CONT_MSG_PER_CONT];
-	unsigned char		padding[PG_SIZE - CONT_MSG_PER_CONT - sizeof(struct c_header)];
+	unsigned char		padding[PADDING(message,CONT_MSG_PER_CONT)];
 };
 
 /* Ports */
@@ -118,7 +130,7 @@ struct c_port
 {
 	struct c_header		header;
 	struct port			ports[CONT_PRT_PER_CONT];
-	unsigned char		padding[PG_SIZE - CONT_PRT_PER_CONT - sizeof(struct c_header)];
+	unsigned char		padding[PADDING(port,CONT_PRT_PER_CONT)];
 };
 
 /* 
