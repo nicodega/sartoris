@@ -138,16 +138,24 @@ int init_task(int task, int *start, unsigned int size)
 			}
 		}
 	}
-	
+
 	mk_leave(x);
 
-	/* initialize memory if requested */
 	if (result == SUCCESS) 
-	{		
-		arch_cpy_to_task(task, (char*)start, 0, size, x);
+	{
+        unsigned int dest = 0;
+        while(size > 0)
+        {
+            int bytes;
+		    bytes = arch_cpy_to_task(task, (char*)start, (char*)dest, size, x);
+
+            start += bytes;
+			size -= bytes;
+            dest += bytes;
+        }
 		stask->state = ALIVE;
 	}
-		
+	
 	return result;
 }
 

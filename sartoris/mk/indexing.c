@@ -8,9 +8,9 @@
 struct index_dir idx_dir;
 
 // Contains how many indexes we need for preallocated structures
-#define IDX_STATIC_THR_COUNT   IDX_LEN(CONT_STATIC_THR * CONT_THR_PER_CONT)
-#define IDX_STATIC_TSK_COUNT   IDX_LEN(CONT_STATIC_TSK * CONT_TSK_PER_CONT)
-#define IDX_STATIC_SMO_COUNT   IDX_LEN(CONT_STATIC_SMO * CONT_SMO_PER_CONT)
+#define IDX_STATIC_THR_COUNT   IDX_LEN(STATIC_THR)
+#define IDX_STATIC_TSK_COUNT   IDX_LEN(STATIC_TSK)
+#define IDX_STATIC_SMO_COUNT   IDX_LEN(STATIC_SMO)
 
 // How many indexes we need in total
 #define IDX_THR_COUNT   IDX_LEN(MAX_THR)

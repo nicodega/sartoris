@@ -19,6 +19,18 @@
 #include <sartoris/critical-section.h>
 #include "sartoris/kernel-data.h"
 
+/* We need need this for gcc to compile */
+void *memcpy( void *to, const void *from, int count )
+{
+	int i = 0;
+	while(i < count){
+		((unsigned char *)to)[i] = ((unsigned char *)from)[i];
+		i++;
+	}
+
+	return to;
+}
+
 /* multi-threding implementation */
 int create_thread(int id, struct thread *thr) 
 {
@@ -104,15 +116,11 @@ int destroy_thread(int id)
 
 			task->thread_count--;
 			
-			// NOTE: Thread run permissions have been disabled 
-			// until I figure a way of creating them only when used
-			/*
 			for (i = 0; i < (BITMAP_SIZE(MAX_THR)); i++) 
 			{
-				run_perms[id][i] = 0;
+				thread->run_perms[i] = 0;
 			}
-			*/
-
+			
 			arch_destroy_thread(id, thread);
 			
 			sfree(thread, id, SALLOC_THR);
@@ -151,7 +159,7 @@ int run_thread(int id)
 		{
 			if(curr_priv <= thread->invoke_level) 
 			{
-				//if (!(thread->invoke_mode == PERM_REQ) && !getbit(run_perms[id], curr_thread))) 
+				if (!(thread->invoke_mode == PERM_REQ && !getbit(thread->run_perms, curr_thread))) 
 				{
 					if (id != curr_thread) 
 					{
@@ -219,7 +227,7 @@ int run_thread_int(int id, void *eip, void *stack)
 		{
 			if(curr_priv <= thread->invoke_level) 
 			{
-				//if (!(thread->invoke_mode == PERM_REQ) && !getbit(run_perms[id], curr_thread))) 
+				if (!(thread->invoke_mode == PERM_REQ && !getbit(thread->run_perms, curr_thread))) 
 				{
 					if (id != curr_thread) 
 					{
@@ -255,22 +263,26 @@ int run_thread_int(int id, void *eip, void *stack)
 	return result;
 }
 
-int set_thread_run_perm(int thread, enum bool perms) 
+int set_thread_run_perm(int thrid, enum bool perms) 
 {
+    struct thread *thread;
 	int x, result = FAILURE;
 
-	/*
 	x = mk_enter();
   
 	if (0 <= perms && perms <= 1) 
 	{
-		setbit(run_perms[curr_thread], thread, perms);
-		result = SUCCESS;
+        if ((0 <= thrid) && (thrid < MAX_THR) && TST_PTR(thrid,thr)) 
+	    {
+		    thread = GET_PTR(curr_thread,thr);
+        
+		    setbit(thread->run_perms, thrid, perms);
+		    result = SUCCESS;
+        }
 	}
 	
 	mk_leave(x);
-	*/
-
+	
 	return result;
 }
 

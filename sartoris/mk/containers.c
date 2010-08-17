@@ -216,7 +216,6 @@ void csfree(void *ptr, int type)
 {	
 	struct c_header *c = (struct c_header *)CONT_HEADER_ADDR(ptr);
 	int entries = 0;
-	struct task *tt; // REMOVE
 
 	/* Add current structure to the container free list */
 	switch(type)

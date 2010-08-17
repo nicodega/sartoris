@@ -19,12 +19,12 @@
 #define MAX_ALLOC_LINEAR   0xC800000   /* 200 MB */
 #define MIN_TASK_OFFSET    MAX_ALLOC_LINEAR
 
-#define MAX_SCA						35  /* max system calls */
-#define MAX_TSK						64  /* max tasks */
-#define MAX_THR						128 /* max concurrent threads of execution */
-#define MAX_IRQ						64  /* max irqs */
-#define MAX_SMO						1024 /* system-wide */
-#define MAX_MSG						1024 /* system-wide */
+#define MAX_SCA						36    /* max system calls */
+#define MAX_TSK						4096  /* max tasks */
+#define MAX_THR						8192  /* max concurrent threads of execution */
+#define MAX_IRQ						64    /* max irqs */
+#define MAX_SMO						32768 /* system-wide */
+#define MAX_MSG						32768 /* system-wide */
 #define MAX_OPEN_PORTS				(32*MAX_TSK)   /* system-wide */
 #define MAX_TSK_OPEN_PORTS			32
 #define MAX_MSG_ON_PORT				32 
@@ -72,7 +72,7 @@ struct task
 	int priv_level;
 
 #ifdef __KERNEL__
-	char state;         /* <- see enum task_state above, added 13/05/03 */
+	char state;         
 	char padding[3];
 	int thread_count;
 	/* 
@@ -93,6 +93,7 @@ struct thread
 	void *ep;
 	void *stack;
 
+    unsigned int run_perms[MAX_THR / (sizeof(unsigned int) << 3)];
 #ifdef __KERNEL__
 	char page_faulted;					/* used to know if we have produced a page fault */
 	char padding[3];
