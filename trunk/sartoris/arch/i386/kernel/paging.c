@@ -146,6 +146,40 @@ void restore_map(pt_entry map)
 	invalidate_tlb((void*)PG_LINEAR_TO_TAB(AUX_PAGE_SLOT(curr_thread))); // invalidate this page
 }
 
+/* 
+This function will map the given task linear address to the 
+current thread mapping slot.
+Returns a linear address on kernel space where the page has been mapped.
+NOTE: The mapped page will not be writable. If the table is not present
+this might issue a page fault!
+*/
+void *map_address(int task, void *laddr)
+{
+    pd_entry *pdir_ptr;
+    pd_entry pdir_entry;
+	pd_entry *pdir_map = AUX_PAGE_SLOT(curr_thread);
+	pt_entry *ptab_map = AUX_PAGE_SLOT(curr_thread);
+    int i;
+
+    // get physical address from task
+    pdir_ptr = GET_TASK_ARCH(task)->pdb;
+    if (pdir_ptr != NULL)
+    {
+        pdir_entry = pdir_map[PG_LINEAR_TO_DIR(laddr)];
+        if(pdir_entry != NULL)
+        {
+            map_page((pt_entry *)PG_ADDRESS(pdir_entry));
+            i = PG_LINEAR_TO_TAB(laddr);
+		    if(ptab_map[i] != NULL)
+            {
+                // we got the physical address, map it
+                map_page((void *)ptab_map[i]);
+            }
+        }
+    }
+    return NULL;
+}
+
 /* IMPORTANT: notice that page directories/tables are mapped to
               a temporary linear address in order to be accessed.
 	          hence, arch_page_in/out do not work with paging 
@@ -166,7 +200,7 @@ int arch_page_in(int task, void *linear, void *physical, int level, int attrib)
 	result = FAILURE;
 	
 	/* be humble: serialize access to page table structure */
-	pdir_ptr = ((struct i386_task *)GET_TASK_ARCH(task))->pdb;
+	pdir_ptr = GET_TASK_ARCH(task)->pdb;
 
 	if (pdir_ptr != NULL || level == 0) 
 	{ 
@@ -175,7 +209,7 @@ int arch_page_in(int task, void *linear, void *physical, int level, int attrib)
 		{  
 			/* no access to microkernel memory! */
 			if ( (unsigned int) linear >= USER_OFFSET || level == 0  ) 
-			{				
+			{
 				/* no remapping of microkernel memory! */
 				switch (level) 
 				{

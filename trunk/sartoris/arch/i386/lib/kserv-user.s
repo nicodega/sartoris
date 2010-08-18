@@ -15,7 +15,7 @@ bits 32
 
 global get_current_task
 
-global set_thread_run_perm
+global set_thread_run_perms
 global set_thread_run_mode
 global run_thread
 global get_current_thread
@@ -41,11 +41,11 @@ get_current_task:
 	pop ebp
 	ret
 	
-set_thread_run_perm:	
+set_thread_run_perms:	
 	push ebp
 	mov ebp, esp
-	pass_arguments 2
-	call SET_THREAD_RUN_PERM : 0x00000000
+	pass_arguments 1
+	call SET_THREAD_RUN_PERMS : 0x00000000
 	pop ebp
 	ret
 
@@ -91,7 +91,7 @@ close_port:
 set_port_perm:
 	push ebp
 	mov ebp, esp
-	pass_arguments 3
+	pass_arguments 2
 	call SET_PORT_PERM : 0x00000000
 	pop ebp
 	ret

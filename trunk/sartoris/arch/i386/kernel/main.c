@@ -67,7 +67,7 @@ void create_syscall_gates()
 
 	hook_syscall(4, 1, &create_thread_c, 2);
 	hook_syscall(5, 1, &destroy_thread_c, 1);
-	hook_syscall(6, 3, &set_thread_run_perm_c, 2);
+	hook_syscall(6, 3, &set_thread_run_perms_c, 1);
 	hook_syscall(7, 3, &set_thread_run_mode_c, 2);
 	hook_syscall(8, 3, &run_thread_c, 1);
 	hook_syscall(9, 3, &get_current_thread_c, 0);
@@ -86,7 +86,7 @@ void create_syscall_gates()
 
 	hook_syscall(19, 3, &open_port_c, 3);
 	hook_syscall(20, 3, &close_port_c, 1);
-	hook_syscall(21, 3, &set_port_perm_c, 3);
+	hook_syscall(21, 3, &set_port_perm_c, 2);
 	hook_syscall(22, 3, &set_port_mode_c, 3);
 	hook_syscall(23, 3, &send_msg_c, 3);
 	hook_syscall(24, 3, &get_msg_c, 3);

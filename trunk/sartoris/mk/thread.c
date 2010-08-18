@@ -9,7 +9,6 @@
 
 #include "sartoris/kernel.h"
 #include "sartoris/cpu-arch.h"
-#include "sartoris/scr-print.h"
 #include "lib/message.h"
 #include "lib/shared-mem.h"
 #include "lib/bitops.h"
@@ -70,6 +69,7 @@ int create_thread(int id, struct thread *thr)
 							thread->invoke_mode = cached_thr.invoke_mode;
 							thread->invoke_level = cached_thr.invoke_level;
 							thread->task_num = tsk_id;
+                            thread->run_perms = NULL;
 							task->thread_count++;
 
 							if (arch_create_thread(id, task->priv_level, thread) < 0) 
@@ -116,11 +116,6 @@ int destroy_thread(int id)
 
 			task->thread_count--;
 			
-			for (i = 0; i < (BITMAP_SIZE(MAX_THR)); i++) 
-			{
-				thread->run_perms[i] = 0;
-			}
-			
 			arch_destroy_thread(id, thread);
 			
 			sfree(thread, id, SALLOC_THR);
@@ -139,6 +134,7 @@ int run_thread(int id)
 	int result;
 	struct thread *thread;
 	struct task *task;
+    unsigned int *perms;
 
 	result = FAILURE;
 
@@ -154,36 +150,55 @@ int run_thread(int id)
 	if (0 <= id && id < MAX_THR && TST_PTR(id,thr))
 	{
 		thread = GET_PTR(id,thr);
-
-		if (thread->invoke_mode != DISABLED) 
+        
+        // if invoke move is PERM_REQ, and the user loaded a bitmap for permissions
+        // check for permissions.
+        // NOTE: this could produce a page fault because it's a user space pointer
+        if(thread->invoke_mode == PERM_REQ && thread->run_perms != NULL)
+        {   
+            /*
+                thread->run_perms is on the desination thread address space. We must ask
+                the arch dependant part of the kernel to map it to our thread mapping zone!!!
+            */
+#ifdef PAGING
+            perms = (unsigned int*)map_address(thread->task_num, (unsigned int*)thread->run_perms + 1);
+#else
+            perms = ((unsigned int*)thread->run_perms + 1);
+#endif
+            // we could get a page fault on getbit
+            if(thread->run_perms->length >= BITMAP_SIZE(curr_thread) && getbit(perms, curr_thread) )
+            {
+                mk_leave(x);
+		        return FAILURE;
+            }
+        }
+        
+        if (thread->invoke_mode != DISABLED) 
 		{
-			if(curr_priv <= thread->invoke_level) 
+			if( curr_priv <= thread->invoke_level || thread->invoke_mode == UNRESTRICTED )
 			{
-				if (!(thread->invoke_mode == PERM_REQ && !getbit(thread->run_perms, curr_thread))) 
+				if (id != curr_thread) 
 				{
-					if (id != curr_thread) 
+					prev_curr_thread = curr_thread;
+					task = GET_PTR(thread->task_num,tsk);
+
+					curr_thread = id;
+					curr_task = thread->task_num;
+					curr_base = task->mem_adr;
+					curr_priv = task->priv_level;
+				
+					result = arch_run_thread(id);
+
+					if ( result !=  SUCCESS ) 
 					{
-						prev_curr_thread = curr_thread;
+						thread = GET_PTR(prev_curr_thread,thr);
 						task = GET_PTR(thread->task_num,tsk);
 
-						curr_thread = id;
+						/* rollback: thread switching failed! */
+						curr_thread = prev_curr_thread;
 						curr_task = thread->task_num;
 						curr_base = task->mem_adr;
 						curr_priv = task->priv_level;
-					
-						result = arch_run_thread(id);
-
-						if ( result !=  SUCCESS ) 
-						{
-							thread = GET_PTR(prev_curr_thread,thr);
-							task = GET_PTR(thread->task_num,tsk);
-
-							/* rollback: thread switching failed! */
-							curr_thread = prev_curr_thread;
-							curr_task = thread->task_num;
-							curr_base = task->mem_adr;
-							curr_priv = task->priv_level;
-						}
 					}
 				}
 			}
@@ -207,51 +222,72 @@ int run_thread_int(int id, void *eip, void *stack)
 	int result;
 	struct thread *thread;
 	struct task *task;
+    unsigned int *perms;
 
 	result = FAILURE;
 
 	x = mk_enter(); /* enter critical block */
 
-	if( dyn_pg_lvl != DYN_PGLVL_NONE && dyn_pg_nest == DYN_NEST_ALLOCATING && dyn_pg_thread == id )
-	{
-		mk_leave(x);
-		/* we cannot return to this thread... it's waiting for a page. */
-		return FAILURE;
-	}
-
 	if ((0 <= id) && (id < MAX_THR) && TST_PTR(id,thr)) 
 	{
 		thread = GET_PTR(id,thr);
 
-		if (thread->invoke_mode != DISABLED) 
+        // if invoke move is PERM_REQ, and the user loaded a bitmap for permissions
+        // check for permissions.
+        // NOTE: this could produce a page fault because it's a user space pointer
+        if(thread->invoke_mode == PERM_REQ && thread->run_perms != NULL)
+        {
+            /*
+                thread->run_perms is on the desination thread address space. We must ask
+                the arch dependant part of the kernel to map it to our thread mapping zone!!!
+            */
+#ifdef PAGING
+            perms = (unsigned int*)map_address(thread->task_num, (unsigned int*)thread->run_perms + 1);
+#else
+            perms = ((unsigned int*)thread->run_perms + 1);
+#endif
+            // we could get a page fault on getbit
+            if(thread->run_perms->length >= BITMAP_SIZE(curr_thread) && getbit(((unsigned int*)thread->run_perms + 1), curr_thread) )
+            {
+                mk_leave(x);
+		        return FAILURE;
+            }
+        }
+        
+	    if( dyn_pg_lvl != DYN_PGLVL_NONE && dyn_pg_nest == DYN_NEST_ALLOCATING && dyn_pg_thread == id )
+	    {
+		    mk_leave(x);
+		    /* we cannot return to this thread... it's waiting for a page. */
+		    return FAILURE;
+	    }
+
+        // Test the thread pointer is valid again (because of the possible PG Fault.
+		if (TST_PTR(id,thr) && thread->invoke_mode != DISABLED) 
 		{
-			if(curr_priv <= thread->invoke_level) 
+			if(curr_priv <= thread->invoke_level || thread->invoke_mode == UNRESTRICTED) 
 			{
-				if (!(thread->invoke_mode == PERM_REQ && !getbit(thread->run_perms, curr_thread))) 
+				if (id != curr_thread) 
 				{
-					if (id != curr_thread) 
+					prev_curr_thread = curr_thread;
+					task = GET_PTR(thread->task_num,tsk);
+
+					curr_thread = id;
+					curr_task = thread->task_num;
+					curr_base = task->mem_adr;
+					curr_priv = task->priv_level;
+
+					result = arch_run_thread_int(id, eip, stack);
+
+					if ( result !=  SUCCESS ) 
 					{
-						prev_curr_thread = curr_thread;
+						thread = GET_PTR(prev_curr_thread,thr);
 						task = GET_PTR(thread->task_num,tsk);
 
-						curr_thread = id;
+						/* rollback: thread switching failed! */
+						curr_thread = prev_curr_thread;
 						curr_task = thread->task_num;
 						curr_base = task->mem_adr;
 						curr_priv = task->priv_level;
-
-						result = arch_run_thread_int(id, eip, stack);
-
-						if ( result !=  SUCCESS ) 
-						{
-							thread = GET_PTR(prev_curr_thread,thr);
-							task = GET_PTR(thread->task_num,tsk);
-
-							/* rollback: thread switching failed! */
-							curr_thread = prev_curr_thread;
-							curr_task = thread->task_num;
-							curr_base = task->mem_adr;
-							curr_priv = task->priv_level;
-						}
 					}
 				}
 			}
@@ -263,24 +299,33 @@ int run_thread_int(int id, void *eip, void *stack)
 	return result;
 }
 
-int set_thread_run_perm(int thrid, enum bool perms) 
+int set_thread_run_perms(struct thread_perms *perms)
 {
     struct thread *thread;
 	int x, result = FAILURE;
-
-	x = mk_enter();
-  
-	if (0 <= perms && perms <= 1) 
-	{
-        if ((0 <= thrid) && (thrid < MAX_THR) && TST_PTR(thrid,thr)) 
-	    {
-		    thread = GET_PTR(curr_thread,thr);
-        
-		    setbit(thread->run_perms, thrid, perms);
-		    result = SUCCESS;
-        }
-	}
+    unsigned int len;
 	
+    if(VALIDATE_PTR(perms) && VALIDATE_PTR((unsigned int)perms + 4))
+    {
+        // this could produce a page fault..
+        len = perms->length;
+    }
+    else
+    {
+        return FAILURE;
+    }
+
+    x = mk_enter();
+
+    if(len <= BITMAP_SIZE(MAX_THR) && VALIDATE_PTR((unsigned int)perms + sizeof(unsigned int) + len))
+    {
+        thread = GET_PTR(curr_thread,thr);
+        
+        thread->run_perms = perms;
+
+	    result = SUCCESS;
+    }
+    
 	mk_leave(x);
 	
 	return result;

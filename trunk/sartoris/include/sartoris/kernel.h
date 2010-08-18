@@ -27,12 +27,12 @@
 #define MAX_MSG						32768 /* system-wide */
 #define MAX_OPEN_PORTS				(32*MAX_TSK)   /* system-wide */
 #define MAX_TSK_OPEN_PORTS			32
-#define MAX_MSG_ON_PORT				32 
+#define MAX_MSG_ON_PORT				64 
 
 #define MAX_NESTED_INT 32
 
-#define INIT_TASK_NUM 31   /* INIT_TASK_NUM must NOT be zero                */ 
-#define INIT_THREAD_NUM 31 /* (zero is used as pre-init pseudo-task number) */
+#define INIT_TASK_NUM   31   /* INIT_TASK_NUM must NOT be zero                */ 
+#define INIT_THREAD_NUM 31   /* (zero is used as pre-init pseudo-task number) */
 
 #ifndef NULL
 # define NULL 0
@@ -41,7 +41,7 @@
 /* possible task states */
 enum task_state { LOADING=0, ALIVE, UNLOADING, DEFUNCT };
 
-/* thread invoke mode options */
+/* thread run mode options */
 enum usage_mode { PERM_REQ=0, PRIV_LEVEL_ONLY, DISABLED, UNRESTRICTED };
 
 #define MAX_USAGE_MODE  UNRESTRICTED
@@ -92,10 +92,10 @@ struct thread
 	int invoke_level;
 	void *ep;
 	void *stack;
-
-    unsigned int run_perms[MAX_THR / (sizeof(unsigned int) << 3)];
+    
 #ifdef __KERNEL__
-	char page_faulted;					/* used to know if we have produced a page fault */
+    struct thread_perms *run_perms;     // this is a pointer to a user space page!
+    char page_faulted;					/* used to know if we have produced a page fault */
 	char padding[3];
 	struct c_thread_unit *next_free;	// used only when free	
 #endif
@@ -110,9 +110,27 @@ struct page_fault
 	int flags;			// flags for the page fault
 };
 
+/* 
+This is an optional access permission structure for threads
+which implement the PERM_REQ access mode. 
+*/
+struct thread_perms
+{
+    int length; // next to this, must be the bitmap
+};
+
+/* 
+This is an optional access permission structure for ports
+which implement the PERM_REQ access mode.
+*/
+struct port_perms
+{
+    int length; // next to this, must be the bitmap
+};
+
 #define PF_FLAG_NONE 0  // a normal page fault interrupt.
 #define PF_FLAG_FREE 1  // a page fault returning a page from the kernel.
-#define PF_FLAG_PG 2    // a page fault for a kernel page need.
+#define PF_FLAG_PG   2  // a page fault for a kernel page need.
 #define PF_FLAG_PGS(a) (a-1) // a page fault for the kernel asking for X-1 pages
 
 #ifdef __KERNEL__

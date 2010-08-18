@@ -24,8 +24,8 @@ global destroy_thread_c
 extern run_thread
 global run_thread_c
 
-extern set_thread_run_perm
-global set_thread_run_perm_c
+extern set_thread_run_perms
+global set_thread_run_perms_c
 
 extern set_thread_run_mode
 global set_thread_run_mode_c
@@ -161,11 +161,11 @@ destroy_thread_c:
 	call do_syscall
 	retf 4
 
-set_thread_run_perm_c:
-	mov ecx, set_thread_run_perm
-	mov edx, 2
+set_thread_run_perms_c:
+	mov ecx, set_thread_run_perms
+	mov edx, 1
 	call do_syscall
-	retf 8
+	retf 4
 
 set_thread_run_mode_c:
 	mov ecx, set_thread_run_mode
@@ -266,9 +266,9 @@ open_port_c:
 	
 set_port_perm_c:
 	mov ecx, set_port_perm
-	mov edx, 3
+	mov edx, 2
 	call do_syscall
-	retf 12
+	retf 8
 
 set_port_mode_c:
 	mov ecx, set_port_mode

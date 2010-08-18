@@ -70,6 +70,15 @@ Returns 0 if page granting/return finished.
 */
 int arch_req_pages();
 
+/* 
+This function will map the given task linear address to the 
+current thread mapping slot.
+Returns a linear address on kernel space where the page has been mapped.
+NOTE: The mapped page will not be writable. If the table is not present
+this might issue a page fault!
+*/
+void *arch_map_address(int taskid, void *laddr);
+
 #endif
 
 /* 

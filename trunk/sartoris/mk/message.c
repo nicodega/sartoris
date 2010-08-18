@@ -46,12 +46,7 @@ int open_port(int port, int priv, enum usage_mode mode)
 	  
 				if (p != NULL) 
 				{
-					/* initialize port permissions */
-					for (i = 0; i < (BITMAP_SIZE(MAX_TSK)); i++) 
-					{
-						p->perms[i] = 0;
-					}
-	    
+                    p->perms = NULL;
 					p->mode = mode;
 					p->priv = priv;
 						    					
@@ -128,24 +123,38 @@ int set_port_mode(int port, int priv, enum usage_mode mode)
     return result;
 }
 
-int set_port_perm(int port, int task_id, int perm) 
+int set_port_perm(int port, struct port_perms *perms) 
 {
 	int x, result;
 	struct task *task;
+    unsigned int len;
     
 	result = FAILURE;
-  
-	if (0 <= task_id && task_id < MAX_TSK && 0 <= port && port < MAX_TSK_OPEN_PORTS && !(perm & ~(1))) 
-	{
-	    x = mk_enter(); /* enter critical block */
-    
-		task = GET_PTR(curr_task,tsk);
-		    
-		if (task->open_ports[port] != NULL) 
-		{
-			result = SUCCESS;
-			setbit(task->open_ports[port]->perms, task_id, perm);
-		}
+
+    if(VALIDATE_PTR(perms) && VALIDATE_PTR((unsigned int)perms + 4))
+    {
+        // this could produce a page fault..
+        len = perms->length;
+    }
+    else
+    {
+        return FAILURE;
+    }
+
+    if (0 <= port && port < MAX_TSK_OPEN_PORTS) 
+	{ 
+        x = mk_enter(); /* enter critical block */
+        
+        if(len <= BITMAP_SIZE(MAX_THR) && VALIDATE_PTR((unsigned int)perms + sizeof(unsigned int) + len))
+        {
+            task = GET_PTR(curr_task,tsk);
+    		    
+		    if (task->open_ports[port] != NULL) 
+		    {
+			    result = SUCCESS;
+			    task->open_ports[port]->perms = perms;
+		    }          
+        }
     
 		mk_leave(x); /* exit critical block */
 	}
@@ -159,33 +168,65 @@ int send_msg(int dest_task_id, int port, int *msg)
     struct port *p;
     int x, result;
 	struct task *task;
+    unsigned int *perms;
     
     result = FAILURE;
     
 	x = mk_enter(); /* enter critical block */
 		
-    if (0 <= dest_task_id && dest_task_id < MAX_TSK && TST_PTR(dest_task_id,tsk) && 0 <= port && port < MAX_TSK_OPEN_PORTS) 
+    if (0 <= dest_task_id && dest_task_id < MAX_TSK && 
+        TST_PTR(dest_task_id,tsk) && 0 <= port && port < MAX_TSK_OPEN_PORTS) 
 	{	
 		task = GET_PTR(dest_task_id,tsk);
 
-		if (task->state == ALIVE && task->open_ports[port] != NULL) 
-		{			
-			if (VALIDATE_PTR(msg)) 
-			{
-				p = task->open_ports[port];
+        p = task->open_ports[port];
 
-				if (p->mode != DISABLED && p->total < MAX_MSG_ON_PORT && !(p->mode == PERM_REQ && !getbit(p->perms, curr_task))) 
-				{					
-				    if ((p->mode == UNRESTRICTED) || (curr_priv <= p->priv)) 
-					{
-						result = enqueue(curr_task, p, (int *) MAKE_KRN_PTR(msg));
-#ifdef _METRICS_
-						if(result == SUCCESS) metrics.messages++;
+        if(p != NULL)
+        {
+            // if invoke move is PERM_REQ, and the user loaded a bitmap for permissions
+            // check for permissions.
+            // NOTE: this could produce a page fault because it's a user space pointer
+            if(p->mode == PERM_REQ && p->perms != NULL)
+            {
+                /*
+                    p->perms is on the desination task address space. We must ask
+                    the arch dependant part of the kernel to map it to our thread mapping zone!!!
+                */
+#ifdef PAGING
+                perms = (unsigned int*)map_address(dest_task_id, (unsigned int*)p->perms + 1);
+#else
+                perms = ((unsigned int*)p->perms + 1);
 #endif
-					}
-				}
-			}
-		}
+                // we could get a page fault on getbit
+                if(p->perms->length >= BITMAP_SIZE(curr_thread) && getbit(perms, curr_task) )
+                {
+                    mk_leave(x);
+	                return FAILURE;
+                }
+            }
+
+            // check destination port is still open, and task is alive, because the page fault occurred.
+		    if (TST_PTR(dest_task_id,tsk) && task->state == ALIVE && task->open_ports[port] != NULL) 
+		    {
+                p = task->open_ports[port];
+
+			    if (VALIDATE_PTR(msg)) 
+			    {
+				    p = task->open_ports[port];
+
+				    if (p->mode != DISABLED && p->total < MAX_MSG_ON_PORT) 
+				    {					
+				        if (p->mode == UNRESTRICTED || curr_priv <= p->priv) 
+					    {
+						    result = enqueue(curr_task, p, (int *) MAKE_KRN_PTR(msg));
+#ifdef _METRICS_
+						    if(result == SUCCESS) metrics.messages++;
+#endif
+					    }
+				    }
+			    }
+		    }
+        }
     }
     
     mk_leave(x); /* exit critical block */
