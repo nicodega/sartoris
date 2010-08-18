@@ -29,7 +29,7 @@ int get_current_task(void);
 int create_thread(int id, struct thread *thr);
 int destroy_thread(int id);
 int run_thread(int id);
-int set_thread_run_perm(int thread, int perm);
+int set_thread_run_perms(struct thread_perms *perms);
 int set_thread_run_mode(int priv, int mode);
 int get_current_thread(void);
 
@@ -48,7 +48,7 @@ int get_last_int(void);
 /* message passing */
 int open_port(int port, int priv, int mode);
 int close_port(int port);
-int set_port_perm(int port, int task, int perm);
+int set_port_perm(int port, struct port_perms *perms);
 int set_port_mode(int port, int priv, int mode);
 int send_msg(int to_address, int port, void *msg);
 int get_msg(int port, void *msg, int *id);

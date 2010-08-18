@@ -30,7 +30,7 @@ struct port
 	unsigned int total;		      /* total messages on port */
 	struct port *next;            /* next port assigned to this task */     
 	enum usage_mode mode;
-	unsigned int perms[BITMAP_SIZE(MAX_TSK)];
+	struct port_perms *perms;     /* this is a userspace address! */
 	int priv;
 };
 
