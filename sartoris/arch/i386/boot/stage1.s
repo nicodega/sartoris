@@ -2,7 +2,7 @@
 ;; 
 ;; This will be the Stage 1 bootloader. It will be exactly 512 bytes in size.
 ;; Things will be left so that our stage 1.5 boot loader can load itself.
-;; This boot loader stage, wonŽt do much. ItŽs a simple stage 1 loader.
+;; This boot loader stage, won't do much. It's a simple stage 1 loader.
 ;; This loader will only load first sector of the stage 1.5 loader.
 ;;
 
@@ -37,7 +37,7 @@ times ((24 + 0xB) - ($-$$)) db 0x00
 
 ;; End of BIOS parameter block.
 
-;; stage 2 first sector lba
+;; stage 2 (or 1.5) first sector lba
 stage2_sector:
 	dd 1
 
@@ -58,7 +58,7 @@ go:
 	
 	;; do not probe LBA if the drive is a floppy 
 	cmp dl, 0x80
-	jb chs_mode		
+	jb chs_mode
 	
 	;; check for lba mode
 	mov	ah, 0x41
@@ -88,7 +88,7 @@ lba_mode:
 	mov word [si], 0x0010
 
 	;; blocks 
-	mov word [si + 2], 2		;; we will read up to two blocks
+	mov word [si + 2], stage1_5blocks	;; we will stage 1.5 blocks
 	
 	;; the absolute address (low 32 bits) 
 	mov dword [si + 8], ebx
@@ -155,7 +155,6 @@ chs_mode:
 
 translate_to_chs:
 	;; translate stage 2 lba to chs
-	
 	mov eax, [stage2_sector]
 
 	xor	edx, edx
@@ -182,7 +181,7 @@ load_track:
 	
 	mov ah, 2	; function: read
 	
-	mov al, 1	; sectors to read
+	mov al, stage1_5blocks	; sectors to read
 		
 	mov cx, [si + 12]		; sector & track
 	mov dl, cl
@@ -242,7 +241,6 @@ load_done:
 	;; exec stage 2
 	jmp stage1_5seg16:0
 	
-
 ;; Stage 1 data 
 
 ;; loading variables
@@ -252,8 +250,8 @@ drive_num:			; BIOS drive number
 tries:
 	db 0
 
-;; some useful far pointers.
-
+;; Fill with 0's until the partition table
+times (446-($-$$)) db 0x00
 	
 ;; complete with 0's and the signature
 times (510-($-$$)) db 0x00
