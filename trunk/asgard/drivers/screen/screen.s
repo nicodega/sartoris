@@ -95,7 +95,7 @@ clear_last_loop:
     
     
 ;; print zero terminated string x in screen position y, using attribute z 
-;; MODIF: now the function places the cursor at the end of the printed text
+;; The function places the cursor at the end of the printed text
 string_print:
     push ebp
     mov ebp, esp
