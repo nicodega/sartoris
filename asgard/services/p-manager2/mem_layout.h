@@ -49,7 +49,7 @@ Memory Layout Defines
 #define PMAN_MALLOC_SIZE            (((0x400000 - PMAN_MULTIBOOT_SIZE) - PMAN_CODE_SIZE))
 
 /* Physical Memory Layout */
-#define PMAN_PHYS_BASE              0x100000                                      // where sartoris and non available memory ends
+#define PMAN_PHYS_BASE              0x200000                                      // where sartoris ends
 #define PMAN_PDIR_PHYS              PMAN_PHYS_BASE                                // PMAN page directory location
 #define PMAN_PTBL_PHYS              (PMAN_PDIR_PHYS + PAGE_SIZE)                  // PMAN first page table location
 #define PMAN_CODE_PHYS              (PMAN_PTBL_PHYS + PAGE_SIZE)                  // PMAN code start
@@ -59,9 +59,9 @@ Memory Layout Defines
 #define PMAN_INIT_RELOC_PHYS        (PMAN_POOL_PHYS + 0x400000)                   // where we will relocate the init images 
                                                                                   // (if this is changed stage 2 copy procedure must be changed too)
 
-#define PMAN_SARTORIS_MMAP_PHYS     0x100000    // where bootinfo is left by sartoris on physical memory
+#define PMAN_SARTORIS_MMAP_PHYS     0x200000    // where bootinfo is left by sartoris on physical memory
 #define PMAN_SARTORIS_MMAP_LINEAR   0x3F0000    // where sartoris maps bootinfo on init task
-#define PMAN_SARTORIS_INIT_PHYS     0x800000    // where sartoris left the init image
+#define PMAN_SARTORIS_INIT_PHYS     0x900000    // where sartoris left the init image
 
 /* PMAN linear memory layout */
 #define PMAN_BASE_LINEAR            0x0                                                // where pman code begins (from pman point of view)

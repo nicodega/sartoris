@@ -124,7 +124,9 @@ struct pm_thread
 
 
 /* Thread and task id assignation boundaries */
+#ifndef MAX_TSK
 #define MAX_TSK 64
+#endif
 
 #define STACK_SLOT_ADDRESS(slot)	((ADDR)STACK_ADDR(PMAN_THREAD_STACK_BASE - slot * 0x20000))
 #define STACK_ADDR(a)				((UINT32)a - 4)
