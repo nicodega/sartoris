@@ -198,7 +198,7 @@ int send_msg(int dest_task_id, int port, int *msg)
                 perms = ((unsigned int*)p->perms + 1);
 #endif
                 // we could get a page fault on getbit
-                if(p->perms->length >= BITMAP_SIZE(curr_thread) && getbit(perms, curr_task) )
+                if(p->perms->length >= BITMAP_SIZE(MAX_TSK) && getbit(perms, curr_task) )
                 {
                     mk_leave(x);
 	                return FAILURE;
