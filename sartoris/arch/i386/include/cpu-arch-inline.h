@@ -41,8 +41,7 @@ static inline void arch_issue_page_fault(void)
 	__asm__ ("int $14");
 }
 
-
-#define MAKE_KRN_PTR(x) (void*) ((unsigned int)(x) + (unsigned int)curr_base)
-#define MAKE_KRN_SHARED_PTR(t, x) (void*) ((unsigned int)(x) + (unsigned int)(GET_PTR(t,tsk))->mem_adr)
+#define MAKE_KRN_PTR(x) (void*) ((unsigned int)(x) + (unsigned int)curr_base - 0x00100000)
+#define MAKE_KRN_SHARED_PTR(t, x) (void*) ((unsigned int)(x) + (unsigned int)(GET_PTR(t,tsk))->mem_adr - 0x00100000)
 #define SUMOVERFLOW(x, y) (((unsigned int)x+(unsigned int)y) < (unsigned int)x || ((unsigned int)x+(unsigned int)y) < (unsigned int)y)
 #endif

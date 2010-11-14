@@ -13,13 +13,13 @@
 /* Size needed for per-task information on arch dependant section */
 #define ARCH_TASK_SIZE (sizeof(struct i386_task))
 /* kernel page table(s) for mapping, shared by everybody */
-#define KERN_LMEM_SIZE  (0x100000 + (MAX_THR * PG_SIZE))  /* Size of sartoris Low Memory block (does not include dynamic memory): 1 page per thread + 1MB */
-#define KERN_MAPPINGS_START 0x100000
+#define KERN_LMEM_SIZE  (0x200000 + (MAX_THR * PG_SIZE))  /* Size of sartoris Low Memory block (does not include dynamic memory): 1 page per thread + 1MB */
+#define KERN_MAPPINGS_START 0x200000
 #define KERN_TABLES     ((KERN_LMEM_SIZE + (0x400000 - (KERN_LMEM_SIZE % 0x400000))) / 0x400000 )
 
 /* Boot information and MMAP will be placed next to the mapping */
 #define BOOTINFO_SIZE	0x10000		/* This is the maximum size bootinfo and mmap will have (64kb) */
-#define BOOTINFO_PHYS	0x100000	/* This is where sartoris loader will copy bootinfo struct and mmap */
+#define BOOTINFO_PHYS	0x200000	/* This is where sartoris loader will copy bootinfo struct and mmap */
 #define BOOTINFO_PAGES  0x10
 
 #ifdef __KERNEL__
@@ -28,16 +28,16 @@
 
 	/* memory layout when paging is disabled */
 #	define KRN_OFFSET  0x00000000   /* physical */
-#	define KRN_SIZE    0x000a0000   /* physical */
+#	define KRN_SIZE    0x000F0000   /* physical */
 #	define USER_OFFSET 0x00100000   /* linear   */
 #	define INIT_SIZE   0x00400000   /* physical */
-#	define INIT_OFFSET 0x00200000   /* physical */
+#	define INIT_OFFSET 0x00900000   /* physical */
 
 #else
 
 	/* memory layout with paging     */
 #	define KRN_OFFSET   0x00000000   /* physical */
-#	define KRN_SIZE     0x000a0000   /* physical */
+#	define KRN_SIZE     0x000F0000   /* physical */
 
 	/* 
 	When dynamic memory allocation is enabled, 
@@ -47,12 +47,12 @@
 #	define USER_OFFSET  MAX_ALLOC_LINEAR   /* linear (200MB of virtual space available for dynamic memory needs)  */
 
 #	define INIT_SIZE    0x00400000   /* physical */ /* last 64kb will contain bootinfo struct and mmap */
-#	define INIT_OFFSET  0x00800000   /* physical */
+#	define INIT_OFFSET  0x00900000   /* physical */
 #	define BOOTINFO_MAP (INIT_SIZE - BOOTINFO_SIZE)   /* virtual  */
 #	define INIT_PAGES (INIT_SIZE / 0x1000)
 
 	/* 
-		NOTE: we will use memory from first MB of the linear address
+		NOTE: we will use memory from second MB of the linear address
 		up to MAX_THR * PG_SIZE
 		for page mappings on intra-task memory transfers. 
 		see i386/kernel/cpu.c, #define AUX_MAPPING_BASE 

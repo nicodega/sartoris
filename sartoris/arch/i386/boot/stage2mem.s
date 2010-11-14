@@ -11,18 +11,17 @@
 %include "multiboot.inc"
 %include "stages.inc"
 
-%define stage_2_blocks 2
-   
-%define realaddress(x) (x + (stage2seg16*0x10-bootseg16*0x10))
+%define stage2_blocks 2
 
 bits 16
 
 stage2_entry:
-
 	;; stage 2 has been loaded completely in memory
-	;; NOTE: On Sartoris Stage 2 is supposed to contain the init image.
+	;; NOTE: The kernel image is now not next to this image.
 	
 	;; stage 1.5 loader must have left:
+	;; Unreal Mode on.
+	;; ds/es: 0x7c0
 	;; ds:si = segment:ofeset of disk address packet/drive geometry
 	;; dl = drive num
 	;; ax = stage 2 image size
@@ -34,50 +33,32 @@ stage2_entry:
 	;; Multiboot procedure, and if a real bootloader 
 	;; is needed (for selecting different kernel versions, etc)
 	;; this one cannot be used.
-	
+
 	;; cx will hold image size (in blocks) without stage 2 loader size
 	mov cx, ax 
-	sub cx, stage_2_blocks
+	sub cx, stage2_blocks
 	
 	;; ds will point to stage2seg16
 	mov ax, stage2seg16
 	mov ds, ax
 	
-	;; bx will point to the Multiboot header 
+	;; bx will point to the Multiboot header (located at the begining of the kernel image)
 	xor ebx, ebx
-	mov bx, stage_2_blocks
-	shl bx, 9				;; multiply by 512
+	mov ebx, (kernel_addr - stage2_addr)		;; now the kernel is loaded here... yay!
 	
 	;; check first value is the magic number
-	cmp dword [bx], MULTIBOOTH_MAGIC
+	a32 cmp dword [ebx], MULTIBOOTH_MAGIC
 	jne near error
 	
 	;; use checksum for checking flags and magic number
-	mov eax, [bx]
-	add eax, [bx + 4]
-	add eax, [bx + 8]
+	a32 mov eax, [ebx]
+	a32 add eax, [ebx + 4]
+	a32 add eax, [ebx + 8]
 	
 	cmp eax, 0
 	jne near error
 	
-	;; FIXME: we should check flags, but we already know what sartoris 
-	;; needs, so it should be added here.
-	
 	;; setup things so the image can be run
-
-;; enable A20
-	
-	call empty_kb_buf	
-
-	mov al, 0xd1
-	out 0x64, al		; 0xd1 -> port 0x64: write the following data
-				; byte to the output port
-	call empty_kb_buf
-	mov al, 0xdf		; i think bit 1 of the outputport is the A20, 
-	out 0x60, al		; but sending 0xdf seems to work. need info on
-				; this.
-	
-	call empty_kb_buf	; A20 up, hopefully
 
 ;; memory size
 
@@ -87,7 +68,7 @@ stage2_entry:
 ;; switch to p-mode
 
 	cli
-	
+
 	lgdt [_gdt_pseudo_descr]
 	lidt [_idt_pseudo_descr]
 	
@@ -95,7 +76,7 @@ stage2_entry:
 	or eax, 1
 	mov cr0, eax
 
-	jmp dword 0x0008:(stage2seg16*0x10 + go32)		; mama!
+	jmp dword 0x0008:(stage2_addr + go32)		; mama!
 go32:		
 bits 32
 
@@ -105,31 +86,11 @@ bits 32
 	mov ss, ax
 	mov fs, ax
 	mov gs, ax
-
-	;; the header on sartoris is placed at the begining of the kernel image
-	;; so multiboot_header.header_addr tell us where we should load the 
-	;; image
-	
-	mov ebx, stage2addr + stage_2_blocks*512
-
-	;; move the kernel image to its position
-	xor eax, eax
-	mov ax, cx			;; cx has image size in blocks, without stage loader 2 size
-	shl eax, 7			;; multiply by 512 / 4
-	
-	mov ecx, eax
-	mov esi, [ebx + multiboot_header.header_addr]	; from
-	sub esi, [ebx + multiboot_header.load_addr]
-	add esi, ebx
-	mov edi, [ebx + multiboot_header.header_addr]	; to
-	cld
-	rep
-	movsd
 	
 ;; EAX contains the magic value 0x2BADB002
 ;; EBX contains the 32-bit physical address of the Multiboot information structure provided by the boot loader. 
 ;; CS is a 32-bit read/execute code segment with an ofeset of 0 and a limit of 0xFFFFFFFF. The exact value is undefined. 
-;; DS,ES,es,GS,SS are 32-bit read/write data segment with an ofeset of 0 and a limit of 0xFFFFFFFF. The exact values are all undefined. 
+;; DS,ES,es,GS,SS are 32-bit read/write data segment with an offset of 0 and a limit of 0xFFFFFFFF. The exact values are all undefined. 
 ;;
 ;; A20 gate is enabled. 
 ;; CR0 Bit 31 (PG) is cleared. Bit 0 (PE) is set. Other bits are all undefined. 
@@ -137,7 +98,8 @@ bits 32
 ;;		Bit 17 (VM) is cleared. Bit 9 (IF) is cleared. Other bits are all undefined. 
 ;;		All other processor registers and flag bits are undefined. 
 
-	mov edx, [ebx + multiboot_header.entry_addr]
+	mov ebx, kernel_addr
+	o32 mov edx, [ebx + multiboot_header.entry_addr]
 
 	mov eax, MULTIBOOTH_MAGIC
 	mov ebx, mbootinfaddr
@@ -149,16 +111,8 @@ bits 16
 error:
 	jmp $
 
-empty_kb_buf:			; this is the standard way, i belive.
-	in al, 0x64
-	and al, 0x02
-	jnz empty_kb_buf
-	ret
-
-
 ;; this system tables are temporary, the kernel will
 ;; update them later
-
 gdt:	
 
 dw 0, 0, 0, 0	; dummy descriptor
@@ -175,11 +129,11 @@ dw 0x00cf ; g-flag=1, d/b bit=1	, limit upper bits F
 	
 _gdt_pseudo_descr:	
 	dw 0x0030		; gdt_limit=48 (3 descriptors)
-	dw (gdt + (stage2seg16 & 0x0FFF)), (stage2seg16 >> 12)
+	dd (stage2_addr + gdt)
 	
 _idt_pseudo_descr:	
 	dw 0x0000		; interrupts will be desabled until 
-	dw 0x0000, 0x0000	; the real system tables are ready.
+	dd 0x00000000	; the real system tables are ready.
 
 bits 16
 
@@ -197,7 +151,6 @@ get_mem_size:
 	xor eax, eax
 	or eax, MBOOTINFO_FLAGMEM
 	mov [es:si + multiboot_info.flags], eax
-
 
 	mov dx, 0 ;; conventional
 	call get_msize
@@ -357,4 +310,4 @@ getmem2fail:
 	mov eax, 0xffffffff
 	ret
 
-times ((stage_2_blocks*512)-($-$$)) db 0x0 	;; fill with 0's
+times ((stage2_blocks*512)-($-$$)) db 0x0 	;; fill with 0's

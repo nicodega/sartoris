@@ -13,7 +13,7 @@ bootsect : stage1.s stage1_5.s stage2mem.s sartoris_loader.s ../kernel/kimg
 
 .PHONY : clean
 clean :
-	rm -f bootsect boot.map
+	rm -f bootsect stage1.map stage1_5.map stage2.map sartoris_loader.map
 	rm -f *~
 
 clean_all : clean
