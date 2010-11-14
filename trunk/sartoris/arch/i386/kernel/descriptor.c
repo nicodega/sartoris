@@ -37,10 +37,14 @@ void init_desc_tables()
 	/* flat kernel data segment */
 	gdt[2].dword0 = 0x0000ffff;
 	gdt[2].dword1 = 0x00cf9200;   // G=1 D/B=1 (32bit) 00  SEGLIM(19:16)= 1111 P=1 DPL= 00 S=1 001000000000
-	/* high memory segment */
+	/* high memory segment (video) */
 	gdt[3].dword0 = D_DW0_BASE(0xa0000) | D_DW0_LIMIT(0x60000);
 	gdt[3].dword1 = D_DW1_BASE(0xa0000) | D_DW1_LIMIT(0x60000) | 
 					DESC_32_SMALL | DESC_RW | DESC_DPL(2);
+    /* READ ONLY low memory segment (BIOS, etc) < 1MB */
+	gdt[3].dword0 = D_DW0_BASE(0x0) | D_DW0_LIMIT(0x100000);
+	gdt[3].dword1 = D_DW1_BASE(0x0) | D_DW1_LIMIT(0x100000) | 
+					DESC_32_SMALL | DESC_R | DESC_DPL(2);
 
 	/* new gdt load */
 	l_desc[0] = ( GDT_ENT * sizeof(struct seg_desc) + ((((unsigned int) gdt) & 0xffff) << 16) );
@@ -79,14 +83,14 @@ void build_ldt(struct i386_task *tinf, int task_num, void *mem_adr, unsigned int
 	dw0 = D_DW0_BASE(mem_adr) + D_DW0_LIMIT(size);
 	dw1 = D_DW1_BASE(mem_adr) + D_DW1_LIMIT(size) + perms;
 
-	// ldt segments arte 32 bits ones
+	// ldt segments are the 32 bits ones
 	ldt[0].dword0 = dw0;   /* exec/read */
 	ldt[0].dword1 = dw1 + DESC_ER;
 	ldt[1].dword0 = dw0;   /* read/write */
 	ldt[1].dword1 = dw1 + DESC_RW;
 }
 
-/* LDT segment descriptor */
+/* Switch LDT segment descriptor on GDT */
 void switch_ldt_desc(struct i386_task *tinf, int priv) 
 {
 	int i;

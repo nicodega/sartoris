@@ -14,7 +14,7 @@ struct i386_task;
 #define GDT_LDTS      4         /* one for each task privilege level
 								   upon thread switch, ldt descriptor will 
 								   be set to the proper address */
-#define SYS_DESC      4        	/* dummy, code, data, himem */
+#define SYS_DESC      5        	/* dummy, code, data, himem, Low Memory (BIOS, etc) */
 
 #define GDT_SYSCALL     SYS_DESC
 #define GDT_LDT         (GDT_SYSCALL + MAX_SCA)

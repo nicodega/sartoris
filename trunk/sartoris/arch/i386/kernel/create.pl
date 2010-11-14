@@ -13,7 +13,7 @@ $zeros = 512 - ($size % 512);
 
 if ($zeros < 512)
 {
-    print "Se agregaran: $zeros bytes\n";
+    print "Will add: $zeros bytes\n";
     system("dd if=/dev/zero of=zeros bs=$zeros count=1");
     system("cat zeros >> kimg");
 }

@@ -23,7 +23,7 @@
 /* the kernel page table(s) for mapping, shared by everybody */
 pt_entry kern_ptable[0x400 * KERN_TABLES]  __align(PG_SIZE);
 
-void init_paging() 
+void init_paging()
 {
 	pt_entry *ptab_ptr;
 	pd_entry *pdir_ptr;
@@ -31,24 +31,38 @@ void init_paging()
 	unsigned int physical;
 	int i;
 	struct i386_task *tinf = GET_TASK_ARCH(INIT_TASK_NUM);
+	
+    /* Build first MB page table */
 
-	/* build the kernel (0 to a0000) page table */
-	physical = 0;
-	for (i=0; i<(KRN_SIZE / PG_SIZE); i++) 
+    /* Low memory (BIOS, etc) */
+	for (i=0; i<160; i++) 
 	{
 		kern_ptable[i] = physical | PG_WRITABLE | PG_PRESENT;
 		physical += PG_SIZE;
 	}
 
 	/* Video memory */
-	for (i=(KRN_SIZE / PG_SIZE); i<256; i++) 
+	for (; i<192; i++) 
 	{
 		kern_ptable[i] = physical | PG_CACHE_DIS | PG_WRITABLE | PG_PRESENT;
 		physical += PG_SIZE;
 	}
 
+    /* VIDEO BIOS, BIOS Shadow, etc (000C0000 - 0x100000), and kernel (0x100000 to 0x200000) */
+	physical = 0;
+	for (;i<512; i++) 
+	{
+		kern_ptable[i] = physical | PG_WRITABLE | PG_PRESENT;
+		physical += PG_SIZE;
+	}
+
+    for (;i<1024; i++) 
+	{
+		kern_ptable[i] = 0;
+	}
+
 	/* 
-		We just built a kernel page table that self-maps megabytes 0-3 of memory.
+		We just built a kernel page table that self-maps megabytes 0-2 of memory.
 		it will be shared by everyone. 
 	
 		We set up a page directory for the init-thread. it links to the
@@ -207,7 +221,7 @@ int arch_page_in(int task, void *linear, void *physical, int level, int attrib)
 		/* no page directory needed for level=0 */
 		if ( (unsigned int) physical < KRN_OFFSET || (unsigned int) physical >= KRN_OFFSET+KRN_SIZE) 
 		{  
-			/* no access to microkernel memory! */
+			/* no access to microkernel memory! (but allow < 1MB) */
 			if ( (unsigned int) linear >= USER_OFFSET || level == 0  ) 
 			{
 				/* no remapping of microkernel memory! */

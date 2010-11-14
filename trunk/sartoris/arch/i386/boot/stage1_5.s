@@ -172,8 +172,8 @@ lba_cont2:
 	;; destination buffer segment 
 	mov ax, 0x0
 	mov word [si + 6], ax
-	mov ax, stage1_5buf_addr
-	sub ax, 0x7c00
+	mov eax, stage1_5buf_addr
+	sub eax, 0x7c00
 	mov word [si + 4], ax
 	
 	xor	eax, eax
@@ -266,8 +266,8 @@ load_track:
 	mov dl, [bp - 2]			;; bp - 2 points to the drive num on stack
 	mov dh, [si + 11]
 	
-	mov bx, stage1_5buf_addr
-	sub bx, 0x7c00
+	mov ebx, stage1_5buf_addr
+	sub ebx, 0x7c00
 	
 reload:
 	pusha
@@ -350,6 +350,7 @@ update_seg:
 update_seg_cont:
 	;; update nextcopy_segment
 	mov ebx, dword [nextcopy_addr]
+	shl eax, 9						;; multiply sectors by 512 to get the size in bytes
 	add ebx, eax
 	mov dword [nextcopy_addr], ebx
 	
@@ -369,7 +370,6 @@ block_read_finished:
 	add di, 6	;; move to next block list item
 	jmp load_blocks
 run:
-xchg bx,bx
 	;; ok now we can run either an stage loader, or directly stage 2 (by default it'll be stage 2)
 	mov ax, [nextstage_addr]
 	shr ax, 4

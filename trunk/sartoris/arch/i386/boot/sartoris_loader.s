@@ -25,14 +25,14 @@
 ;;		Bit 17 (VM) is cleared. Bit 9 (IF) is cleared. Other bits are all undefined. 
 ;;		All other processor registers and flag bits are undefined. 
 
-%define multiboot_info_address   0x100000		;; we will place multiboot info here
-%define kernel_address 0x00000000				;; we will place the kernel here
-%define init_address   0x00800000				;; we will place the init image here
-%define stack_address  0x000a0000 - 0x4			;; we will place the stack here
+%define multiboot_info_address   0x200000            ;; we will place multiboot info here
+%define init_address             0x00900000          ;; we will place the init image here
+%define stack_address            0x00300000 - 0x4    ;; we will place the kernel stack here
+%define kernel_address_loader    0x100000            ;; the loader will move the kernel down to this address
 
 %define loader_sectors 1
 
-%define realaddress(x) ((x) + (image_phys_pos))
+org image_phys_pos
 
 bits 32
 
@@ -45,13 +45,13 @@ _start:
 	;; - Even though the segment registers are set up as described above, the GDTR may be invalid, so the OS image must 
 	;; not load any segment registers (even just reloading the same values!) until it sets up its own GDT. 
 	;; - The OS image must leave interrupts disabled until it sets up its own IDT.
-	
+
 	;; load gdt and idt with our tables
-	lgdt [realaddress(_gdt_pseudo_descr)]
-	lidt [realaddress(_idt_pseudo_descr)]
+	lgdt [_gdt_pseudo_descr]
+	lidt [_idt_pseudo_descr]
 	
 	;; jump to cs:ep2
-	jmp 0x8:(image_phys_pos + ep2)
+	jmp 0x8:ep2
 ep2:
 
 	;; now it's safe to load our segment registers :D
@@ -83,7 +83,7 @@ ep2:
 	je nommap
 
 	;; copy mmap and update bootinfo pointer :)
-	mov esi, [ebx + multiboot_info.mmap_addr]	 ;; source
+	mov esi, [ebx + multiboot_info.mmap_addr]        ;; source
 	mov edi, multiboot_info_address + boot_info_size ;; dest
 
 copymmap_entry:
@@ -101,21 +101,22 @@ copymmap_entry:
 	mov ebx, multiboot_info_address
 	mov dword [ebx + multiboot_info.mmap_addr], (multiboot_info_address + boot_info_size)
 nommap:
-	;; move the kernel down to 0x0
-	mov ecx, (((kern_sectors - loader_sectors) * 512) >> 2)		;; how many bytes will we copy? (we ignore loader sectors)
-	mov esi, image_phys_pos+(loader_sectors*512)		;; where do we start? (this is the value in our 
-								;; multiboot header + size of this loader)
-	mov edi, kernel_address					;; destination
+	;; move the kernel down to 0x100000
+	mov ecx, ((kern_sectors * 512) >> 2)						;; how many bytes will we copy? 
+	mov esi, image_phys_pos+(loader_sectors*512)                ;; where do we start? (this is the value in our 
+                                                                ;; multiboot header + size of this loader)
+	mov edi, kernel_address_loader                              ;; destination
 	cld
 	rep
 	movsd
 
 	;; place init img where it should be
-	mov ecx, [realaddress(img_size)]
+	mov ecx, [img_size]
 	sub ecx, ((kern_sectors + loader_sectors) * 512)
 	shr ecx, 2
 	mov esi, image_phys_pos + (kern_sectors + loader_sectors)*512
 	mov edi, init_address
+	cld
 	rep
 	movsd
 	
@@ -123,8 +124,8 @@ nommap:
 	;; let's jump to the kernel initialization routines.
 
 	mov esp, stack_address		;; don't forget to setup the stack 
-
-	jmp dword 0x8:0x0	; kernel init running!
+xchg bx,bx
+	jmp dword 0x8:kernel_address_loader	; kernel init running!
 	
 die:
 	jmp $
@@ -142,12 +143,12 @@ dw 0x00cf ; g-flag=1, d/b bit=1	(limit mult by 4096, default 32-bit opsize), lim
 
 dw 0xffff ; limit=ffff
 dw 0x0000 ; base_adress=0
-dw 0x9200 ; p-flag=1, dpl=0, s-flag=1, type read/write
+dw 0x9200 ; p-flag=1, dpl=0, s-flag=1, type read/write (data)
 dw 0x00cf ; g-flag=1, d/b bit=1	, limit upper bits F
 	
 _gdt_pseudo_descr:	
 	dw 0x0030		; gdt_limit=48 (3 descriptors)
-	dw (gdt + (image_phys_pos & 0x0000FFFF)), (image_phys_pos >> 16)
+	dd gdt
 	
 _idt_pseudo_descr:	
 	dw 0x0000           ; interrupts will be desabled until 

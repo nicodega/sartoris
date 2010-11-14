@@ -9,7 +9,7 @@ typedef unsigned int pd_entry;
 
 /* linear address used to map pages from
    other tasks (should be otherwise unused) */
-#define AUX_MAPPING_BASE 0x100000	/* linear */
+#define AUX_MAPPING_BASE 0x200000	/* linear */
 #define AUX_PAGE_SLOT(thread) (void*)(AUX_MAPPING_BASE + thread * PG_SIZE)
 
 #define PG_LINEAR_TO_DIR(linear) ((unsigned int)linear >> 22)
@@ -32,7 +32,7 @@ typedef unsigned int pd_entry;
 #define PG_GLOBAL    0x00000100
 
 /* defined by us: */
-#define PG_SHARED    0x00000200 /* the page belongs to at least one SMOs */
+#define PG_SHARED    0x00000200 /* the page belongs to at least one SMO */
 #define PG_MAPPED    0x00000400 /* this entry was created to map a SMO   */
 
 struct i386_task;
