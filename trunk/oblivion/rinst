@@ -1,0 +1,3 @@
+#!/bin/sh
+
+scp bin/oblivion.img anfaegtelse:~/oblivion/bin/oblivion.img

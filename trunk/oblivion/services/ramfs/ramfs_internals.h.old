@@ -1,0 +1,21 @@
+/*  
+ *   Oblivion 0.1 ram filesystem inernals header
+ *   
+ *   Copyright (C) 2002, Santiago Bazerque and Nicolas de Galarreta
+ *   
+ *   sbazerqu@dc.uba.ar                
+ *   nicodega@cvtci.com.ar
+ */
+
+#ifndef _RAMFS_INT_
+#define _RAMFS_INT_
+
+#define CODE_SIZE 0x800
+
+#define NUM_FILES 7
+
+int get_filenum(char *s);
+void acknowledge(int error_code, int task_id, struct fs_command *io_msg);
+int streq(char *s, char *t);
+
+#endif

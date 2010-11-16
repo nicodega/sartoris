@@ -1,0 +1,4 @@
+void clear_screen(void);
+void scroll_up_one();
+void scroll_up(int n);
+void string_print(char *s, int pos, int att);
