@@ -26,7 +26,7 @@ if [ ! -s sartoris-i386 ]; then
 fi
 
 if [ ! -s os ]; then
-	echo "there is no include/os! creating link to include/asgard"
+	echo "there is no include/os! creating link to include/oblivion"
 	ln -s oblivion os
 fi
 
