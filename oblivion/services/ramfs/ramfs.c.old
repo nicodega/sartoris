@@ -1,0 +1,99 @@
+/*  
+ *   Oblivion 0.1 ram filesystem service
+ *   
+ *   Copyright (C) 2002, Santiago Bazerque and Nicolas de Galarreta
+ *   
+ *   sbazerqu@dc.uba.ar                
+ *   nicodega@cvtci.com.ar
+ */
+
+
+#include <sartoris/syscall.h>
+#include <oblivion/layout.h>
+#include <services/ramfs/ramfs.h>
+#include <services/filesys/filesys.h>
+#include "ramfs_internals.h"
+
+char *filenames[] = { "hello",
+		      "hdtest",
+		      "mount",
+		      "umount",
+		      "ls",
+		      "misbehav",
+		      "jedi" };
+
+char name[20];
+
+void ramfs(void) {
+  struct fs_command io_msg;
+  int id;
+  int filenum;
+  
+  __asm__ ("sti" : :);
+  
+  for (;;) {
+    
+    while (get_msg_count(FS_CMD_PORT)>0) {
+      get_msg(FS_CMD_PORT, &io_msg, &id);
+      
+      switch(io_msg.op) {
+      case FS_READ:
+	
+	if (read_mem(io_msg.smo_name, 0, FILENAME_SIZE/4, name) < 0) {
+	  acknowledge(FS_FAIL, id, &io_msg);
+	} else {
+	  filenum = get_filenum(name); 
+	  if (filenum < 0) {
+	    acknowledge(FS_NO_SUCH_FILE, id, &io_msg);
+	  } else {
+	    if (write_mem(io_msg.smo_buff, 0, FILE_SIZE/4, (void*)(CODE_SIZE + filenum*FILE_SIZE)) < 0) {
+	      acknowledge(FS_FAIL, id, &io_msg);
+	    } else {
+	      acknowledge(FS_OK, id, &io_msg);
+	    }
+	  }
+	}   
+	break;
+      }
+    }
+    
+    run_thread(SCHED_THR);
+    
+  }
+}
+  
+int get_filenum(char *s) {
+  int i;
+  
+  for (i=0; i<NUM_FILES; i++) {
+    if (streq(s, filenames[i])) {
+      return i;
+    }
+  }
+  
+  return -1;
+}
+
+void acknowledge(int error_code, int task_id, struct fs_command *io_msg) {
+  struct fs_response res_msg;
+  
+  res_msg.op = io_msg->op;
+  res_msg.id = io_msg->id;
+  res_msg.result = error_code;
+  res_msg.smo_name = io_msg->smo_name;
+  res_msg.smo_buff = io_msg->smo_buff;
+  
+  send_msg(task_id, io_msg->ret_port, &res_msg);
+}
+
+int streq(char *s, char *t) {
+  int i=0;
+  char c;
+  
+  while((c=s[i]) == t[i]) {
+    if (!c) return 1;
+    i++;
+  }
+  
+  return 0;
+}
