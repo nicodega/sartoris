@@ -1,0 +1,33 @@
+#!/usr/bin/perl
+
+##########################################################
+# first argument is the file name, if the second argument
+# is -d then the third arg is the desired file size (it'll
+# be filled with 0's. If the second argument is -m then it
+# indicates the file size should be a multiple of the 
+# third arg. 
+##########################################################
+
+$size = (stat($ARGV[0]))[7];
+
+if(index $ARGV[2], '0x' == 0)
+{
+	$argv2 = hex $ARGV[2];
+}
+else
+{
+	$argv2 = $ARGV[2];
+}
+
+if( $ARGV[1] eq "-d" ){
+    ($zeros = $argv2 - $size) >= 0 or die "FILL ERROR: File is too big!\n";
+	print "size is = $size, pretended is $argv2 \n";
+}elsif ($ARGV[1] eq "-m"){
+    $zeros = $argv2 - ($size % $argv2); 
+}else{
+    die "fatal error: fill received wrong parameters.\n";
+}
+print "Size: $size bytes\n$zeros bytes will be added\n";
+system("dd if=/dev/zero of=zeros bs=$zeros count=1 ; cat zeros >> $ARGV[0]");
+
+
