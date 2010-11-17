@@ -32,7 +32,7 @@ int open_port(int port, int priv, enum usage_mode mode)
 	
     result = FAILURE;
 	
-    if (0 <= mode && mode < MAX_USAGE_MODE) 
+    if (0 <= mode && mode <= MAX_USAGE_MODE) 
 	{
 		if (0 <= port && port <= MAX_TSK_OPEN_PORTS) 
 		{	
@@ -104,7 +104,7 @@ int set_port_mode(int port, int priv, enum usage_mode mode)
     
     result = FAILURE;
   
-    if (0 <= mode && mode < MAX_USAGE_MODE) 
+    if (0 <= mode && mode <= MAX_USAGE_MODE) 
 	{
 		x = mk_enter(); /* enter critical block */
 		

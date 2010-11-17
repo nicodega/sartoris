@@ -38,19 +38,19 @@ void init_indexes()
 
 	for(id = 0; id < IDX_TSK_COUNT; id++)
 	{
-		idx_dir.index_ptr_tsk[id] = (id < IDX_STATIC_TSK_COUNT)? (void*)((unsigned int)static_idx_mem + id * PG_SIZE) : NULL;
+		idx_dir.index_ptr_tsk[id] = (struct index*)((id < IDX_STATIC_TSK_COUNT)? (void*)((unsigned int)static_idx_mem + id * PG_SIZE) : NULL);
 		idx_dir.free_ptrs_tsk[id] = IDX_SIZE;
 	}
 
 	for(id = 0; id < IDX_THR_COUNT; id++)
 	{
-		idx_dir.index_ptr_thr[id] = (id < IDX_STATIC_THR_COUNT)? (void*)((unsigned int)static_idx_mem + IDX_STATIC_TSK_COUNT * PG_SIZE + id * PG_SIZE) : NULL;
+		idx_dir.index_ptr_thr[id] = (struct index*)((id < IDX_STATIC_THR_COUNT)? (void*)((unsigned int)static_idx_mem + IDX_STATIC_TSK_COUNT * PG_SIZE + id * PG_SIZE) : NULL);
 		idx_dir.free_ptrs_thr[id] = IDX_SIZE;
 	}
 
 	for(id = 0; id < IDX_SMO_COUNT; id++)
 	{
-		idx_dir.index_ptr_smo[id] = (id < IDX_STATIC_SMO_COUNT)? (void*)((unsigned int)static_idx_mem + (IDX_STATIC_THR_COUNT + IDX_STATIC_TSK_COUNT) * PG_SIZE + id * PG_SIZE) : NULL;
+		idx_dir.index_ptr_smo[id] = (struct index*)((id < IDX_STATIC_SMO_COUNT)? (void*)((unsigned int)static_idx_mem + (IDX_STATIC_THR_COUNT + IDX_STATIC_TSK_COUNT) * PG_SIZE + id * PG_SIZE) : NULL);
 		idx_dir.free_ptrs_smo[id] = IDX_SIZE;
 	}
 }
@@ -61,18 +61,19 @@ returns 1 if successful, 0 otherwise.
 */
 int index_alloc(int id, int type)
 {
+    unsigned int *ptr = NULL;
+    int i;
+
 	/* check if we have index page allocated */
 	switch(type)
 	{
 		case IDX_TSK:
 			if(!TST_DIR_PTR(id,tsk))
 			{
-				// we will set index entry to a bogus value
-				// because dynamic allocation might break 
-				// atomicity
-				SET_DIR_PTR(id,tsk,(struct index *)dyn_alloc_page(DYN_PGLVL_IDX));
-				if(!TST_DIR_PTR(id,tsk))
-					return 0;
+                ptr = (unsigned int *)dyn_alloc_page(DYN_PGLVL_IDX);
+                if(!ptr) return 0;
+				SET_DIR_PTR(id,tsk,(struct index *)ptr);
+				for(ptr, i = 0;i < 0x400;i++, ptr++)*ptr = 0;
 				SET_DIR_FREE(id,tsk,IDX_SIZE-1);
 			}
 			else
@@ -83,9 +84,10 @@ int index_alloc(int id, int type)
 		case IDX_THR:
 			if(!TST_DIR_PTR(id,thr))
 			{
-				SET_DIR_PTR(id,thr,(struct index *)dyn_alloc_page(DYN_PGLVL_IDX));
-				if(!TST_DIR_PTR(id,thr))
-					return 0;						
+				ptr = (unsigned int *)dyn_alloc_page(DYN_PGLVL_IDX);
+                if(!ptr) return 0;
+                SET_DIR_PTR(id,thr,(struct index *)ptr);
+				for(ptr, i = 0;i < 0x400;i++, ptr++)*ptr = 0;					
 				SET_DIR_FREE(id,thr,IDX_SIZE-1);
 			}
 			else
@@ -96,9 +98,10 @@ int index_alloc(int id, int type)
 		case IDX_SMO:
 			if(!TST_DIR_PTR(id,smo))
 			{
-				SET_DIR_PTR(id,smo,(struct index *)dyn_alloc_page(DYN_PGLVL_IDX));
-				if(!TST_DIR_PTR(id,smo)) 
-					return 0;
+                ptr = (unsigned int *)dyn_alloc_page(DYN_PGLVL_IDX);
+                if(!ptr) return 0;
+				SET_DIR_PTR(id,smo,(struct index *)ptr);
+				for(ptr, i = 0;i < 0x400;i++, ptr++)*ptr = 0;
 				SET_DIR_FREE(id,smo,IDX_SIZE-1);
 			}
 			else
@@ -107,7 +110,7 @@ int index_alloc(int id, int type)
 			}
 			break;
 	}
-
+    
 	return 1;
 }
 
@@ -128,21 +131,21 @@ void index_free(int id, int type)
 			
 			SET_PTR(id,tsk,NULL);
 			free = &GET_DIR_FREE(id,tsk);
-			idx = &GET_DIR_PTR(id,tsk);
+			idx = GET_DIR_PTR(id,tsk);
 			break;
 		case IDX_THR:
 			if(!TST_PTR(id,thr)) return;
 			
 			SET_PTR(id,thr,NULL);
 			free = &GET_DIR_FREE(id,thr);
-			idx = &GET_DIR_PTR(id,tsk);
+			idx = GET_DIR_PTR(id,thr);
 			break;
 		case IDX_SMO:
 			if(!TST_PTR(id,smo)) return;
 			
 			SET_PTR(id,smo,NULL);
 			free = &GET_DIR_FREE(id,smo);
-			idx = &GET_DIR_PTR(id,tsk);
+			idx = GET_DIR_PTR(id,smo);
 			break;
 	}
 
@@ -210,6 +213,3 @@ int index_find_free(int type)
 	}
 	return j;
 }
-
-
-

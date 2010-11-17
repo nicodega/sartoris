@@ -34,7 +34,6 @@
 #include "sartoris/scr-print.h"
 
 /* important interrupt handling data */
-
 int int_handlers[MAX_IRQ];            /* int number -> thread handler id           */
 unsigned char int_nesting[MAX_IRQ];   /* int number -> bool indicates nesting mode */
 unsigned char int_active[MAX_THR];    /* thread id -> bool indicating wether this  *
@@ -61,26 +60,26 @@ int initialize_kernel(void)
 {
 	int i, j;
 
-	/* initialize text-mode vga */
+	/* initialize text-mode vga            */
 	k_scr_init();
 	k_scr_clear();
 
-	/* Initialize critical sections */
+	/* Initialize critical sections        */
 	mk_cs_init();
 
-	/* Initialize indexes */
+	/* Initialize indexes                  */
 	init_indexes();
 
 	/* Initialize dynamic memory subsystem */
 	dyn_init();
 
-	/* initialize containers */
+	/* initialize containers               */
 	init_containers();
 		
-	/* initialize salloc */
+	/* initialize salloc                   */
 	init_salloc();
 
-	/* initialize interrupt stack */
+	/* initialize interrupt stack          */
 	int_stack_pointer = 0;
 	for (i = 0; i < MAX_IRQ; i++) 
 	{
@@ -89,7 +88,7 @@ int initialize_kernel(void)
 
 	last_int = -1;
 
-	// initialize metrics if necessary
+	/* initialize metrics if necessary     */
 #ifdef _METRICS_
 	initialize_metrics();
 #endif

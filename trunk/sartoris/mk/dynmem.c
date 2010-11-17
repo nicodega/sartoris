@@ -58,7 +58,7 @@ void dyn_init()
 		pg_bitmap[i] = 0;
 }
 
-void dyn_free_queued();
+void dyn_free_queued(int);
 /*
 Get a page from OS (be careful on outher functions... this breaks atomicity)
 This will return the linear address of the page we got from the underlying OS.
@@ -67,7 +67,8 @@ NOTE: We count on atomicity here, until we invoke arch_request_page().
 void *dyn_alloc_page(int lvl)
 {
 	void *laddr = NULL;		// this is the address where we mapped the granted page
-	
+	int i = 0, j = 0;
+
 	/*
 	Check if there is a non returned free page
 	*/
@@ -91,24 +92,25 @@ void *dyn_alloc_page(int lvl)
 	/*
 	Find a free page on sartoris linear space using the bitmap
 	*/
-	int i,j;
 	for(i=0; i < DYN_BITMAPSIZE; i++)
 	{
 		if((pg_bitmap[i] & 0xFFFFFFFF) != 0xFFFFFFFF)
 		{
 			/* we found a free page on this dword */
-			for(j = 31; j >= 0; j--)
+			for(j = 0; j < (sizeof(unsigned int) * 8); j++)
 			{
-				if((pg_bitmap[i] & (0x1 << j)) == 0)
+				if((pg_bitmap[i] & (0x80000000 >> j)) == 0)
 				{
-					laddr = (void*)(KERN_LMEM_SIZE + (i * 32 + (32 - j)) * PG_SIZE);
+					laddr = (void*)(KERN_LMEM_SIZE + (i * 32 + j) * PG_SIZE);
 					break;
 				}
 			}
+            if(laddr != NULL)
+                break;
 		}
 	}
 
-	if(i == DYN_BITMAPSIZE) return NULL;
+	if(i * 32 + j >= DYN_PAGES) return NULL;
 	
 	dyn_pg_lvl = lvl;	// indicate we are on a dynamic memory PF
 
@@ -118,16 +120,9 @@ void *dyn_alloc_page(int lvl)
 	
 	if(ret == FAILURE) return NULL;
 
-	setbit(pg_bitmap, (unsigned int)(((unsigned int)laddr - KERN_LMEM_SIZE) / PG_SIZE), 0);
+	setbit(pg_bitmap, (unsigned int)(((unsigned int)laddr - KERN_LMEM_SIZE) / PG_SIZE), 1);
 
 	return laddr;
-}
-
-void dyn_bmp_free(unsigned int laddr)
-{
-	laddr -= KERN_LMEM_SIZE;
-	laddr = laddr / PG_SIZE;
-	setbit(pg_bitmap, (unsigned int)(((unsigned int)laddr - KERN_LMEM_SIZE) / PG_SIZE),0);
 }
 
 /*
@@ -139,7 +134,6 @@ void dyn_free_page(void *linear, int lvl)
 {
 	/* Attempt to return the page */
 	struct dyn_free_page *pg = NULL;
-	int ret;
 		
 	/* Add page to non-returned pages list */
 	pg = (struct dyn_free_page *)linear;
@@ -176,13 +170,9 @@ void dyn_free_page(void *linear, int lvl)
 	if(f_alloc > DYN_THRESHOLD)
 	{
 		if(f_count == 0)
-		{	
-			dyn_free_queued(DYN_THRESHOLD / 2);		
-		}
+			dyn_free_queued(DYN_THRESHOLD >> 1);
 		else
-		{
 			f_count--;
-		}
 	}
 	
 	dyn_pg_ret--; 
@@ -191,12 +181,13 @@ void dyn_free_page(void *linear, int lvl)
 void dyn_free_queued(int count)
 {
 	struct dyn_free_page *pg;
+    unsigned int laddr;
 	int ret = 1;
 
 	while(dyn_free_first != NULL && ret && count > 0)
 	{
 		/* 
-		Remove the page from the list (just in case some other free is performed
+		    Remove the page from the list (just in case some other free is performed
 			and it finished while we broke atomicity)
 		*/
 		pg = dyn_free_first;
@@ -225,12 +216,13 @@ void dyn_free_queued(int count)
 		else
 		{
 			/* Set page as free on bitmap */
-			dyn_bmp_free((unsigned int)pg);
+			laddr = (unsigned int)pg;
+            laddr -= KERN_LMEM_SIZE;
+	        laddr = laddr / PG_SIZE;
+	        setbit(pg_bitmap, (unsigned int)(((unsigned int)laddr - KERN_LMEM_SIZE) / PG_SIZE), 0);
 
 			f_count--;
 		}
 		count--;
 	}	
 }
-
-

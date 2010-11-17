@@ -21,6 +21,7 @@
 #include "lib/indexing.h"
 #include <sartoris/critical-section.h>
 
+
 /* shared memory subsystem implementation */
 
 /* these are the proper system calls: */
@@ -81,7 +82,6 @@ int claim_mem(int smo_id)
 int read_mem(int smo_id, int off, int size, int *dest) 
 {
     struct smo *my_smo;
-    int src_task;
     char *src;
     int x, result;
     
@@ -97,8 +97,8 @@ int read_mem(int smo_id, int off, int size, int *dest)
 
 			while (my_smo->target == curr_task && off + size <= my_smo->len 
 				   && (my_smo->rights & READ_PERM) && result != SUCCESS)
-			{                                          
-				int bytes;
+			{                            
+                int bytes;
 					
 				src = (char *) ((unsigned int)my_smo->base + off);
 				/*
@@ -133,7 +133,6 @@ int read_mem(int smo_id, int off, int size, int *dest)
 int write_mem(int smo_id, int off, int size, int *src) 
 {
     struct smo *my_smo;
-    int src_task;
     char *dest;
     int x, result;
     
@@ -149,8 +148,8 @@ int write_mem(int smo_id, int off, int size, int *src)
 
 			while (my_smo->target == curr_task && off + size <= my_smo->len 
 				   && (my_smo->rights & WRITE_PERM) && result != SUCCESS)                   
-			{                                           
-				int bytes;
+			{                      
+                int bytes;
 
 				dest = (char *) ((unsigned int)my_smo->base + off);
 				bytes = arch_cpy_to_task(my_smo->owner, (char*)src, (char*)dest, size, x); 
@@ -242,10 +241,12 @@ int get_new_smo(int task_id, int target_task, int addr, int size, int perms)
 	}
 
 	/* allocate a new SMO. Atomicity CAN be broken HERE. */
-	smo = salloc(id, SALLOC_SMO);
+	smo = (struct smo*)salloc(id, SALLOC_SMO);
 
-	if(id == -1)  /* No free smos */
+    if(smo == NULL)  /* No free smos */
+    {
 		return FAILURE;
+    }
 	    
 	task = GET_PTR(task_id,tsk);
 
@@ -327,25 +328,3 @@ void delete_task_smo(int task_id)
     
     mk_leave(x); /* exit critical block */
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
