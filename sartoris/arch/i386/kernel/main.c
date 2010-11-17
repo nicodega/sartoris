@@ -43,14 +43,17 @@ void arch_init_cpu(void)
 	/* idt initialization                                 */
 	init_interrupts();
 
-	/* Initialize global tss */
+	/* Initialize global tss                              */
 	arch_init_global_tss();
 
+    /* Initialize dynamic memory                          */
 	arch_init_dynmem();
 
+    /* Create init task                                   */
 	create_init_task();  
 
 #ifdef PAGING
+    /* Initialize paging                                  */
 	init_paging();
 #endif
 	/* the system is almost up! the rest is done back in the initalize_kernel 

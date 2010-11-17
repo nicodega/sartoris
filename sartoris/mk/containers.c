@@ -16,8 +16,8 @@ int init_container_type(int type, int static_elem_count, int static_containers, 
 
 	// set free elements for this type to all elements statically allocated
 	containers.free[type] = static_elem_count;
-	// set max free to the ammount of static containers
-	containers.max_free[type] = static_containers;
+	// set max free to the ammount of static elements on one container
+	containers.max_free[type] = static_elem_count / static_containers; // We will keep one container in order to avoid initializing it again
 	// first free container points to the first static container
 	c = containers.first_free[type] = first_container;
 
@@ -26,7 +26,7 @@ int init_container_type(int type, int static_elem_count, int static_containers, 
 		// Initialize the container as static
 		cont_init(c, type, CONT_FLAGS_PREALLOC);
 		c->prev = ((j == 0)? NULL : (struct c_header*)((unsigned int)c - PG_SIZE));
-		c->next = ((j == static_containers - 1)? NULL : (struct c_header*)((unsigned int)c + PG_SIZE));
+		c->next = ((j == static_containers - 1)? (struct c_header*)NULL : (struct c_header*)((unsigned int)c + PG_SIZE));
 		c = (struct c_header*)((unsigned int)c + PG_SIZE);
 		i++;
 	}	
@@ -60,6 +60,7 @@ Initializes a container with all free structures
 void cont_init(struct c_header *container, int type, int flags)
 {
 	int i = 0;
+    void *ptr = NULL;
 	
 	container->first_free = (void*)((unsigned int)container + sizeof(struct c_header));
 	container->flags = flags;
@@ -69,53 +70,53 @@ void cont_init(struct c_header *container, int type, int flags)
 	{
 		case CONT_ALLOC_THR:
 			container->free = CONT_THR_PER_CONT;
-			struct c_thread_unit *thr = (struct c_thread_unit*)container->first_free;
+			ptr = container->first_free;
 			for(i = 1; i < container->free; i++)
 			{
-				thr->next_free = (struct c_thread_unit *)((unsigned int)thr + sizeof(struct c_thread_unit));
-				thr = thr->next_free;
+				((struct c_thread_unit *)ptr)->next_free = (struct c_thread_unit *)((unsigned int)ptr + sizeof(struct c_thread_unit));
+				ptr = ((struct c_thread_unit *)ptr)->next_free;
 			}
-			thr->next_free = NULL;
+			((struct c_thread_unit *)ptr)->next_free = NULL;
 			break;
 		case CONT_ALLOC_TSK:
 			container->free = CONT_TSK_PER_CONT;
-			struct c_task_unit *tsk = (struct c_task_unit*)container->first_free;
+			ptr = container->first_free;
 			for(i = 1; i < container->free; i++)
 			{
-				tsk->next_free = (struct c_task_unit*)((unsigned int)tsk + sizeof(struct c_task_unit));
-				tsk = tsk->next_free;
+				((struct c_task_unit *)ptr)->next_free = (struct c_task_unit*)((unsigned int)ptr + sizeof(struct c_task_unit));
+				ptr = ((struct c_task_unit *)ptr)->next_free;
 			}
-			tsk->next_free = NULL;
+			((struct c_task_unit *)ptr)->next_free = NULL;
 			break;
 		case CONT_ALLOC_SMO:
 			container->free = CONT_SMO_PER_CONT;
-			struct smo *smo = (struct smo*)container->first_free;
+			ptr = container->first_free;
 			for(i = 1; i < container->free; i++)
 			{
-				smo->next = (struct smo *)((unsigned int)smo + sizeof(struct smo));
-				smo = smo->next;
+				((struct smo*)ptr)->next = (struct smo *)((unsigned int)ptr + sizeof(struct smo));
+				ptr = ((struct smo*)ptr)->next;
 			}
-			smo->next = NULL;
+			((struct smo*)ptr)->next = NULL;
 			break;
 		case CONT_ALLOC_MSG:
 			container->free = CONT_MSG_PER_CONT;
-			struct message *msg = (struct message*)container->first_free;
+			ptr = container->first_free;
 			for(i = 1; i < container->free; i++)
 			{
-				msg->next = (struct message *)((unsigned int)msg + sizeof(struct message));
-				msg = msg->next;
+				((struct message*)ptr)->next = (struct message *)((unsigned int)ptr + sizeof(struct message));
+				ptr = ((struct message*)ptr)->next;
 			}
-			msg->next = NULL;
+			((struct message*)ptr)->next = NULL;
 			break;
 		case CONT_ALLOC_PRT:
 			container->free = CONT_PRT_PER_CONT;
-			struct port *prt = (struct port*)container->first_free;
+			ptr = container->first_free;
 			for(i = 1; i < container->free; i++)
 			{
-				prt->next = (struct port *)((unsigned int)prt + sizeof(struct port));
-				prt = prt->next;
+				((struct port*)ptr)->next = (struct port *)((unsigned int)ptr + sizeof(struct port));
+				ptr = ((struct port*)ptr)->next;
 			}
-			prt->next = NULL;
+			((struct port*)ptr)->next = NULL;
 			break;
 		default:
 			break;
@@ -135,7 +136,7 @@ void *csalloc(int type)
 	if(c == NULL)
 	{		
 		/* No free container available */
-		containers.first_free[type] = (struct c_header *)dyn_alloc_page(CONT_ALLOC2DYN(type));
+		c = containers.first_free[type] = (struct c_header *)dyn_alloc_page(CONT_ALLOC2DYN(type));
 
 		if(containers.first_free[type] == NULL) 
 			return NULL;
@@ -209,7 +210,7 @@ void *csalloc(int type)
 }
 
 /*
-Frees a structure allocated with salloc. Type of the structure
+Frees a structure allocated with csalloc. Type of the structure
 must be provided.
 */
 void csfree(void *ptr, int type)
@@ -221,27 +222,27 @@ void csfree(void *ptr, int type)
 	switch(type)
 	{
 		case CONT_ALLOC_THR:
-			((struct c_thread_unit*)ptr)->next_free = c->first_free;
+			((struct c_thread_unit*)ptr)->next_free = (struct c_thread_unit*)c->first_free;
 			c->first_free = ((struct c_thread_unit*)ptr);
 			entries = CONT_THR_PER_CONT;
 			break;
 		case CONT_ALLOC_TSK:
-			((struct c_task_unit*)ptr)->next_free = c->first_free;
+			((struct c_task_unit*)ptr)->next_free = (struct c_task_unit*)c->first_free;
 			c->first_free = ((struct c_task_unit*)ptr);
 			entries = CONT_TSK_PER_CONT;
 			break;
 		case CONT_ALLOC_SMO:
-			((struct smo*)ptr)->next = c->first_free;
+			((struct smo*)ptr)->next = (struct smo*)c->first_free;
 			c->first_free = ((struct smo*)ptr);
 			entries = CONT_SMO_PER_CONT;
 			break;
 		case CONT_ALLOC_MSG:
-			((struct message*)ptr)->next = c->first_free;
+			((struct message*)ptr)->next = (struct message*)c->first_free;
 			c->first_free = ((struct message*)ptr);
 			entries = CONT_MSG_PER_CONT;
 			break;
 		case CONT_ALLOC_PRT:
-			((struct port*)ptr)->next = c->first_free;
+			((struct port*)ptr)->next = (struct port*)c->first_free;
 			c->first_free = ((struct port*)ptr);
 			entries = CONT_PRT_PER_CONT;
 			break;
@@ -281,6 +282,8 @@ void csfree(void *ptr, int type)
 			
 			if(c->next != NULL)
 				c->next->prev = c->prev;
+
+            containers.free[type] -= entries;
 			
 			dyn_free_page(c, CONT_ALLOC2DYN(type));			
 			return;

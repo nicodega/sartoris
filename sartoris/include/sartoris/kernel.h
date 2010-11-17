@@ -50,11 +50,6 @@ enum usage_mode { PERM_REQ=0, PRIV_LEVEL_ONLY, DISABLED, UNRESTRICTED };
 #define READ_PERM  2 
 #define WRITE_PERM 4
 
-/* these are used to use a signed id field
-   as a condition variable during initialization */
-#define UNUSED       -1
-#define INITIALIZING -2
-
 #define SUCCESS    0
 #define FAILURE   -1
 
