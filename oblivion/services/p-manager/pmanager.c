@@ -79,30 +79,11 @@ void process_manager(void)
     unsigned int linear, physical;
 
     __asm__ ("cli" : :);
-/*
+
     if(create_int_handler(32, SCHED_THR, 0, 0) < 0)
     {
         string_print("PMAN: HANDLER CREATION FAILED", 0, 0x7); for(;;);
         STOP;
-    }
-*/     
-    for(i=0; i<NUM_PROC; i++) 
-    {
-        /* first: the page directory */
-        page_in(BASE_PROC_TSK + i, 0, (void*)(PRC_PDIR_BASE + i*0x1000), 0, 0);
-
-        /* second: the page table */
-        page_in(BASE_PROC_TSK + i, (void*)SARTORIS_PROC_BASE_LINEAR, (void*)(PRC_PTAB_BASE + i*0x1000), 1, PGATT_WRITE_ENA);	
-
-        linear = SARTORIS_PROC_BASE_LINEAR;
-        physical = PRC_MEM_BASE + i*PRC_SLOT_SIZE;
-
-        for(j=0; j<(PRC_SLOT_SIZE/PAGE_SIZE); j++) 
-        {
-            page_in(BASE_PROC_TSK + i, (void*) linear, (void*) physical, 2, PGATT_WRITE_ENA);
-            linear += PAGE_SIZE;
-            physical += PAGE_SIZE; 
-        }
     }
     
     /* get rid of the init stuff */
@@ -162,10 +143,13 @@ void process_manager(void)
         /* run the user programs */
         for (i=0; i<NUM_PROC; i++) 
         {
-            if (state[i]==RUNNING) 
-            {
+            if (state[i]==RUNNING || state[i]==INITIALIZING) 
+            {                
                 running = BASE_PROC_THR+i;
-                run_thread(BASE_PROC_THR+i);
+                if(run_thread(BASE_PROC_THR+i))
+                {
+                    string_print("COULD NOT RUN PROC!",23*160,12); for(;;);
+                }
                 ack_int_master();
             }
         }
@@ -182,14 +166,21 @@ void process_manager(void)
                     for (i=0; i<NUM_PROC; i++) 
                         console_begin(i);
                 }
-                else if (csl_sgn.alt && csl_sgn.key == '.') 
+                else
                 {
-                    reboot();
-                } 
-                else if (state[csl_sgn.term]==RUNNING && (csl_sgn.key == 'c' || csl_sgn.key == 'C')) 
-                {
-                    do_unload(csl_sgn.term);
-                    show_prompt(csl_sgn.term);
+                    if (csl_sgn.alt && csl_sgn.key == '.') 
+                    {
+                        reboot();
+                    } 
+                    else if (state[csl_sgn.term]==RUNNING 
+                        || state[csl_sgn.term]==INITIALIZING)
+                    {                    
+                        if(csl_sgn.key == 'c' || csl_sgn.key == 'C') 
+                        {
+                            do_unload(csl_sgn.term);
+                            show_prompt(csl_sgn.term);
+                        }
+                    }
                 }
             }          
         }
@@ -426,6 +417,25 @@ void do_load(int term)
     prc_task.priv_level = 2;
 
     if (create_task(BASE_PROC_TSK+term, &prc_task)) STOP;
+
+    /* first: the page directory */
+    i = term;
+    page_in(BASE_PROC_TSK + i, 0, (void*)(PRC_PDIR_BASE + i*0x1000), 0, 0);
+
+    /* second: the page table */
+    page_in(BASE_PROC_TSK + i, (void*)SARTORIS_PROC_BASE_LINEAR, (void*)(PRC_PTAB_BASE + i*0x1000), 1, PGATT_WRITE_ENA);	
+
+    unsigned int linear = SARTORIS_PROC_BASE_LINEAR;
+    unsigned int physical = PRC_MEM_BASE + i * PRC_SLOT_SIZE;
+
+    int j = 0;
+    for(; j<=(PRC_SLOT_SIZE/PAGE_SIZE); j++) 
+    {
+        page_in(BASE_PROC_TSK + i, (void*) linear, (void*) physical, 2, PGATT_WRITE_ENA);
+        linear += PAGE_SIZE;
+        physical += PAGE_SIZE; 
+    }
+
     if (init_task(BASE_PROC_TSK+term, (void*) load_buffer[term], BLOCK_SIZE)) STOP;
 
     /* pass the command line on */
@@ -442,9 +452,12 @@ void do_load(int term)
     prc_thread.ep = 0;
     prc_thread.stack = (void*)(0x10000 - 0x4);
 
-    create_thread(BASE_PROC_THR+term, &prc_thread);
-
-    state[term] = INITIALIZING;    
+    if(create_thread(BASE_PROC_THR+term, &prc_thread))
+    {
+        string_print("COULD NOT CREATE PROC THR!",23*160,12); STOP;
+    }
+    
+    state[term] = INITIALIZING;
 }
 
 void do_unload(int term) {
@@ -481,7 +494,7 @@ int streq(char *s, char *t)
     return 0;
 }
 
-int csl_print(int csl, char *str, int att, int len, int res_code) 
+int csl_print(int term, char *str, int att, int len, int res_code) 
 {
     struct csl_io_msg csl_io;
 
@@ -489,7 +502,7 @@ int csl_print(int csl, char *str, int att, int len, int res_code)
     csl_io.smo = share_mem(CONS_TASK, str, len+1, READ_PERM);
     csl_io.attribute = att;
     csl_io.response_code = res_code;
-    return send_msg(CONS_TASK, 8+csl, &csl_io);
+    return send_msg(CONS_TASK, 1+term, &csl_io);
 }
 
 void spawn_handlers(void) 
@@ -529,7 +542,8 @@ void handler(void)
 
         exception = get_last_int();
 
-        if (running >= BASE_PROC_THR) {
+        if (running >= BASE_PROC_THR) 
+        {                  
             prog_id = running - BASE_PROC_THR;
             state[prog_id] = KILLED;
             switch(exception) 
@@ -568,8 +582,7 @@ void handler(void)
                   msg = txt_simd_fault;
                   break;
             }
-            csl_print(prog_id, msg, 0x7, 80, prog_id);
-
+            csl_print(prog_id, msg, 0x7, strlen(msg), prog_id);
         } 
         else 
         { /* a service thread crashed! */

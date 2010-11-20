@@ -1,6 +1,6 @@
 all : ramfs_files.img
 
-ramfs_files.img : hello.raw misbehav.raw jedi.raw idle.raw
+ramfs_files.img : hello.raw misbehav.raw jedi.raw idle.raw mmx.raw
 	../../../tools/mkbfat ramfs_files.img
 
 hello.raw : ../../../programs/helloworld/hello.raw
@@ -14,6 +14,9 @@ jedi.raw : ../../../programs/jedi/jedi.raw
 
 idle.raw : ../../../programs/idle/idle.raw
 	cp ../../../programs/idle/idle.raw .
+	
+mmx.raw : ../../../programs/mmx/mmx.raw
+	cp ../../../programs/mmx/mmx.raw .
 
 .PHONY : clean
 clean :
