@@ -41,7 +41,7 @@ void arch_caps_init()
 	arch_caps.cores = 0;
 
 	/*
-	Do we have CPUID? (I'll assume we are ona 486+ system)
+	Do we have CPUID? (I'll assume we are on a 486+ system)
 	*/
 	if(arch_caps_hascpuid())
 	{
