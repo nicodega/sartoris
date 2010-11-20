@@ -1,4 +1,5 @@
-CFLAGS = -O2 -ffreestanding -nostdinc -nostdlib -nostartfiles 
+#CFLAGS = -O2 -ffreestanding -nostdinc -nostdlib -nostartfiles 
+CFLAGS = -ffreestanding -nostdinc -nostdlib -nostartfiles 
 CXX = g++
 CXXFLAGS = -O2 -ffreestanding -nostdinc -nostdlib -nostartfiles 
 LD = ld

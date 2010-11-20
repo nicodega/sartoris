@@ -3,7 +3,7 @@ CFLAGS += -I"../../include"
 objects = console.o $(extobjects)
 
 extobjects = ../../klib/kserv.o ../../lib/int.o ../../drivers/keyboard/keyb.o \
-../../drivers/screen/screen.o
+../../drivers/screen/screen.o ../../lib/print.o
 
 all : console.img 
 

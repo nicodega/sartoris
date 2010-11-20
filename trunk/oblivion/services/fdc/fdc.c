@@ -65,15 +65,14 @@ void init_drive() {
 	struct dma_command dma_msg;
 	struct dma_response dma_res;
 	
-	__asm__ ("sti"::);
-
-	init_rtc(0x0c);	/* initialize RTC */
-
     open_port(FDC_COMMAND_PORT, 0, UNRESTRICTED);
     open_port(FDC_DMA_TRANSACTIONS, 0, UNRESTRICTED);
 
-	/* create timer thread */
+	__asm__ ("sti"::);
 
+	init_rtc(0x0c);	/* initialize RTC */
+    
+	/* create timer thread */
 	thr.task_num=FDC_TASK;
 	thr.invoke_mode=PRIV_LEVEL_ONLY;                      
 	thr.invoke_level=0;
@@ -81,14 +80,14 @@ void init_drive() {
 	thr.stack= (void*)(0xe000 - 0x04);
 
 	create_thread(TIMER_THR, &thr);
-	create_int_handler(40, TIMER_THR, true, 5);
+	create_int_handler(40, TIMER_THR, 1, 5);
 	/* IRQ8 -> 40 in the IDT */
 	
 	thr.ep= (void*)&irq_handler;
 	thr.stack= (void*)(0xe000 - 0x2F);
 
 	create_thread(FDCI_THR, &thr);
-	create_int_handler(38, FDCI_THR, true, 6);
+	create_int_handler(38, FDCI_THR, 1, 6);
 	/* IRQ6 -> 38 in the IDT */
 
 	/* get DMA channel 2 from DMA manager */
@@ -120,12 +119,13 @@ void init_drive() {
 
 	/* now we enter an infinite loop, checking and procesing
 	   messages */
-
+int k =0;
 	while (!die) {
 	
+        
 	  /* wait for a message to serve */
-	  
 	  while (get_msg_count(FDC_COMMAND_PORT) == 0) { 
+          string_print("FDC ALIVE",20*160,k++);
 	    run_thread(SCHED_THR);
 	  }
 
@@ -399,7 +399,7 @@ int fdc_rw(int block, int smo_id, int write) {
 
 		if(smo_id == -1) { return -1; }
 
-		read_mem(smo_id, 0,128, buffer);
+		read_mem(smo_id, 0,512, buffer);
 	}
 
 	while (i != 0) {
@@ -452,7 +452,7 @@ int fdc_rw(int block, int smo_id, int write) {
 		    dma_smo = dma_res.res1;
 		    dma_op = READ;
 		  }
-		  write_mem(dma_smo, 0, 128, buffer);
+		  write_mem(dma_smo, 0, 512, buffer);
 		  send_byte(CMD_WRITE);
 		}
 
@@ -502,8 +502,8 @@ int fdc_rw(int block, int smo_id, int write) {
 		if (smo_id == -1) {
 			return -1;
 		}	
-		read_mem(dma_smo,0,128,buffer);
-		write_mem(smo_id,0,128,buffer);
+		read_mem(dma_smo,0,512,buffer);
+		write_mem(smo_id,0,512,buffer);
 	}
 
 	motor_off();

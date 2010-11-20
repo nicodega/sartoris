@@ -133,7 +133,7 @@ read_loop:
 	pop ebp
 	ret
 
-	;; this function writes the contnents of the vga memory area 
+	;; this function writes the contents of the vga memory area 
 	;; from a buffer
 
 write_screen:

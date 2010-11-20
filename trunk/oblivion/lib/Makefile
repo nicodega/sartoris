@@ -1,4 +1,4 @@
-all : int.o reboot.o scheduler.o malloc.o sprintf.o printf.o init.o bfilesys.o
+all : int.o reboot.o scheduler.o malloc.o sprintf.o printf.o init.o bfilesys.o print.o
 
 CPPFLAGS+= -I"../include"
 
@@ -18,6 +18,8 @@ sprintf.o : sprintf.c ../include/lib/printf.h
 printf.o : printf.c ../include/lib/printf.h
 
 init.o : init.c
+
+print.o : print.c
 
 bfilesys.o : bfilesys.c ../include/lib/bfilesys.h
 

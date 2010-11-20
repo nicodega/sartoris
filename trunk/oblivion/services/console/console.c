@@ -16,6 +16,8 @@
 #include <lib/reboot.h>
 #include "csl_internals.h"
 
+#include <lib/print.h>
+
 #define NUM_VIRTUAL 8
 #define KBD_BUF_SIZE 256  /* must match size defined in the driver */
 
@@ -39,30 +41,38 @@ char txt_bad_smo_out[] = "\n\n-> console server: bad SMO received for console sc
 void console(void) 
 {
     int i;
+    struct csl_signal_msg msg;
 
+    open_port(0, 0, UNRESTRICTED);
+    for(i = 0; i < NUM_VIRTUAL; i++)
+        open_port(1+i, 0, UNRESTRICTED);
+
+    /* Let PMAN know we are alive */
+    msg.term = -1;
+    send_msg(0, 1, &msg);
+    
     /* initialization code */
-    __asm__ ("sti" : : );
+    __asm__ __volatile__ ("sti" : : );
+    
     cur_screen=0;
     next_read=next_write=0;
     full_buf=0;
 
-    for (i=0; i<NUM_VIRTUAL; i++) {
+    for (i=0; i<NUM_VIRTUAL; i++) 
+    {
         vt_reset(i);
     }
 
     create_keyb_thread();
-
-    open_port(0, 0, UNRESTRICTED);
-
+    
     /* ok, we spawned the thread that will handle the keyboard. */
     /* now enter the main loop. */
-
+int k =0;
     for(;;) {
-
+        string_print("CON ALIVE",22*160,k++);
         do_io();
 
         run_thread(SCHED_THR);
-
     }
 }
 
@@ -76,114 +86,92 @@ void create_keyb_thread(void) {
     kbd_hdl.stack= (void*)(0xe000 - 0x4);
 
     create_thread(CONSK_THR, &kbd_hdl);
-    create_int_handler(33, CONSK_THR, true, 1);
-
+    create_int_handler(33, CONSK_THR, 1, 1);
 }
 
-void do_control(void) {
-    struct csl_ctl_msg cmsg;
-    int i, j, id;
-
-    while(get_msg_count(0)>0) {
-        get_msg(0, (int*) &cmsg, &id);
-        i = cmsg.index;
-
-        switch (cmsg.command) {
-    case CSL_RESET:
-        vt_reset(i);
-        break;
-    case CSL_SWITCH:
-        vt_switch(i);
-        break;
-        }
-    }
-}
-
-void do_io(void) {
+void do_io(void) 
+{
     struct csl_io_msg iomsg;
     struct csl_response_msg rmsg;
-    int i, j, ret_len, id;
-
+    int i, j, ret_len, id, len;
+    
     /* process new requests */
+    for (i=0; i<NUM_VIRTUAL; i++) 
+    {
+        while (!t[i].scanning && get_msg_count(1+i) > 0) 
+        {   
+            get_msg(1+i, &iomsg, &id);
+            
+            switch(iomsg.command) 
+            {
+              case CSL_RESET:
+                  //vt_reset(i);
+                  break;
+              case CSL_SWITCH:
+                  vt_switch(i);
+                  break;
+              case CSL_WRITE:
+                  len = mem_size(iomsg.smo);
+                  if (len > MAX_CSL_WRITE) {
+                      len = MAX_CSL_WRITE;
+                  }
+                  if (len == -1 || read_mem(iomsg.smo, 0, len, &str) >=0) 
+                  {
+                      t[i].scanning_pos = vt_print(i, t[i].scanning_pos,
+                          str, len, iomsg.attribute, &j);
 
-    for (i=0; i<NUM_VIRTUAL; i++) {
+                      if (i==cur_screen) { 
+                          set_cursor_pos(t[i].scanning_pos/2); 
+                      }
 
-        while (!t[i].scanning && get_msg_count(8+i) > 0) {
-            get_msg(8+i, &iomsg, &id);
+                      rmsg.code = iomsg.response_code;
+                      rmsg.smo = iomsg.smo;
+                      send_msg(id, 0, &rmsg);
 
-            switch(iomsg.command) {
-      case CSL_RESET:
-          vt_reset(i);
-          break;
-      case CSL_SWITCH:
-          vt_switch(i);
-          break;
-      case CSL_WRITE:
+                  } else {
+                      t[cur_screen].scanning_pos = vt_print(cur_screen,
+                          t[cur_screen].scanning_pos,
+                          txt_bad_smo_in,
+                          160,
+                          0x7,
+                          &j);
+                      set_cursor_pos(t[cur_screen].scanning_pos/2); 
+                  }
+                  break;
 
-          if (iomsg.len > MAX_CSL_WRITE) {
-              iomsg.len = MAX_CSL_WRITE;
-          }
+              case CSL_READ:
+                  len = mem_size(iomsg.smo);
+                  t[i].scanning = 1;
+                  if (len <= IBUF_SIZE) {
+                      t[i].max_input_len = len-1;
+                  } else {
+                      t[i].max_input_len = IBUF_SIZE-1;
+                  }
 
-          if (read_mem(iomsg.smo, 0, iomsg.len/4, &str)>=0) {
+                  t[i].input_owner_id = id;
+                  t[i].input_smo = iomsg.smo;
+                  t[i].response = iomsg.response_code;
+                  t[i].delimiter = iomsg.delimiter;	
+                  t[i].done = 0;
+                  t[i].input_len = 0;
+                  t[i].print_len = 0;
+                  t[i].cursor_pos = 0;
+                  t[i].modified = 0;
 
-              t[i].scanning_pos = vt_print(i, t[i].scanning_pos,
-                  str, iomsg.len, iomsg.attribute, &j);
+                  if (t[i].echo = iomsg.echo) {
+                      t[i].scanning_att = iomsg.attribute;
+                      if (i==cur_screen) { cursor_on(); }
+                  }
 
-              if (i==cur_screen) { 
-                  set_cursor_pos(t[i].scanning_pos/2); 
-              }
-
-              rmsg.code = iomsg.response_code;
-              rmsg.smo = iomsg.smo;
-              send_msg(id, 0, &rmsg);
-
-          } else {
-
-              t[cur_screen].scanning_pos = vt_print(cur_screen,
-                  t[cur_screen].scanning_pos,
-                  txt_bad_smo_in,
-                  160,
-                  0x7,
-                  &j);
-              set_cursor_pos(t[cur_screen].scanning_pos/2); 
-          }
-          break;
-
-      case CSL_READ:
-          t[i].scanning = 1;
-          iomsg.len -= iomsg.len % 4;
-          if (iomsg.len <= IBUF_SIZE) {
-              t[i].max_input_len = iomsg.len-1;
-          } else {
-              t[i].max_input_len = IBUF_SIZE-1;
-          }
-
-          t[i].input_owner_id = id;
-          t[i].input_smo = iomsg.smo;
-          t[i].response = iomsg.response_code;
-          t[i].delimiter = iomsg.delimiter;	
-          t[i].done = 0;
-          t[i].input_len = 0;
-          t[i].print_len = 0;
-          t[i].cursor_pos = 0;
-          t[i].modified = 0;
-
-          if (t[i].echo = iomsg.echo) {
-              t[i].scanning_att = iomsg.attribute;
-              if (i==cur_screen) { cursor_on(); }
-          }
-
-          break;
+                  break;
             }
         }    
     }
 
     /* get new keystrokes */
-
     get_keystrokes();
 
     /* see if any scans are done and do echo */
-
     for (i=0; i<NUM_VIRTUAL; i++) {
         if (t[i].scanning && t[i].modified) {
 
@@ -201,12 +189,11 @@ void do_io(void) {
             if (t[i].done) {
 
                 t[i].scanning=0;
-                ret_len=t[i].input_len;
+                ret_len = t[i].input_len;
                 t[i].input_buf[ret_len++]=0;
 
-                if ( write_mem(t[i].input_smo, 0, ret_len/4 + ((ret_len%4==0) ? 0 : 1), 
-                    t[i].input_buf) < 0 ) {
-
+                if ( write_mem(t[i].input_smo, 0, ret_len+1, t[i].input_buf) < 0 ) 
+                {
                         t[cur_screen].scanning_pos = vt_print(cur_screen,
                             t[cur_screen].scanning_pos,
                             txt_bad_smo_out,
@@ -221,7 +208,6 @@ void do_io(void) {
                 rmsg.smo = t[i].input_smo;
                 send_msg(t[i].input_owner_id, CSL_ACK_PORT, &rmsg);
 
-
                 if (t[i].echo) {
                     cursor_off();
                     t[i].scanning_pos += 2*t[i].print_len;
@@ -234,75 +220,93 @@ void do_io(void) {
 
 }  
 
-void get_keystrokes(void) {
+void get_keystrokes(void) 
+{
     unsigned char mask, c;
     int i, j;
     struct vterm *cterm;
     struct csl_signal_msg signal;
 
-    while (! (next_read==next_write && !full_buf)) {
+    while (! (next_read==next_write && !full_buf)) 
+    {
         mask = kbd_buf[next_read];
         c = kbd_buf[next_read+1];
-        if ( mask & CTL_KEY_MASK) {
-
-            if (mask & CONTROL_MASK) {
-
+        if ( mask & CTL_KEY_MASK) 
+        {
+            if (mask & CONTROL_MASK) 
+            {
                 signal.term = cur_screen;
                 signal.key = c;
                 signal.alt = mask & ALT_MASK;
                 send_msg(PMAN_TASK, CSL_SGN_PORT, &signal);
-
-            } else if ( mask & ALT_MASK) {
-
-                if (c == LEFT) {   /* o sea, ALT+4 */
-
-                    if (cur_screen==0) {
+            } 
+            else if ( mask & ALT_MASK) 
+            {
+                if (c == LEFT) 
+                {   /* o sea, ALT+4 */
+                    if (cur_screen==0) 
+                    {
                         i = NUM_VIRTUAL - 1;
                     } else {
                         i = cur_screen-1;
                     }
                     vt_switch(i);
-
-                } else if (c == RIGHT) {
-
+                } 
+                else if (c == RIGHT) 
+                {
                     i = (cur_screen+1) % NUM_VIRTUAL;
                     vt_switch(i);
-
                 }
             }
-
-        } else {  /* !(mask & CTL_KEY_MASK) */
-
+        } 
+        else 
+        {  /* !(mask & CTL_KEY_MASK) */
             cterm = &t[cur_screen];
-            if (cterm->scanning) {
-
+            if (cterm->scanning) 
+            {
                 cterm->modified = 1;
 
-                if (c==BACKSPACE) {                  /* we eat the backspaces here */
-                    if (cterm->cursor_pos > 0) {
-                        for (i=cterm->cursor_pos; i<cterm->input_len; i++) {
+                if (c==BACKSPACE) 
+                {                  /* we eat the backspaces here */
+                    if (cterm->cursor_pos > 0) 
+                    {
+                        for (i=cterm->cursor_pos; i<cterm->input_len; i++) 
+                        {
                             cterm->input_buf[i-1] = cterm->input_buf[i];
                         }
                         cterm->input_buf[--cterm->input_len] = ' ';
                         cterm->cursor_pos--;
                     }
-                } else if (c==LEFT) {
-                    if (cterm->cursor_pos > 0) {
+                } 
+                else if (c==LEFT) 
+                {
+                    if (cterm->cursor_pos > 0) 
+                    {
                         cterm->cursor_pos--;
                     }
-                } else if (c==RIGHT) {
-                    if (cterm->cursor_pos < cterm->input_len) {
+                } 
+                else if (c==RIGHT) 
+                {
+                    if (cterm->cursor_pos < cterm->input_len) 
+                    {
                         cterm->cursor_pos++;
                     }
-                } else if (c==cterm->delimiter) {
+                } 
+                else if (c==cterm->delimiter) 
+                {
                     cterm->done=1;
-                } else if (c < 0x80) {
-                    if (cterm->input_len < cterm->max_input_len) {
-                        for (i=cterm->input_len; i>cterm->cursor_pos; i--) {
+                }
+                else if (c < 0x80) 
+                {
+                    if (cterm->input_len < cterm->max_input_len) 
+                    {
+                        for (i=cterm->input_len; i>cterm->cursor_pos; i--) 
+                        {
                             cterm->input_buf[i] = cterm->input_buf[i-1];
                         }
                         cterm->input_buf[cterm->cursor_pos++] = c;
-                        if(++cterm->input_len > cterm->print_len) {
+                        if(++cterm->input_len > cterm->print_len) 
+                        {
                             cterm->print_len = cterm->input_len;
                         }
                     }
@@ -333,23 +337,26 @@ void vt_switch(int i) {
 }
 
 
-void vt_reset(int i) {
+void vt_reset(int i) 
+{
     int j=0;
 
-    while(j<80*25*2) {
+    while(j<80*25*2) 
+    {
         t[i].screen_buf[j++]=' ';
         t[i].screen_buf[j++]=0x07;
     }
+
     t[i].scanning=0;
     t[i].scanning_pos=0;
     t[i].cursor_pos=0;
     t[i].print_len=0;
     t[i].input_len=0;
-    if (i==cur_screen) {
-        cursor_off();
-        write_screen(t[i].screen_buf);
+    if (i==cur_screen) 
+    {
+        cursor_off();  
+        write_screen(t[i].screen_buf); 
     }
-
 }
 
 

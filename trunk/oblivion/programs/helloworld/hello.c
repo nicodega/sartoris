@@ -19,9 +19,8 @@ void run(void) {
 	get_msg(0, csl, &i);
 
 	iomsg.command = CSL_WRITE;
-	iomsg.smo = share_mem(CONS_TASK, helloworld, 10, READ_PERM);
+	iomsg.smo = share_mem(CONS_TASK, helloworld, 40, READ_PERM);
 	iomsg.attribute = 11;
-	iomsg.len = 40;
 	iomsg.response_code = 0;
 	send_msg(CONS_TASK, 8+csl[0], &iomsg);
 
