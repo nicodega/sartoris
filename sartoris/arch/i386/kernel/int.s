@@ -358,12 +358,12 @@ simd_ext:
 	mov esi, simd_ext_msg
 	jmp exceptional_death
 	
+extern int7handler
 	
 ;; since we implemented software task switching and
 ;; mmx fpu sse support, this exception will be handled first by us
 bits 32
 no_copro:
-	push dword 0    ; error is 0 (just in case)
 	pusha
 	push ds
 	push es
@@ -384,9 +384,21 @@ no_copro:
 	jz no_copro_end
 no_copro_present:
 
-	;; remove flags
-	;; from stack
+	cmp dword [int7handler], 0
+	je no_copro_die
+	
+	;; call handle int 	
+	push dword 7
+	call handle_int
+	add esp, 4
+	
 	popf
+	pop es
+	pop ds
+	popa
+	iret
+	
+no_copro_die:
 	;; no mmx/fpu support
 	;; raise kernel exception	
 	mov esi, no_copro_msg
@@ -397,7 +409,6 @@ no_copro_end:
 	pop es
 	pop ds	
 	popa
-	add esp, 4
 	iret
 	
 
