@@ -16,7 +16,7 @@
 #endif
 
 /* limitations and init params */
-#define MAX_ALLOC_LINEAR   0xC800000   /* 200 MB */
+#define MAX_ALLOC_LINEAR   0xC800000   /* 200 MB () */
 #define MIN_TASK_OFFSET    MAX_ALLOC_LINEAR
 
 #define MAX_SCA						36    /* max system calls */

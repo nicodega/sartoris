@@ -27,12 +27,12 @@ int create_int_handler(int number, int thread_id, int nesting, int priority)
     result = FAILURE;
     
     x = mk_enter(); /* enter critical block */
-    
+        
     if (0 <= number && number < MAX_IRQ && TST_PTR(thread_id,thr) && int_handlers[number] < 0) 
-	{
+	{        
 		if (arch_create_int_handler(number) == 0) 
 		{
-			result = SUCCESS;
+            result = SUCCESS;
 	
 			if (nesting) 
 				int_nesting[number] = 1;
@@ -43,9 +43,9 @@ int create_int_handler(int number, int thread_id, int nesting, int priority)
 			int_active[thread_id] = 0;
 		}
     }
-    
+        
     mk_leave(x); /* exit critical block */
-    
+        
     return result;
 }
 
@@ -79,12 +79,16 @@ int destroy_int_handler(int number, int thread)
 void handle_int(int number) 
 {
     int h;
-	struct thread *thread = GET_PTR(curr_thread, thr);
-	struct task *task = GET_PTR(thread->task_num,tsk);
-
+	struct thread *thread;
+	struct task *task;
+    
 #ifdef PAGING
     if (IS_PAGE_FAULT(number)) 
 	{		
+        kprintf(12, "mk/INTERRUPT.C: PF");
+        thread = GET_PTR(curr_thread, thr);
+        task = GET_PTR(thread->task_num,tsk);
+
 		/* IS_PAGE_FAULT comes from kernel-arch.h */
 		thread->page_faulted = 1;
 
@@ -94,6 +98,7 @@ void handle_int(int number)
 		*/
 		if(dyn_pg_lvl != DYN_PGLVL_NONE && dyn_pg_nest == DYN_NEST_NONE)
 		{			
+            kprintf(12, "mk/INTERRUPT.C: ALLOCATING");for(;;);
 			dyn_pg_nest = DYN_NEST_ALLOCATING;
 
 			last_page_fault.task_id = -1;
@@ -107,6 +112,7 @@ void handle_int(int number)
 		}
 		else if(dyn_pg_ret != 0) // dynamic memory page is being freed?
 		{
+            kprintf(12, "mk/INTERRUPT.C: dyn_pg_ret NOT NULL");for(;;);
 			last_page_fault.task_id = -1;
 			last_page_fault.thread_id = -1;
 			last_page_fault.linear = arch_get_freed_physical();
@@ -125,8 +131,9 @@ void handle_int(int number)
 			// did we pagefault on a kernel dynamic memory page?
 			if(last_page_fault.linear < (void*)MAX_ALLOC_LINEAR)
 			{
+                kprintf(12, "mk/INTERRUPT.C: PF ON KERNEL DYNAMIC");for(;;);
 				if(last_page_fault.linear < (void*)KERN_LMEM_SIZE)
-					k_scr_print("mk/INTERRUPT.C: KERNEL SPACE PAGE FAULT!",12);
+					k_scr_print("mk/INTERRUPT.C: KERNEL SPACE PAGE FAULT!",12);for(;;);
 
 				// try to map an existing kernel table onto the task
 				if(last_page_fault.linear > (void*)KERN_LMEM_SIZE && arch_kernel_pf(last_page_fault.linear) != FAILURE)
@@ -153,6 +160,8 @@ void handle_int(int number)
 				int_stack[int_stack_pointer++] = curr_thread;
 				int_active[h] = 1;
 			}
+            thread = GET_PTR(h, thr);
+            task = GET_PTR(thread->task_num,tsk);
 			curr_thread = h;
 			curr_task = thread->task_num;
 			curr_base = task->mem_adr;

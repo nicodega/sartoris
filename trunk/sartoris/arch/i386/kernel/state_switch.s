@@ -14,8 +14,6 @@ extern global_tss
 extern curr_state
 
 extern arch_caps
-extern k_scr_print
-extern k_scr_hex
 
 ;;
 ;; In order not to perform an mmx/fpu preservation always
@@ -75,7 +73,7 @@ arch_switch_thread:
 
 	;; ds:ecx will contain thread state 
 	;; mov eax,[ecx + thr_state.xxxx]
-	mov ecx, [curr_state]					;; now ecx contains &thr_states[current thread]
+	mov ecx, [curr_state]					;; now ecx contains the state of the running thread
 	
 	;; edx will contain cr3 for new thread
 	mov edx, [ebp+16]			            ;; now edx contains cr3 for new thread
@@ -162,10 +160,9 @@ _mmx_cont:
 	;; load ldt register
 	;; indicating wich priv
 	;; ldt descriptor from 
-	;; gdt must be used 
-	
+	;; gdt must be used	
 	mov eax, [ecx + thr_state.ldt_sel]
-		
+
 	lldt [ecx + thr_state.ldt_sel] 
 	
 	;; restore segments (no problem again, since we are on kernel segments)
@@ -207,7 +204,7 @@ _dummy_eip:
 	;; load eflags register now 
 	mov eax, [ecx + thr_state.eflags]
 	push eax
-	popf
+	popf			;; interrupts should be disabled
 	
 	pop ebp
 	xor eax, eax                        ;; in case we were invoked from run_thread_int		
@@ -246,14 +243,16 @@ no_sse:
 
 	;; load eflags register now 
 	mov eax, [ecx + thr_state.eflags]
-	push eax
-	popf
 		
 	;; first time -> load ds and es
-	mov eax, [ecx + thr_state.es]
-	mov es, eax
-	mov eax, [ecx + thr_state.ds]
-	mov ds, eax
+	mov ebx, [ecx + thr_state.es]
+	mov es, ebx
+	mov ebx, [ecx + thr_state.ds]
+	mov ds, ebx
+	
+	;; restore flags (interrupts should be disabled here)
+	push eax
+	popf
 	
 	retf   ;; God help us!!
 			

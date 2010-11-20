@@ -11,9 +11,10 @@ struct i386_task;
 #define LDT_ENT 3
 #define LDT_SIZE (LDT_ENT * sizeof(struct seg_desc))
 
-#define GDT_LDTS      4         /* one for each task privilege level
-								   upon thread switch, ldt descriptor will 
-								   be set to the proper address */
+#define GDT_LDTS      4         /* one for each task privilege level.
+								   Each task has it's own LDT, but we will switch
+                                   the LDT on the GDT uppon thread switch.
+                                 */
 #define SYS_DESC      5        	/* dummy, code, data, himem, Low Memory (BIOS, etc) */
 
 #define GDT_SYSCALL     SYS_DESC

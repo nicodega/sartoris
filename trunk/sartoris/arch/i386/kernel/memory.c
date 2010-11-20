@@ -110,8 +110,8 @@ int arch_cpy_to_task(int task, char* src, char* dst, unsigned int len, int x)
 
 		}
 		else
-		{ /* issue page fault for source (current) task */
-       
+		{ 
+            /* issue page fault for source (current) task */
 			last_page_fault.task_id = curr_task;
 			last_page_fault.thread_id = curr_thread;
 			last_page_fault.linear = &src[i];

@@ -113,7 +113,7 @@ void *dyn_alloc_page(int lvl)
 	if(i * 32 + j >= DYN_PAGES) return NULL;
 	
 	dyn_pg_lvl = lvl;	// indicate we are on a dynamic memory PF
-
+    kprintf(12, "mk/dynmem.c: ASKING FOR PAGE type: %i ", lvl);
 	int ret = arch_request_page(laddr);
 	
 	dyn_pg_lvl = DYN_PGLVL_NONE;

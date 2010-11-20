@@ -18,6 +18,7 @@ void k_scr_moveUp(void);
 void k_scr_print(char* text, byte att); 
 void k_scr_hex(int n, byte att);
 void k_scr_clear(void);
+int kprintf(unsigned char att, char *format, ...);
 
 #endif
 

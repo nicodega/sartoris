@@ -142,6 +142,7 @@ int run_thread(int id)
 
 	if( dyn_pg_lvl != DYN_PGLVL_NONE && dyn_pg_nest == DYN_NEST_ALLOCATING && dyn_pg_thread == id )
 	{
+        kprintf(0x7, "run_thread: Cannot run thread while allocation is taking place.");
 		mk_leave(x);
 		/* we cannot return to this thread... it's waiting for a page. */
 		return FAILURE;

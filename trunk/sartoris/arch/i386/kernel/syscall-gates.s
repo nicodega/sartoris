@@ -124,7 +124,6 @@ extern arch_thread_int_ret
 %define SFLAG_RUN_INT           0x4
 
 ;; tasking
-
 create_task_c:
 	mov ecx, create_task
 	mov edx, 2

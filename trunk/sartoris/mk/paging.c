@@ -58,7 +58,7 @@ int page_in(int task, void *linear, void *physical, int level, int attrib)
 #else
 	struct task *stask;
 	int x = mk_enter(), ret = FAILURE;
-
+    
 	/*
 	NEW: We MUST check task was created! This could be done on inverse
 	order before, because page directories where already allocated. 
@@ -68,7 +68,7 @@ int page_in(int task, void *linear, void *physical, int level, int attrib)
 		stask = GET_PTR(task,tsk);
 		if(stask->state == ALIVE)
 		{
-			ret = arch_page_in(task, linear, physical, level, attrib);
+            ret = arch_page_in(task, linear, physical, level, attrib);
 		}
 	}
 	

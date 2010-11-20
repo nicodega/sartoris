@@ -21,14 +21,14 @@
 #ifdef PAGING
 
 /* the kernel page table(s) for mapping, shared by everybody */
-pt_entry kern_ptable[0x400 * KERN_TABLES]  __align(PG_SIZE);
+pt_entry kern_ptables[KERN_TABLES][0x400]  __align(PG_SIZE);
 
 void init_paging()
 {
 	pt_entry *ptab_ptr;
 	pd_entry *pdir_ptr;
 	unsigned int linear;
-	unsigned int physical;
+	unsigned int physical = 0;
 	int i;
 	struct i386_task *tinf = GET_TASK_ARCH(INIT_TASK_NUM);
 	
@@ -37,28 +37,27 @@ void init_paging()
     /* Low memory (BIOS, etc) */
 	for (i=0; i<160; i++) 
 	{
-		kern_ptable[i] = physical | PG_WRITABLE | PG_PRESENT;
+		kern_ptables[0][i] = physical | PG_WRITABLE | PG_PRESENT;
 		physical += PG_SIZE;
 	}
 
 	/* Video memory */
 	for (; i<192; i++) 
 	{
-		kern_ptable[i] = physical | PG_CACHE_DIS | PG_WRITABLE | PG_PRESENT;
+		kern_ptables[0][i] = physical | PG_CACHE_DIS | PG_WRITABLE | PG_PRESENT;
 		physical += PG_SIZE;
 	}
 
     /* VIDEO BIOS, BIOS Shadow, etc (000C0000 - 0x100000), and kernel (0x100000 to 0x200000) */
-	physical = 0;
 	for (;i<512; i++) 
 	{
-		kern_ptable[i] = physical | PG_WRITABLE | PG_PRESENT;
+		kern_ptables[0][i] = physical | PG_WRITABLE | PG_PRESENT;
 		physical += PG_SIZE;
 	}
 
     for (;i<1024; i++) 
 	{
-		kern_ptable[i] = 0;
+		kern_ptables[0][i] = 0;
 	}
 
 	/* 
@@ -74,9 +73,10 @@ void init_paging()
 	/* Init page directory will be first page after image */
 	pdir_ptr = tinf->pdb = (void*)(INIT_OFFSET+INIT_SIZE);
 
-	for(i = 0; i < KERN_TABLES; i++)
+    pdir_ptr[0] = ((unsigned int)kern_ptables[0]) | PG_WRITABLE | PG_PRESENT;
+	for(i = 1; i < KERN_TABLES; i++)
 	{
-		pdir_ptr[i] = ((unsigned int)kern_ptable + i * PG_SIZE) | PG_WRITABLE | PG_PRESENT;
+		pdir_ptr[i] = 0;
 	}
 
 	/* clear the rest of the page directory */
@@ -85,10 +85,10 @@ void init_paging()
 	{
 		pdir_ptr[i] = 0;
 	}
-
+    
 	/* point to user page table located next to init image (first page is for dir) */
 	pdir_ptr[PG_LINEAR_TO_DIR(USER_OFFSET)] = (INIT_OFFSET+INIT_SIZE+PG_SIZE) | PG_WRITABLE | PG_USER | PG_PRESENT;
-
+    
 	start_paging(tinf);
 
 	/* build user page table */
@@ -145,19 +145,22 @@ void start_paging(struct i386_task *tinf)
 /* remember: physical should be a multiple of PG_SIZE */
 void map_page(void *physical) 
 {
-  kern_ptable[PG_LINEAR_TO_TAB(AUX_PAGE_SLOT(curr_thread))] = PG_ADDRESS(physical) | PG_WRITABLE | PG_PRESENT;
-  invalidate_tlb((void*)PG_LINEAR_TO_TAB(AUX_PAGE_SLOT(curr_thread))); // invalidate this page
+    void *addr = AUX_PAGE_SLOT(curr_thread);
+    kern_ptables[PG_LINEAR_TO_DIR(addr)][PG_LINEAR_TO_TAB(addr)] = PG_ADDRESS(physical) | PG_WRITABLE | PG_PRESENT;
+    invalidate_tlb((void*)PG_LINEAR_TO_TAB(addr)); // invalidate this page
 }
 
 pt_entry save_map() 
 {
-	return kern_ptable[PG_LINEAR_TO_TAB(AUX_PAGE_SLOT(curr_thread))];
+    void *addr = AUX_PAGE_SLOT(curr_thread);
+    return kern_ptables[PG_LINEAR_TO_DIR(addr)][PG_LINEAR_TO_TAB(addr)];
 }
 
 void restore_map(pt_entry map) 
 {
-	kern_ptable[PG_LINEAR_TO_TAB(AUX_PAGE_SLOT(curr_thread))] = map;
-	invalidate_tlb((void*)PG_LINEAR_TO_TAB(AUX_PAGE_SLOT(curr_thread))); // invalidate this page
+    void *addr = AUX_PAGE_SLOT(curr_thread);
+    kern_ptables[PG_LINEAR_TO_DIR(addr)][PG_LINEAR_TO_TAB(addr)] = map;
+	invalidate_tlb((void*)PG_LINEAR_TO_TAB(addr)); // invalidate this page
 }
 
 /* 
@@ -324,15 +327,18 @@ int arch_page_in(int task, void *linear, void *physical, int level, int attrib)
 						if (task != curr_task) 
 						{ 							
 							result = SUCCESS; /* done with level 0 */
-						
-							/* insert the kernel page tables */							
+                            						
+							/* insert static kernel page tables 
+                            NOTE: mappings tables won't be loaded because when used 
+                            a mapping will be created again.
+                            */
 							pdir_ptr = (pd_entry *)PG_ADDRESS(physical);
 													
 							map_page(pdir_ptr);
 													
-							for (i=0; i<(KERN_TABLES); i++) 
+							for (i=0; i<(KERN_STA_TABLES); i++) 
 							{	
-								pdir_map[i] = ((unsigned int)kern_ptable + i * PG_SIZE) | PG_WRITABLE | PG_PRESENT;
+								pdir_map[i] = ((unsigned int)kern_ptables[i]) | PG_WRITABLE | PG_PRESENT;
 							}
 													
 							/* and clear the rest of the page directory */

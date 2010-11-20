@@ -42,9 +42,9 @@ void init_desc_tables()
 	gdt[3].dword1 = D_DW1_BASE(0xa0000) | D_DW1_LIMIT(0x60000) | 
 					DESC_32_SMALL | DESC_RW | DESC_DPL(2);
     /* READ ONLY low memory segment (BIOS, etc) < 1MB */
-	gdt[3].dword0 = D_DW0_BASE(0x0) | D_DW0_LIMIT(0x100000);
-	gdt[3].dword1 = D_DW1_BASE(0x0) | D_DW1_LIMIT(0x100000) | 
-					DESC_32_SMALL | DESC_R | DESC_DPL(2);
+	gdt[4].dword0 = D_DW0_BASE(0x0) | D_DW0_LIMIT(0x100000);
+	gdt[4].dword1 = D_DW1_BASE(0x0) | D_DW1_LIMIT(0x100000) | 
+					DESC_32_BIG | DESC_ER | DESC_DPL(1);
 
 	/* new gdt load */
 	l_desc[0] = ( GDT_ENT * sizeof(struct seg_desc) + ((((unsigned int) gdt) & 0xffff) << 16) );

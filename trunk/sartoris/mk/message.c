@@ -161,8 +161,7 @@ int set_port_perm(int port, struct port_perms *perms)
   
 	return result;
 }
-
-
+int msgc = 0;
 int send_msg(int dest_task_id, int port, int *msg) 
 {
     struct port *p;
@@ -173,12 +172,12 @@ int send_msg(int dest_task_id, int port, int *msg)
     result = FAILURE;
     
 	x = mk_enter(); /* enter critical block */
-		
+    
     if (0 <= dest_task_id && dest_task_id < MAX_TSK && 
         TST_PTR(dest_task_id,tsk) && 0 <= port && port < MAX_TSK_OPEN_PORTS) 
-	{	
+	{
 		task = GET_PTR(dest_task_id,tsk);
-
+        
         p = task->open_ports[port];
 
         if(p != NULL)
@@ -241,11 +240,12 @@ int get_msg(int port, int *msg, int *id)
     int x, result;
 	
     result = FAILURE;
-    
+
+    x = mk_enter(); /* enter critical block */
+      
     if (0 <= port && port < MAX_TSK_OPEN_PORTS) 
 	{
-		x = mk_enter(); /* enter critical block */
-      
+		
 		task = GET_PTR(curr_task,tsk);
 		p = task->open_ports[port];
       
@@ -259,9 +259,9 @@ int get_msg(int port, int *msg, int *id)
 #endif
 			}
 		}
-		
-		mk_leave(x); /* exit critical block */
     }
+
+    mk_leave(x); /* exit critical block */
     
     return result;
 }
@@ -356,7 +356,7 @@ int enqueue(int from_task_id, struct port *p, int *msg)
     
     result = FAILURE;
     
-	m = (struct message *)salloc(0, SALLOC_MSG);
+    m = (struct message *)salloc(0, SALLOC_MSG);
 
     if (m != NULL) 
 	{
@@ -364,10 +364,8 @@ int enqueue(int from_task_id, struct port *p, int *msg)
       
 		dst = (int*)m->data;
 		for (i = 0; i < MSG_LEN; i++) 
-		{
 			dst[i] = msg[i];
-		}
-
+		
 		m->next = NULL;
 		m->sender_id = from_task_id;
       
@@ -375,6 +373,7 @@ int enqueue(int from_task_id, struct port *p, int *msg)
       	if(p->first == NULL)
 		{
 			p->first = m;
+            p->last = m;
 		}
 		else
 		{
@@ -398,7 +397,7 @@ int dequeue(int *id, struct port *p, int *msg)
     int *src;
     
     result = FAILURE;
-      
+
     first = p->first;
 
     if (first != NULL) 
@@ -420,8 +419,10 @@ int dequeue(int *id, struct port *p, int *msg)
 		{
 			p->last = NULL;
 		}
+
+        sfree(first, 0, SALLOC_MSG);
     }
-    
+
     return result;
 }
 
@@ -436,7 +437,9 @@ void delete_task_ports(struct task *task)
 
 	while(i < MAX_TSK_OPEN_PORTS)
 	{
-		if(task->open_ports[i] != NULL) delete_port(task, task->open_ports[i]);
+		if(task->open_ports[i] != NULL) 
+            delete_port(task, task->open_ports[i]);
+        i++;
 	}
         
     mk_leave(x); /* exit critical block */

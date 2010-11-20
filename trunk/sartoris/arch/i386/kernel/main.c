@@ -45,10 +45,10 @@ void arch_init_cpu(void)
 
 	/* Initialize global tss                              */
 	arch_init_global_tss();
-
+    
     /* Initialize dynamic memory                          */
 	arch_init_dynmem();
-
+    
     /* Create init task                                   */
 	create_init_task();  
 
@@ -139,7 +139,7 @@ void create_init_task()
 	thr.invoke_level = 1;
 	thr.ep = 0x00000000;
 	thr.stack = (void*)(INIT_SIZE - BOOTINFO_SIZE - 0x4); // remember bootinfo is mapped at the end of INIT image
-		
+
 	if (create_task(INIT_TASK_NUM, &tsk) < 0) 
 	{
 		k_scr_print("INIT TASK CREATION FAILED\n", 0x4);

@@ -22,6 +22,7 @@
 
 #include "sartoris/scr-print.h"
 
+int counter = 0;
 /* multi-tasking implementation */
 int create_task(int id, struct task *tsk) 
 {
@@ -31,14 +32,16 @@ int create_task(int id, struct task *tsk)
 	int x;             /* mutex variable */
 	int result;
 	struct task *task;
-	
+    
+    counter++;
+    	
 	result = FAILURE;
 
 	x = mk_enter();  /* enter critical block */
 
 	if (VALIDATE_PTR(tsk)) 
-	{
-		tsk = (struct task *) MAKE_KRN_PTR(tsk);
+	{        
+        tsk = (struct task *)MAKE_KRN_PTR(tsk);
 		cached_mem_adr = tsk->mem_adr;        /* if we will pagefault, we must do it now */
 		cached_size = tsk->size;              /* (before the sanity checks) */
 		cached_priv_level = tsk->priv_level;
@@ -168,25 +171,25 @@ int destroy_task(int id)
 	result = FAILURE;
 
 	x = mk_enter(); /* enter critical block */
-
-	/* check everything */
+    
+    /* check everything */
 	if (0 <= id && id < MAX_TSK && TST_PTR(id,tsk)) 
-	{
+	{        
 		tsk = GET_PTR(id,tsk);
-
+        
 		if (tsk->thread_count == 0 && curr_task != id && tsk->state == ALIVE) 
 		{
 			result = SUCCESS;
 			tsk->state = UNLOADING;
 		}
 	}
-
+    
 	mk_leave(x); /* exit critical block */
 
 	if (result == SUCCESS) 
 	{
 		result = arch_destroy_task(id); /* if cannot destroy, set result accordingly */
-
+        
 		if (result == SUCCESS) 
 		{
 			delete_task_smo(id);
