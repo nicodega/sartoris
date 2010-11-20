@@ -35,7 +35,6 @@ int arch_destroy_int_handler(int number);
 int arch_page_in(int task, void *linear, void *physical, int level, int attrib);
 int arch_page_out(int task, void *linear, int level);
 int arch_kernel_pf(void *linear);
-int arch_flush_tlb(void);
 
 void arch_mem_cpy_words(int *src, int *dst, unsigned int len);
 void arch_mem_cpy_bytes(char *src, char *dst, unsigned int len);
