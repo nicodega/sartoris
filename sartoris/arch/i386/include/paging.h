@@ -46,7 +46,6 @@ void *arch_translate(int task, void *address);
 int verify_present(void *address, int write);
 
 void map_page(void *physical);
-void static invalidate_tlb(void *linear);
 
 #endif
 

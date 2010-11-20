@@ -43,6 +43,23 @@ static inline void arch_issue_page_fault(void)
 	__asm__ ("int $14");
 }
 
+
+#ifdef PAGING
+static inline int arch_flush_tlb() 
+{
+	/* touch cr3, processor invalidates all tlb entries */
+	__asm__ __volatile__ ("movl %%cr3, %%eax\n\t" 
+			 "movl %%eax, %%cr3" :  :  : "cc", "eax" );
+}
+
+static inline void invalidate_tlb(void *linear) 
+{
+	__asm__ __volatile__ ("invlpg %0" : : "m" (linear));
+
+	arch_flush_tlb();   /* FIXME !!! */
+}
+#endif
+
 #define MAKE_KRN_PTR(x) (void*) ((unsigned int)(x) + (unsigned int)curr_base)
 #define MAKE_KRN_SHARED_PTR(t, x) (void*) ((unsigned int)(x) + (unsigned int)(GET_PTR(t,tsk))->mem_adr)
 #define SUMOVERFLOW(x, y) (((unsigned int)x+(unsigned int)y) < (unsigned int)x || ((unsigned int)x+(unsigned int)y) < (unsigned int)y)

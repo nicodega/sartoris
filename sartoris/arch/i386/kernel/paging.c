@@ -435,20 +435,20 @@ int arch_page_out(int task, void *linear, int level)
 
 	return result;
 }
-
-int arch_flush_tlb() 
-{
-	/* touch cr3, processor invalidates all tlb entries */
-	__asm__ __volatile__ ("movl %%cr3, %%eax\n\t" 
-			 "movl %%eax, %%cr3" :  :  : "cc", "eax" );
-}
-
-void invalidate_tlb(void *linear) 
-{
-	__asm__ __volatile__ ("invlpg %0" : : "m" (linear));
-
-	arch_flush_tlb();   /* FIXME !!! */
-}
+//
+//static inline int arch_flush_tlb() 
+//{
+//	/* touch cr3, processor invalidates all tlb entries */
+//	__asm__ __volatile__ ("movl %%cr3, %%eax\n\t" 
+//			 "movl %%eax, %%cr3" :  :  : "cc", "eax" );
+//}
+//
+//static inline void invalidate_tlb(void *linear) 
+//{
+//	__asm__ __volatile__ ("invlpg %0" : : "m" (linear));
+//
+//	arch_flush_tlb();   /* FIXME !!! */
+//}
 
 
 /* this adjusts our one-page window to other address spaces */
