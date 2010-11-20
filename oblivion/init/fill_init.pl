@@ -9,7 +9,12 @@ $zeros = 0;
 
 print "Size: $size bytes\n";
 
-$zeros = 0x1000 - $size; 
+$zeros = 0x1000 - $size;
+
+if($zeros < 0)
+{
+	die "Init is too big!";
+}
 
 print "Se agregaran: $zeros bytes\n";
 system("dd if=/dev/zero of=zeros bs=$zeros count=1");

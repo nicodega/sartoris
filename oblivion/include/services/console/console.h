@@ -26,29 +26,29 @@ struct csl_ctl_msg {
   int index;
   int command;
   int padding[2];
-};
+} __attribute__ ((__packed__));
 
 struct csl_io_msg {
   int command;
   int smo;
-  int len;
   char delimiter;
   char attribute;
   char echo;
   char response_code;
-};
+  int padding;
+} __attribute__ ((__packed__));
 
 struct csl_signal_msg {
   int term;
   char key;
   char alt;
   char padding[10];
-};
+} __attribute__ ((__packed__));
 
 struct csl_response_msg {
   int smo;
   char code;
   char padding[11];
-};
+} __attribute__ ((__packed__));
 
 #endif

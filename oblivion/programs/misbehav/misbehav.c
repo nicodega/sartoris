@@ -33,9 +33,8 @@ void run(void)
 	get_msg(0, csl, &i);
 
 	iomsg.command = CSL_WRITE;
-	iomsg.smo = share_mem(CONS_TASK, byeworld, 20, READ_PERM);
+	iomsg.smo = share_mem(CONS_TASK, byeworld, 80, READ_PERM);
 	iomsg.attribute = 11;
-	iomsg.len = 80;
 	iomsg.response_code = 0;
 	send_msg(CONS_TASK, 8+csl[0], &iomsg);
 	
@@ -63,9 +62,8 @@ void run(void)
 #endif
 	
 	iomsg.command = CSL_WRITE;
-	iomsg.smo = share_mem(CONS_TASK, lazarus, 20, READ_PERM);
+	iomsg.smo = share_mem(CONS_TASK, lazarus, 80, READ_PERM);
 	iomsg.attribute = 11;
-	iomsg.len = 80;
 	iomsg.response_code = 0;
 	send_msg(CONS_TASK, 8+csl[0], &iomsg);
 	

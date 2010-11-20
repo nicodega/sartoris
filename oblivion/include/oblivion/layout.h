@@ -22,13 +22,13 @@
 
 #define SCHED_THR 1            /* scheduler thread*/
 #define EXC_HANDLER_THR 2      /* general exception handler*/
-#define CONSM_THR 5            /* console server thread */
-#define CONSK_THR 6            /* keyboard handler */
-#define FDCM_THR 7             /* floppy server thread */
-#define TIMER_THR 8            /* timer handler */
-#define FDCI_THR 9             /* floppy int handler */
-#define RAMFS_THR 10           /* ram-filesystem thread */
-#define DMA_MAN_THR 11         /* dma-manager thread */
+#define CONSM_THR 3            /* console server thread */
+#define CONSK_THR 4            /* keyboard handler */
+#define FDCM_THR 5             /* floppy server thread */
+#define TIMER_THR 6            /* timer handler */
+#define FDCI_THR 7             /* floppy int handler */
+#define RAMFS_THR 8           /* ram-filesystem thread */
+#define DMA_MAN_THR 9         /* dma-manager thread */
 
 #define INIT_CODE_SIZE 0x1000
 #define SRV_DISK_SIZE 0x4000
@@ -50,7 +50,6 @@
 #define FDC_SLOT 2
 #define RAMFS_SLOT 3
 #define DMA_MAN_SLOT 4
-#define HDC_SLOT 5
 
 #define PAGE_SIZE 0x1000
 

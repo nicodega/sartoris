@@ -20,9 +20,8 @@ int prt::print(char *txt) {
   while(txt[len++]) ;
   
   iomsg.command = CSL_WRITE;
-  iomsg.smo = share_mem(CONS_TASK, txt, (len/4)+1, READ_PERM);
+  iomsg.smo = share_mem(CONS_TASK, txt, len+1, READ_PERM);
   iomsg.attribute = 7;
-  iomsg.len = len;
   iomsg.response_code = 0;
   send_msg(CONS_TASK, csl_num, &iomsg);
   

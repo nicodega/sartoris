@@ -33,9 +33,8 @@ int printf(char *format, ...) {
 	
 	/* issue print command */
 	iomsg.command = CSL_WRITE;
-	iomsg.smo = share_mem(CONS_TASK, buf, 128, READ_PERM);
+	iomsg.smo = share_mem(CONS_TASK, buf, 512, READ_PERM);
 	iomsg.attribute = 7;
-	iomsg.len = 512;
 	iomsg.response_code = 0;
 	send_msg(CONS_TASK, 8+console, &iomsg);
 	

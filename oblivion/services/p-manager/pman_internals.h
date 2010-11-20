@@ -21,17 +21,18 @@
 #define TERM_REQ_PORT 4
 #define RUNNING_PORT 5
 
-#define PROMPT 0
-#define LOADING 1
-#define INITIALIZING 2
-#define RUNNING 3
-#define KILLED 4
+#define UNINITIALIZED 0
+#define PROMPT 1
+#define LOADING 2
+#define INITIALIZING 3
+#define RUNNING 4
+#define KILLED 5
 
 #define NUM_SERV_THR 32
 #define NUM_PROC 8
 
 #define BASE_PROC_TSK 16
-#define BASE_PROC_THR (MAX_THR-8)
+#define BASE_PROC_THR NUM_SERV_THR
 
 #define SARTORIS_PROC_BASE_LINEAR   MIN_TASK_OFFSET
 

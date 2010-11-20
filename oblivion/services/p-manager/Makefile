@@ -2,12 +2,12 @@ CPPFLAGS += -I"../../include"
 
 objects = pmanager.o $(extobjects)
 extobjects = ../../klib/kserv.o ../../lib/int.o ../../lib/reboot.o \
-../../drivers/screen/screen.o ../../drivers/pit/pit.o
+../../drivers/screen/screen.o ../../drivers/pit/pit.o ../../lib/print.o
 
 all : pmanager.img 
 
 .PHONY : pmanager.img
-pmanager.img : pmanager.o 
+pmanager.img : pmanager.o
 	$(LD) --oformat binary --entry 0x00000000 --Ttext 0x00000000 -N \
 --Map pmanager.map -o pmanager.img $(objects)
 	./fill.pl

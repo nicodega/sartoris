@@ -20,6 +20,9 @@
 #include "pman_internals.h"
 #include "exception.h"
 
+
+#include <drivers/screen/screen.h>
+#include <lib/print.h>
 char txt_init[] = "\nOblivion Test Version\nMicrokernel version 2.0\n";
 
 char *txt_csl[] = { "console 0 ready.",
@@ -50,7 +53,6 @@ char txt_fp_err[] = "\nprocess manager -> fatal error: program received floating
 char txt_alig_chk[] = "\nprocess manager -> warning: program received alignment check exception";
 char txt_simd_fault[] = "\nprocess manager -> fatal error: program received SIMD extensions fault";
 
-
 char txt_input[NUM_PROC][INPUT_LENGTH];
 int input_smo[NUM_PROC];
 
@@ -77,7 +79,13 @@ void process_manager(void)
     unsigned int linear, physical;
 
     __asm__ ("cli" : :);
-
+/*
+    if(create_int_handler(32, SCHED_THR, 0, 0) < 0)
+    {
+        string_print("PMAN: HANDLER CREATION FAILED", 0, 0x7); for(;;);
+        STOP;
+    }
+*/     
     for(i=0; i<NUM_PROC; i++) 
     {
         /* first: the page directory */
@@ -96,11 +104,11 @@ void process_manager(void)
             physical += PAGE_SIZE; 
         }
     }
-
+    
     /* get rid of the init stuff */
     destroy_thread(INIT_THREAD_NUM);
     destroy_task(INIT_TASK_NUM);
-
+    
     spawn_handlers();
 
     adjust_pit(SCHED_HERTZ);
@@ -111,19 +119,19 @@ void process_manager(void)
     }
 
     serv_present[CONSM_THR] = 1;
-    serv_present[RAMFS_THR] = 1;
-    serv_present[FDCM_THR] = 1;
+    serv_present[RAMFS_THR] = 1;/*
     serv_present[DMA_MAN_THR] = 1;
-
+    serv_present[FDCM_THR] = 1;*/
+    
     for (i=0; i<NUM_PROC; i++) 
     {
-        input_smo[i] = share_mem(CONS_TASK, txt_input[i], INPUT_LENGTH/4, WRITE_PERM);
+        input_smo[i] = share_mem(CONS_TASK, txt_input[i], INPUT_LENGTH, WRITE_PERM);
         command_smo[i] = -1;
     }
 
     for (i=0; i<NUM_PROC; i++) 
     {
-        console_begin(i);
+        state[i] = UNINITIALIZED;
     }
 
     ack_int_master();
@@ -133,9 +141,12 @@ void process_manager(void)
     open_port(CSL_ACK_PORT, 0, UNRESTRICTED);
     open_port(RAMFS_INPUT_PORT, 0, UNRESTRICTED);
     open_port(TERM_REQ_PORT, 0, UNRESTRICTED);
+    open_port(RUNNING_PORT, 0, UNRESTRICTED);
 
+    int k = 7;
     for(;;) 
-    {
+    {        
+        string_print("PMAN ALIVE",23*160,k++);
 
         /* run the services */
         for (i=0; i<NUM_SERV_THR; i++) 
@@ -159,13 +170,19 @@ void process_manager(void)
             }
         }
 
-        /* get signals from console */
+        /* get signals from console */  
         while (get_msg_count(CSL_SGN_PORT)>0) 
         {
             get_msg(CSL_SGN_PORT, &csl_sgn, &id);
+            
             if (id == CONS_TASK) 
             {
-                if (csl_sgn.alt && csl_sgn.key == '.') 
+                if(csl_sgn.term == -1)
+                {                    
+                    for (i=0; i<NUM_PROC; i++) 
+                        console_begin(i);
+                }
+                else if (csl_sgn.alt && csl_sgn.key == '.') 
                 {
                     reboot();
                 } 
@@ -174,11 +191,10 @@ void process_manager(void)
                     do_unload(csl_sgn.term);
                     show_prompt(csl_sgn.term);
                 }
-
-            }
+            }          
         }
 
-        /* get acks from console input */ 
+        ///* get acks from console input */
         while (get_msg_count(CSL_ACK_PORT)>0) 
         {
             get_msg(CSL_ACK_PORT, &csl_res, &id);
@@ -206,7 +222,7 @@ void process_manager(void)
             }
         }
 
-        /* get acks from ram-filesystem */
+        ///* get acks from ram-filesystem */
         while (get_msg_count(RAMFS_INPUT_PORT) > 0) 
         {
             get_msg(RAMFS_INPUT_PORT, &fs_res, &id);
@@ -267,29 +283,35 @@ void process_manager(void)
                     break;
                 }
             }
-        }
-        
+        }      
     }
-
 }
 
+int strlen(char *s)
+{
+    int l = 0;
+    while(s[l]){l++;}
+    return l;
+}
 
-void console_begin(int term) {
+void console_begin(int term) 
+{
     struct csl_io_msg csl_io;
 
+    state[term]=UNINITIALIZED;
+    
     csl_io.command = CSL_RESET;
-    send_msg(CONS_TASK, 8+term, &csl_io);
-
+    send_msg(CONS_TASK, 1+term, &csl_io);
+    
     csl_io.command = CSL_WRITE;
-    csl_io.len = 80;
     csl_io.attribute = 0x7;
     csl_io.response_code = NUM_PROC+1;
 
-    csl_io.smo = share_mem(CONS_TASK, txt_init, 20, READ_PERM); 
-    send_msg(CONS_TASK, 8+term, &csl_io);
-
-    csl_io.smo = share_mem(CONS_TASK, txt_csl[term], 20, READ_PERM);
-    send_msg(CONS_TASK, 8+term, &csl_io);
+    csl_io.smo = share_mem(CONS_TASK, txt_init, strlen(txt_init)+1, READ_PERM);
+    send_msg(CONS_TASK, 1+term, &csl_io);
+    
+    csl_io.smo = share_mem(CONS_TASK, txt_csl[term], strlen(txt_csl[term])+1, READ_PERM);
+    send_msg(CONS_TASK, 1+term, &csl_io);
 
     show_prompt(term);
 }
@@ -298,29 +320,26 @@ void show_prompt(int term)
 {
     struct csl_io_msg csl_io;
     int i;
-
-    state[term]=PROMPT;
     
     csl_io.command = CSL_WRITE;
-    csl_io.smo = share_mem(CONS_TASK, txt_prompt, 20, READ_PERM);
-    csl_io.len = 80;
+    csl_io.smo = share_mem(CONS_TASK, txt_prompt, strlen(txt_prompt)+1, READ_PERM);
     csl_io.attribute = 0x7;
     csl_io.response_code = NUM_PROC+1;
-    send_msg(CONS_TASK, 8+term, &csl_io);
+    send_msg(CONS_TASK, 1+term, &csl_io);
 
     for (i=0; i<INPUT_LENGTH; i++) 
     {
         txt_input[term][i] = '\0';
     }
-
     
     csl_io.command = CSL_READ;
     csl_io.delimiter = '\n';
     csl_io.echo = 1;
     csl_io.response_code = term;
-    csl_io.len = 80;
     csl_io.smo = input_smo[term];
-    send_msg(CONS_TASK, 8+term, &csl_io);
+    send_msg(CONS_TASK, 1+term, &csl_io);
+
+    state[term]=PROMPT;
 }
 
 void get_input(int term) 
@@ -328,7 +347,7 @@ void get_input(int term)
     int i;
 
     restore_cmd[term] = 0;
-    for (i=0; i<80; i++)
+    for (i=0; i<INPUT_LENGTH; i++)
     {
         if (txt_input[term][i] == ' ') 
         {
@@ -341,14 +360,14 @@ void get_input(int term)
 }
 
 void fetch_file(int term, int fs_task, int ret_port) 
-{
+{    
     struct fs_command io_msg;
 
     state[term] = LOADING;
 
     io_msg.op = FS_READ;
-    io_msg.smo_name = share_mem(fs_task, txt_input[term], 20, READ_PERM);
-    io_msg.smo_buff = share_mem(fs_task, load_buffer[term], BLOCK_SIZE/4, WRITE_PERM);
+    io_msg.smo_name = share_mem(fs_task, txt_input[term], INPUT_LENGTH, READ_PERM);
+    io_msg.smo_buff = share_mem(fs_task, load_buffer[term], BLOCK_SIZE, WRITE_PERM);
     io_msg.id = term;
     io_msg.ret_port = ret_port;
 
@@ -360,18 +379,17 @@ void inform_load_error(int term, int status)
     struct csl_io_msg csl_io;
 
     csl_io.command = CSL_WRITE;
-    csl_io.len = 80;
     csl_io.response_code = NUM_PROC+1;
     csl_io.attribute = 0x7;
     switch (status) 
     {
       case FS_NO_SUCH_FILE:
-          csl_io.smo = share_mem(CONS_TASK, txt_err_unrec, 20, READ_PERM);
-          send_msg(CONS_TASK, 8+term, &csl_io);
+          csl_io.smo = share_mem(CONS_TASK, txt_err_unrec, strlen(txt_err_unrec)+1, READ_PERM);
+          send_msg(CONS_TASK, 1+term, &csl_io);
           break;
       case FS_FAIL:
-          csl_io.smo = share_mem(CONS_TASK, txt_err_smo, 20, READ_PERM);
-          send_msg(CONS_TASK, 8+term, &csl_io);
+          csl_io.smo = share_mem(CONS_TASK, txt_err_smo, strlen(txt_err_smo)+1, READ_PERM);
+          send_msg(CONS_TASK, 1+term, &csl_io);
           break;
     }
 }
@@ -416,7 +434,7 @@ void do_load(int term)
         claim_mem(command_smo[term]);
     }
 
-    command_smo[term] = share_mem(BASE_PROC_TSK+term, txt_input[term], 20, READ_PERM);
+    command_smo[term] = share_mem(BASE_PROC_TSK+term, txt_input[term], strlen(txt_input[term])+1, READ_PERM);
 
     prc_thread.task_num = BASE_PROC_TSK+term;
     prc_thread.invoke_mode = PRIV_LEVEL_ONLY;
@@ -468,8 +486,7 @@ int csl_print(int csl, char *str, int att, int len, int res_code)
     struct csl_io_msg csl_io;
 
     csl_io.command = CSL_WRITE;
-    csl_io.smo = share_mem(CONS_TASK, str, (len/4) + ((len % 4)==0 ? 0 : 1) , READ_PERM);
-    csl_io.len = len;
+    csl_io.smo = share_mem(CONS_TASK, str, len+1, READ_PERM);
     csl_io.attribute = att;
     csl_io.response_code = res_code;
     return send_msg(CONS_TASK, 8+csl, &csl_io);
