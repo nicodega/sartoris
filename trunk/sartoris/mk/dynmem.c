@@ -1,5 +1,6 @@
 
 #include "sartoris/kernel.h"
+#include "sartoris/metrics.h"
 #include "sartoris/kernel-data.h"
 #include "lib/bitops.h"
 #include "lib/dynmem.h"
@@ -80,7 +81,10 @@ void *dyn_alloc_page(int lvl)
 
 		f_alloc--;
 		f_count = DYN_GRACE_PERIOD; // reset grace period
-
+#ifdef METRICS
+        metrics.alloc_dynamic_pages--;
+        metrics.dynamic_pages++;
+#endif
 		return laddr;
 	}
 
@@ -121,7 +125,9 @@ void *dyn_alloc_page(int lvl)
 	if(ret == FAILURE) return NULL;
 
 	setbit(pg_bitmap, (unsigned int)(((unsigned int)laddr - KERN_LMEM_SIZE) / PG_SIZE), 1);
-
+#ifdef METRICS
+    metrics.dynamic_pages++;
+#endif
 	return laddr;
 }
 
@@ -132,7 +138,6 @@ This will break atomicity.
 */
 void dyn_free_page(void *linear, int lvl)
 {
-	/* Attempt to return the page */
 	struct dyn_free_page *pg = NULL;
 		
 	/* Add page to non-returned pages list */
@@ -150,7 +155,10 @@ void dyn_free_page(void *linear, int lvl)
 		pg->prev = NULL;
 	}
 	dyn_free_first = pg;
-
+#ifdef METRICS
+    metrics.dynamic_pages--;
+    metrics.alloc_dynamic_pages++;
+#endif
 	/* Check if some other thread is busy freeing. */
 	if(dyn_pg_ret != 0)
 	{
@@ -166,7 +174,7 @@ void dyn_free_page(void *linear, int lvl)
 	}
 	
 	f_alloc++;
-	
+
 	if(f_alloc > DYN_THRESHOLD)
 	{
 		if(f_count == 0)
@@ -215,6 +223,9 @@ void dyn_free_queued(int count)
 		}
 		else
 		{
+#ifdef METRICS
+            metrics.alloc_dynamic_pages--;
+#endif
 			/* Set page as free on bitmap */
 			laddr = (unsigned int)pg;
             laddr -= KERN_LMEM_SIZE;

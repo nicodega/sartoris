@@ -85,7 +85,7 @@ void handle_int(int number)
 #ifdef PAGING
     if (IS_PAGE_FAULT(number)) 
 	{		
-        kprintf(12, "mk/INTERRUPT.C: PF");
+        kprintf(12, "\nmk/INTERRUPT.C: PF");
         thread = GET_PTR(curr_thread, thr);
         task = GET_PTR(thread->task_num,tsk);
 
@@ -94,11 +94,11 @@ void handle_int(int number)
 
 		/*
 		If dynamic memory request level is not NONE and it's not nested, or 
-		we are in the middle of a 
+		we are in the middle of freeing a page.
 		*/
 		if(dyn_pg_lvl != DYN_PGLVL_NONE && dyn_pg_nest == DYN_NEST_NONE)
 		{			
-            kprintf(12, "mk/INTERRUPT.C: ALLOCATING");for(;;);
+            kprintf(12, "\nmk/INTERRUPT.C: ALLOCATING");for(;;);
 			dyn_pg_nest = DYN_NEST_ALLOCATING;
 
 			last_page_fault.task_id = -1;
@@ -112,7 +112,7 @@ void handle_int(int number)
 		}
 		else if(dyn_pg_ret != 0) // dynamic memory page is being freed?
 		{
-            kprintf(12, "mk/INTERRUPT.C: dyn_pg_ret NOT NULL");for(;;);
+            kprintf(12, "\nmk/INTERRUPT.C: dyn_pg_ret NOT NULL");for(;;);
 			last_page_fault.task_id = -1;
 			last_page_fault.thread_id = -1;
 			last_page_fault.linear = arch_get_freed_physical();
@@ -131,9 +131,9 @@ void handle_int(int number)
 			// did we pagefault on a kernel dynamic memory page?
 			if(last_page_fault.linear < (void*)MAX_ALLOC_LINEAR)
 			{
-                kprintf(12, "mk/INTERRUPT.C: PF ON KERNEL DYNAMIC");for(;;);
+                kprintf(12, "\nmk/INTERRUPT.C: PF ON KERNEL DYNAMIC");for(;;);
 				if(last_page_fault.linear < (void*)KERN_LMEM_SIZE)
-					k_scr_print("mk/INTERRUPT.C: KERNEL SPACE PAGE FAULT!",12);for(;;);
+					k_scr_print("\nmk/INTERRUPT.C: KERNEL SPACE PAGE FAULT!",12);for(;;);
 
 				// try to map an existing kernel table onto the task
 				if(last_page_fault.linear > (void*)KERN_LMEM_SIZE && arch_kernel_pf(last_page_fault.linear) != FAILURE)
@@ -231,12 +231,13 @@ int pop_int()
     
     x = mk_enter(); /* enter critical block */
 
-	if (int_stack_pointer > 0) {
-      
-      result = SUCCESS;
-      
-	  // we will leave the interrupt active
-      int_stack_pointer--;
+	if (int_stack_pointer > 0) 
+    {
+
+        result = SUCCESS;
+
+        // we will leave the interrupt active
+        int_stack_pointer--;
     }
 
 	mk_leave(x); /* exit critical block */

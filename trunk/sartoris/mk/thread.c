@@ -9,6 +9,7 @@
 
 #include "sartoris/kernel.h"
 #include "sartoris/cpu-arch.h"
+#include "sartoris/metrics.h"
 #include "lib/message.h"
 #include "lib/shared-mem.h"
 #include "lib/bitops.h"
@@ -82,6 +83,12 @@ int create_thread(int id, struct thread *thr)
 								sfree(thread, id, SALLOC_THR);
 								result = FAILURE;
 							}
+                            else
+                            {
+#ifdef METRICS
+                            metrics.threads++;
+#endif                    
+                            }
 						}
 					}
 				}
@@ -119,6 +126,9 @@ int destroy_thread(int id)
 			arch_destroy_thread(id, thread);
 			
 			sfree(thread, id, SALLOC_THR);
+#ifdef METRICS
+            metrics.threads--;
+#endif
 		}
 	}
 
