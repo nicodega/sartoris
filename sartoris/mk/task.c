@@ -10,7 +10,7 @@
 
 #include "sartoris/kernel.h"
 #include "sartoris/cpu-arch.h"
-#include "sartoris/scr-print.h"
+#include "sartoris/metrics.h"
 #include "lib/message.h"
 #include "lib/shared-mem.h"
 #include "lib/bitops.h"
@@ -19,8 +19,6 @@
 
 #include "sartoris/kernel-data.h"
 #include <sartoris/critical-section.h>
-
-#include "sartoris/scr-print.h"
 
 int counter = 0;
 /* multi-tasking implementation */
@@ -94,6 +92,9 @@ int create_task(int id, struct task *tsk)
 			/* the task is officially alive, other syscalls should
 			operate on it, therefore: */
 			task->state = ALIVE;
+#ifdef METRICS
+            metrics.tasks++;
+#endif
 		}
 		else 
 		{	
@@ -194,7 +195,9 @@ int destroy_task(int id)
 		{
 			delete_task_smo(id);
 			delete_task_ports(tsk);
-			
+#ifdef METRICS
+            metrics.tasks--;
+#endif			
 			sfree(tsk, id, SALLOC_TSK);
 		}		
 	}

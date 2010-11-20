@@ -4,6 +4,7 @@
 #include "sartoris/kernel-data.h"
 #include "lib/indexing.h"
 #include "lib/containers.h"
+#include "sartoris/metrics.h"
 
 struct index_dir idx_dir;
 
@@ -71,6 +72,9 @@ int index_alloc(int id, int type)
 			if(!TST_DIR_PTR(id,tsk))
 			{
                 ptr = (unsigned int *)dyn_alloc_page(DYN_PGLVL_IDX);
+#ifdef METRICS
+                metrics.allocated_indexes++;
+#endif
                 if(!ptr) return 0;
 				SET_DIR_PTR(id,tsk,(struct index *)ptr);
 				for(ptr, i = 0;i < 0x400;i++, ptr++)*ptr = 0;
@@ -86,6 +90,9 @@ int index_alloc(int id, int type)
 			{
 				ptr = (unsigned int *)dyn_alloc_page(DYN_PGLVL_IDX);
                 if(!ptr) return 0;
+#ifdef METRICS
+                metrics.allocated_indexes++;
+#endif
                 SET_DIR_PTR(id,thr,(struct index *)ptr);
 				for(ptr, i = 0;i < 0x400;i++, ptr++)*ptr = 0;					
 				SET_DIR_FREE(id,thr,IDX_SIZE-1);
@@ -100,7 +107,10 @@ int index_alloc(int id, int type)
 			{
                 ptr = (unsigned int *)dyn_alloc_page(DYN_PGLVL_IDX);
                 if(!ptr) return 0;
-				SET_DIR_PTR(id,smo,(struct index *)ptr);
+#ifdef METRICS
+                metrics.allocated_indexes++;
+#endif
+                SET_DIR_PTR(id,smo,(struct index *)ptr);
 				for(ptr, i = 0;i < 0x400;i++, ptr++)*ptr = 0;
 				SET_DIR_FREE(id,smo,IDX_SIZE-1);
 			}
@@ -110,7 +120,9 @@ int index_alloc(int id, int type)
 			}
 			break;
 	}
-    
+#ifdef METRICS
+    metrics.indexes++;
+#endif
 	return 1;
 }
 
@@ -151,10 +163,17 @@ void index_free(int id, int type)
 
 	(*free)++;
 
+#ifdef METRICS
+    metrics.indexes--;
+#endif
+
 	if(*free == IDX_SIZE && !IDX_PREALLOC(idx))
 	{
 		/* Return index page to OS */
 		dyn_free_page(idx, DYN_PGLVL_IDX);
+#ifdef METRICS
+        metrics.allocated_indexes--;
+#endif
 		switch(type)
 		{
 			case IDX_TSK:
