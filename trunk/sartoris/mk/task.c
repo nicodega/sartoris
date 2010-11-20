@@ -116,11 +116,11 @@ int init_task(int task, int *start, unsigned int size)
 {
 	struct task *stask = NULL;
 	int x = mk_enter(), result = FAILURE;
-	
+	    
 	/*
 	NEW: We MUST check task is created and alive.
 	*/
-	if((0 <= task) && (task < MAX_THR) && TST_PTR(task,tsk))	
+	if((0 <= task) && (task < MAX_TSK) && TST_PTR(task,tsk))	
 	{
 		stask = GET_PTR(task,tsk);
 		
@@ -133,7 +133,7 @@ int init_task(int task, int *start, unsigned int size)
 				{
 					if (VALIDATE_PTR(((unsigned int)start) + size - 1) && 
 						!SUMOVERFLOW(((unsigned int)start), size - 1)) 
-					{
+					{   
 						result = SUCCESS;
 						stask->state = LOADING;
 					}

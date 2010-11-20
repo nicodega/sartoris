@@ -401,7 +401,7 @@ no_fxrstor:
 	frstor  [ecx + thr_state.mmx]
 	jmp arch_detected_mmxfpu_cont
 no_load:
-;; Check fxrstor support
+	;; Check fxrstor support
 	mov eax, [arch_caps]
 	and eax, 0x10					;; this is SCAP_FXSR
 	jz no_fxrstor_no_load

@@ -41,7 +41,7 @@ int create_thread(int id, struct thread *thr)
 	result = FAILURE;
 
 	x = mk_enter(); /* enter critical block */ 
-
+    
 	if (VALIDATE_PTR(thr)) 
 	{
 		thr = (struct thread *)MAKE_KRN_PTR(thr);
@@ -149,14 +149,14 @@ int run_thread(int id)
 	}
 
 	if (0 <= id && id < MAX_THR && TST_PTR(id,thr))
-	{
+	{        
 		thread = GET_PTR(id,thr);
         
         // if invoke move is PERM_REQ, and the user loaded a bitmap for permissions
         // check for permissions.
         // NOTE: this could produce a page fault because it's a user space pointer
         if(thread->invoke_mode == PERM_REQ && thread->run_perms != NULL)
-        {   
+        {
             /*
                 thread->run_perms is on the desination thread address space. We must ask
                 the arch dependant part of the kernel to map it to our thread mapping zone!!!
@@ -176,9 +176,9 @@ int run_thread(int id)
         
         if (thread->invoke_mode != DISABLED) 
 		{
-			if( curr_priv <= thread->invoke_level || thread->invoke_mode == UNRESTRICTED )
+            if( curr_priv <= thread->invoke_level || thread->invoke_mode == UNRESTRICTED )
 			{
-				if (id != curr_thread) 
+    			if (id != curr_thread) 
 				{
 					prev_curr_thread = curr_thread;
 					task = GET_PTR(thread->task_num,tsk);
@@ -187,7 +187,7 @@ int run_thread(int id)
 					curr_task = thread->task_num;
 					curr_base = task->mem_adr;
 					curr_priv = task->priv_level;
-				
+
 					result = arch_run_thread(id);
 
 					if ( result !=  SUCCESS ) 

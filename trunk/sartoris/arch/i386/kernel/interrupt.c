@@ -17,6 +17,7 @@
 struct seg_desc idt[MAX_IRQ] __align(8); // (intel says its better if its 8 byte aligned)
 
 int exc_error_code;
+int int7handler;                // if it's 1 then there's a handler for int7
 extern void default_int();
 
 int arch_create_int_handler(int number) 
@@ -26,10 +27,11 @@ int arch_create_int_handler(int number)
 	if (number >= MAX_IRQ) { return -1; }
 
 #ifdef FPU_MMX
-	/* This will be handled by us, sory. */
+	/* This will be handled by us. */
 	if(number == 7 && arch_has_cap_or(SCAP_MMX | SCAP_FPU | SCAP_SSE | SCAP_SSE2))
 	{
-		return -1;
+        int7handler = 1;
+		return 0;
 	}
 #endif
     
@@ -60,6 +62,12 @@ int arch_create_int_handler(int number)
 int arch_destroy_int_handler(int number) 
 {
 	if (number >= MAX_IRQ) { return -1; }
+
+    if(number == 7 && arch_has_cap_or(SCAP_MMX | SCAP_FPU | SCAP_SSE | SCAP_SSE2))
+	{
+        int7handler = 0;
+		return 0;
+	}
 
 	if ( (number > 31) && (number < 48) ) 
 	{
@@ -99,6 +107,8 @@ void init_interrupts()
 {
 	int i;
 	unsigned int l_desc[2];
+
+    int7handler = NULL;
 
 	/* set up default exception handlers */
 	for (i=0; i<32; i++) 
