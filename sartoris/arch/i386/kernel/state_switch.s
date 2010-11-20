@@ -214,12 +214,14 @@ _dummy_eip:
 _first_time:
 	;; load initial mxcsr if SSE is present
 	;; only for the first time
+%ifdef FPU_MMX
 	mov eax, [ecx + thr_state.sflags]
 	and eax, SFLAG_SSE
 	jz no_sse
 	xor eax, eax
 	ldmxcsr [arch_caps + 16]
 no_sse:	
+%endif
 	;; setup our stack0
 	xor ebp, ebp
 	mov eax, [ecx + thr_state.esp]
