@@ -243,7 +243,7 @@ void get_keystrokes(void)
             else if ( mask & ALT_MASK) 
             {
                 if (c == LEFT) 
-                {   /* o sea, ALT+4 */
+                {   /* ALT+4 */
                     if (cur_screen==0) 
                     {
                         i = NUM_VIRTUAL - 1;
