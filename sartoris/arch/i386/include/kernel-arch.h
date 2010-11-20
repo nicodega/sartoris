@@ -12,10 +12,20 @@
 #endif
 /* Size needed for per-task information on arch dependant section */
 #define ARCH_TASK_SIZE (sizeof(struct i386_task))
-/* kernel page table(s) for mapping, shared by everybody */
+/* Kernel linear memory size (for mappings) */
 #define KERN_LMEM_SIZE  (0x200000 + (MAX_THR * PG_SIZE))  /* Size of sartoris Low Memory block (does not include dynamic memory): 1 page per thread + 1MB */
 #define KERN_MAPPINGS_START 0x200000
-#define KERN_TABLES     ((KERN_LMEM_SIZE + (0x400000 - (KERN_LMEM_SIZE % 0x400000))) / 0x400000 )
+/* kernel page table(s) for mapping, shared by everybody */
+#if (KERN_LMEM_SIZE % 0x400000) == 0
+    #define KERN_TABLES (KERN_LMEM_SIZE / 0x400000 )
+#else
+    #define KERN_TABLES ((KERN_LMEM_SIZE + (0x400000 - (KERN_LMEM_SIZE % 0x400000))) / 0x400000)
+#endif
+#if (KERN_MAPPINGS_START % 0x400000) == 0
+    #define KERN_STA_TABLES (KERN_MAPPINGS_START / 0x400000 )
+#else
+    #define KERN_STA_TABLES ((KERN_MAPPINGS_START + (0x400000 - (KERN_MAPPINGS_START % 0x400000))) / 0x400000)
+#endif
 
 /* Boot information and MMAP will be placed next to the mapping */
 #define BOOTINFO_SIZE	0x10000		/* This is the maximum size bootinfo and mmap will have (64kb) */
@@ -27,16 +37,16 @@
 #ifndef PAGING
 
 	/* memory layout when paging is disabled */
-#	define KRN_OFFSET  0x00000000   /* physical */
+#	define KRN_OFFSET  0x00100000   /* physical */
 #	define KRN_SIZE    0x000F0000   /* physical */
-#	define USER_OFFSET 0x00100000   /* linear   */
-#	define INIT_SIZE   0x00400000   /* physical */
-#	define INIT_OFFSET 0x00900000   /* physical */
+#	define USER_OFFSET 0x00200000   /* linear   */
+#	define INIT_SIZE   0x00500000   /* physical */
+#	define INIT_OFFSET 0x00A00000   /* physical */
 
 #else
 
 	/* memory layout with paging     */
-#	define KRN_OFFSET   0x00000000   /* physical */
+#	define KRN_OFFSET   0x00100000   /* physical */
 #	define KRN_SIZE     0x000F0000   /* physical */
 
 	/* 

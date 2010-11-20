@@ -32,13 +32,14 @@ int arch_create_int_handler(int number)
 		return -1;
 	}
 #endif
-
+    
 	ep = idt_call_table[number];
+    
 	idt[number].dword0 = (KRN_CODE << 16) | (ep & 0xffff);
 	idt[number].dword1 = (ep & 0xffff0000) | DESC_DPL(0) | IRQ_GATE_32 | GATE_32;
 
 	if ( (number > 31) && (number < 48) ) 
-	{
+	{        
 		/* enable the line in the pic */
 		number -= 32;
 		if (0 <= number && number < 8) 
@@ -52,7 +53,7 @@ int arch_create_int_handler(int number)
 				enable_int_slave(number-8);
 			}
 		}
-	}
+	}    
 	return 0;
 }
 

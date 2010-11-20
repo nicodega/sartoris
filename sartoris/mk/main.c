@@ -63,7 +63,7 @@ int initialize_kernel(void)
 	/* initialize text-mode vga            */
 	k_scr_init();
 	k_scr_clear();
-
+        
 	/* Initialize critical sections        */
 	mk_cs_init();
 
@@ -97,17 +97,16 @@ int initialize_kernel(void)
 		Initialize a pseudo task/thread with id=0,
 		necessary for syscalls from arch_init_cpu 
 	*/
-
-	curr_base = (void*)KRN_OFFSET;
+	curr_base = (void*)0;   // base for the microkernel is 0 (even when loaded at 1MB)
 	curr_task = 0;
 	curr_thread = 0;
 	curr_priv = 0;
-	
+    	
 	// Allocate a task
 	struct task *t = salloc(0, SALLOC_TSK);
 	t->state = ALIVE;
 	t->size	 = 0x1000000;	/* sixteen megs */
-	
+        
 	// allocate a thread
 	struct thread *th = salloc(0, SALLOC_THR);
 	th->invoke_mode = PRIV_LEVEL_ONLY;
@@ -118,7 +117,7 @@ int initialize_kernel(void)
 		and create init task/thread according to
 		architectural needs.
 	*/
-	
+
 	arch_init_cpu();
 	
 	/* Free pseudo task/thread.
@@ -126,7 +125,7 @@ int initialize_kernel(void)
 	be performed while switching to the new thread. Hence
 	information wont be corrupted. (It's dirty I know...)
 	*/
-	sfree(t, 0, SALLOC_TSK);	
+	sfree(t, 0, SALLOC_TSK);
 	sfree(th, 0, SALLOC_THR);
 		
 	/* the kernel now becomes a passive entity... */

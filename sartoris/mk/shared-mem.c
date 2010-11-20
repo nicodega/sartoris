@@ -154,9 +154,9 @@ int write_mem(int smo_id, int off, int size, int *src)
 				dest = (char *) ((unsigned int)my_smo->base + off);
 				bytes = arch_cpy_to_task(my_smo->owner, (char*)src, (char*)dest, size, x); 
 
-				if (!(0 <= smo_id && smo_id < MAX_SMO && off >= 0 && size >= 0 && TST_PTR(smo_id,smo) 
+				if (!(TST_PTR(smo_id,smo) 
 					&& my_smo->target == curr_task && off + size <= my_smo->len 
-				    && (my_smo->rights & READ_PERM)))
+				    && (my_smo->rights & WRITE_PERM)))
 				{
 					mk_leave(x);
 					return FAILURE;

@@ -56,7 +56,6 @@ void *salloc(int id, int type)
 
 		if(ptr == NULL)
 		{
-			k_scr_print("Alloc3",0x7);
 			ammount[type]--;
 			index_free(id, ALLOC2IDX(type));
 			return NULL;

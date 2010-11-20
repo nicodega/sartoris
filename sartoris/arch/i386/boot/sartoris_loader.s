@@ -27,7 +27,7 @@
 
 %define multiboot_info_address   0x200000            ;; we will place multiboot info here
 %define init_address             0x00900000          ;; we will place the init image here
-%define stack_address            0x00300000 - 0x4    ;; we will place the kernel stack here
+%define stack_address            0x200000 - 0x4      ;; we will place the kernel stack here
 %define kernel_address_loader    0x100000            ;; the loader will move the kernel down to this address
 
 %define loader_sectors 1
@@ -124,7 +124,7 @@ nommap:
 	;; let's jump to the kernel initialization routines.
 
 	mov esp, stack_address		;; don't forget to setup the stack 
-xchg bx,bx
+
 	jmp dword 0x8:kernel_address_loader	; kernel init running!
 	
 die:

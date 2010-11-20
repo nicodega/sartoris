@@ -47,10 +47,11 @@ static inline void mk_cs_init()
 NOTE: This function is SMP ready. */
 static inline int mk_enter()
 {
-	arch_cli();
+	int x = arch_cli();
 #ifdef _SMP_
 	spinwait();
 #endif
+    return x;
 }
 
 /* This function will Leave a sartoris critical section. 
