@@ -19,6 +19,7 @@ int get_metrics(struct sartoris_metrics *m)
 {
 	if(VALIDATE_PTR(m)) 
 	{
+        m = MAKE_KRN_PTR(m);
 		*m = metrics;
 		return SUCCESS;
 	}
