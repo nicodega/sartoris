@@ -1,5 +1,5 @@
 objects = $(extobjects) jedi.o
-extobjects = ../../lib/init.o ../../klib/kserv-user.o ../../lib/scheduler.o ../../lib/printf.o
+extobjects = ../../lib/init.o ../../klib/kserv-user.o ../../lib/scheduler.o ../../lib/printf.o  ../../lib/malloc.o
 
 all : jedi.raw
 

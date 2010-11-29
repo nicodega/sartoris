@@ -1,5 +1,5 @@
 objects = hello.o $(extobjects)
-extobjects = ../../klib/kserv.o ../../lib/scheduler.o
+extobjects = ../../klib/kserv-user.o ../../lib/scheduler.o  ../../lib/malloc.o
 
 all : hello.raw
 

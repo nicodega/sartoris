@@ -17,7 +17,6 @@
 
 #include <sartoris/syscall.h>
 #include <oblivion/layout.h>
-#include <services/ramfs/ramfs.h>
 #include <services/filesys/filesys.h>
 #include <lib/bfilesys.h>
 #include "ramfs_internals.h"
@@ -42,7 +41,7 @@ void ramfs(void)
     __asm__ __volatile__ ("sti" : :);
 
     readfat((void*)ramfiledata, &nfiles, fatable);
-int k =0;
+    int k =0;
     for (;;) 
     {
         string_print("RAMFS ALIVE",21*160,k++);
@@ -53,25 +52,52 @@ int k =0;
 
             switch(io_msg.op) 
             {
-              case FS_READ:
-                  if (read_mem(io_msg.smo_name, 0, FILENAME_SIZE, name) < 0) 
-                  {
-                      acknowledge(FS_FAIL, id, &io_msg);
-                  } else {
-                      filenum = get_filenum(name);
-                      if (filenum < 0) {
-                          acknowledge(FS_NO_SUCH_FILE, id, &io_msg);
-                      } else {
-                          if (write_mem(io_msg.smo_buff, 0,
-                              fatable[filenum].filesize,
-                              fatable[filenum].filepos) < 0) {
-                                  acknowledge(FS_FAIL, id, &io_msg);
-                          } else {
-                              acknowledge(FS_OK, id, &io_msg);
-                          }
-                      }
-                  }
-          break;
+                case FS_SIZE:
+                    if (read_mem(io_msg.smo_name, 0, 50, name) < 0) 
+                    {
+                        acknowledge(FS_FAIL, id, &io_msg);
+                    }
+                    else
+                    {
+                        filenum = get_filenum(name);
+                        io_msg.smo_buff = fatable[filenum].filesize;
+                        acknowledge(FS_OK, id, &io_msg);                    
+                    }
+                    break;
+                case FS_READ:
+                    if (read_mem(io_msg.smo_name, 0, 50, name) < 0) 
+                    {
+                        acknowledge(FS_FAIL, id, &io_msg);
+                    } 
+                    else 
+                    {
+                        filenum = get_filenum(name);
+                        if (filenum < 0) 
+                        {
+                            acknowledge(FS_NO_SUCH_FILE, id, &io_msg);
+                        }
+                        else
+                        {
+                            int s = 0;
+                            s = io_msg.offset + io_msg.count;
+                            if( s > fatable[filenum].filesize)
+                            {                                
+                                acknowledge(FS_FAIL, id, &io_msg);
+                            }
+                            else
+                            {
+                                if (write_mem(io_msg.smo_buff, 0, io_msg.count, (void*)((unsigned int)fatable[filenum].filepos + io_msg.offset)) < 0) 
+                                {
+                                    acknowledge(FS_FAIL, id, &io_msg);
+                                } 
+                                else 
+                                {
+                                    acknowledge(FS_OK, id, &io_msg);
+                                }
+                            }
+                        }
+                    }
+                    break;
             }
         }
         run_thread(SCHED_THR);

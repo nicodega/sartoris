@@ -8,9 +8,9 @@
 
 struct fatline
 {
-	char	filename[50];
-	void*	filepos;
-	int	filesize;
+	char   filename[50];
+	void*  filepos;
+	int    filesize;
 };
 
 void readfat(void *data, int *filecounter, struct fatline table[]);

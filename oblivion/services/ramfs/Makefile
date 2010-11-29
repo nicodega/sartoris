@@ -19,7 +19,7 @@ ramfs_code.img : entry.o ramfs.o
 	./fill_code.pl
 
 # dependencies
-ramfs.o : ramfs.c ramfs_internals.h ../../include/services/ramfs/ramfs.h
+ramfs.o : ramfs.c ramfs_internals.h
 
 entry.o : entry.c
 
