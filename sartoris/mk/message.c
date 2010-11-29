@@ -19,6 +19,7 @@
 #include "lib/salloc.h"
 #include "lib/indexing.h"
 #include <sartoris/critical-section.h>
+#include "sartoris/error.h"
 
 /* message subsystem implementation */
 
@@ -56,11 +57,24 @@ int open_port(int port, int priv, enum usage_mode mode)
 					metrics.ports++;
 #endif
 					result = SUCCESS;
+                    set_error(SERR_OK);
 				}
 			}
+            else
+            {
+                set_error(SERR_INVALID_PORT);
+            }
 	
 			mk_leave(x); /* exit critical block */
 		}
+        else
+        {
+            set_error(SERR_INVALID_PORT);
+        }
+    }
+    else
+    {
+        set_error(SERR_INVALID_MODE);
     }
       
     return result;
@@ -89,9 +103,18 @@ int close_port(int port)
 #ifdef _METRICS_
 			metrics.ports--;
 #endif
+            set_error(SERR_OK);
 		}
+        else
+        {
+            set_error(SERR_INVALID_PORT);
+        }
       
 		mk_leave(x); /* exit critical block */
+    }
+    else
+    {
+        set_error(SERR_INVALID_PORT);
     }
 
     return result;
@@ -115,9 +138,18 @@ int set_port_mode(int port, int priv, enum usage_mode mode)
 			result = SUCCESS;
 			task->open_ports[port]->priv = priv;
 			task->open_ports[port]->mode = mode;
+            set_error(SERR_OK);
 		}
+        else
+        {
+            set_error(SERR_INVALID_PORT);
+        }
       
 		mk_leave(x); /* exit critical block */
+    }
+    else
+    {
+        set_error(SERR_INVALID_MODE);
     }
     
     return result;
@@ -138,6 +170,7 @@ int set_port_perm(int port, struct port_perms *perms)
     }
     else
     {
+        set_error(SERR_INVALID_PTR);
         return FAILURE;
     }
 
@@ -153,15 +186,27 @@ int set_port_perm(int port, struct port_perms *perms)
 		    {
 			    result = SUCCESS;
 			    task->open_ports[port]->perms = perms;
-		    }          
+		    }
+            else
+            {
+                set_error(SERR_INVALID_PORT);
+            }
+        }
+        else
+        {
+            set_error(SERR_INVALID_SIZE);
         }
     
 		mk_leave(x); /* exit critical block */
 	}
+    else
+    {
+        set_error(SERR_INVALID_PORT);
+    }
   
 	return result;
 }
-int msgc = 0;
+
 int send_msg(int dest_task_id, int port, int *msg) 
 {
     struct port *p;
@@ -184,8 +229,9 @@ int send_msg(int dest_task_id, int port, int *msg)
         {
             // if invoke move is PERM_REQ, and the user loaded a bitmap for permissions
             // check for permissions.
-            // NOTE: this could produce a page fault because it's a user space pointer
-            if(p->mode == PERM_REQ && p->perms != NULL)
+            // NOTE: this could produce a page fault because it's a user space pointer, but 
+            // only on threads with privilege level greater than 0
+            if(curr_priv != 0 && p->mode == PERM_REQ && p->perms != NULL)
             {
                 /*
                     p->perms is on the desination task address space. We must ask
@@ -197,10 +243,15 @@ int send_msg(int dest_task_id, int port, int *msg)
                 perms = ((unsigned int*)p->perms + 1);
 #endif
                 // we could get a page fault on getbit
-                if(p->perms->length >= BITMAP_SIZE(MAX_TSK) && getbit(perms, curr_task) )
+                if(perms && p->perms->length >= BITMAP_SIZE(MAX_TSK) && getbit( (unsigned int*)perms+1, curr_task) )
                 {
+                    set_error(SERR_NO_PERMISSION);
                     mk_leave(x);
 	                return FAILURE;
+                }
+                else if(!perms)
+                {
+                    set_error(SERR_MISSING_PERMS_BITMAP);
                 }
             }
 
@@ -218,14 +269,54 @@ int send_msg(int dest_task_id, int port, int *msg)
 				        if (p->mode == UNRESTRICTED || curr_priv <= p->priv) 
 					    {
 						    result = enqueue(curr_task, p, (int *) MAKE_KRN_PTR(msg));
+
+						    if(result == SUCCESS)
+                            {
+                                set_error(SERR_OK);
 #ifdef _METRICS_
-						    if(result == SUCCESS) metrics.messages++;
+                                metrics.messages++;
 #endif
+                            }
 					    }
+                        else
+                        {
+                            set_error(SERR_NO_PERMISSION);
+                        }
 				    }
+                    else
+                    {
+                        if(p->mode != DISABLED)
+                            set_error(SERR_PORT_DISABLED);
+                        else
+                            set_error(SERR_PORT_FULL);
+                    }
 			    }
+                else
+                {
+                    set_error(SERR_INVALID_PTR);
+                }
 		    }
+            else
+            {
+                if(!TST_PTR(dest_task_id,tsk) || task->state != ALIVE)
+                    set_error(SERR_INVALID_TSK);
+                else
+                    set_error(SERR_INVALID_PORT);
+            }
         }
+        else
+        {
+            set_error(SERR_INVALID_PORT);
+        }
+    }
+    else
+    {
+        if(0 > dest_task_id || dest_task_id >= MAX_TSK)
+            set_error(SERR_INVALID_ID);
+        else if(TST_PTR(dest_task_id,tsk))
+            set_error(SERR_INVALID_TSK);
+        else if(0 <= port && port < MAX_TSK_OPEN_PORTS)
+            set_error(SERR_INVALID_PORT);
     }
     
     mk_leave(x); /* exit critical block */
@@ -254,11 +345,28 @@ int get_msg(int port, int *msg, int *id)
 			if (VALIDATE_PTR(msg) && VALIDATE_PTR(id)) 
 			{
 				result = dequeue((int *)MAKE_KRN_PTR(id), p, (int *)MAKE_KRN_PTR(msg));
+
+				if(result == SUCCESS) 
+                {
 #ifdef _METRICS_
-				if(result == SUCCESS) metrics.messages--;
+                    metrics.messages--;
 #endif
+                    set_error(SERR_OK);
+                }
 			}
+            else
+            {
+                set_error(SERR_INVALID_PTR);
+            }
 		}
+        else
+        {
+            set_error(SERR_INVALID_PORT);
+        }
+    }
+    else
+    {
+        set_error(SERR_INVALID_PORT);
     }
 
     mk_leave(x); /* exit critical block */
@@ -274,10 +382,16 @@ int get_msg_count(int port)
 	x = mk_enter();
 
 	task = GET_PTR(curr_task,tsk);
-    if (0 > port || port >= MAX_TSK_OPEN_PORTS || task->open_ports[port] == NULL) 
+    if (0 > port || port >= MAX_TSK_OPEN_PORTS || task->open_ports[port] == NULL)
+    {
+        set_error(SERR_INVALID_PORT);
 		res = FAILURE;
+    }
     else
+    {
+        set_error(SERR_OK);
 		res = task->open_ports[port]->total;
+    }
 
 	mk_leave(x);
 
@@ -301,6 +415,10 @@ struct port *create_port(struct task *task)
 	{
 		p->total = 0;
 		p->last = p->first = NULL;		
+    }
+    else
+    {
+        set_error(SERR_NO_MEM);
     }
     
     return p;
@@ -335,7 +453,7 @@ void empty(struct port *p)
     p->last = p->first = NULL;
     p->total = 0;
       
-    if (m != NULL) 
+    while (m != NULL) 
 	{
 		next = m->next;
 		sfree(m, 0, SALLOC_MSG);
@@ -382,6 +500,10 @@ int enqueue(int from_task_id, struct port *p, int *msg)
 		}
 		p->total++;
     }
+    else
+    {
+        set_error(SERR_NO_MEM);
+    }
     
     return result;
 }
@@ -421,6 +543,10 @@ int dequeue(int *id, struct port *p, int *msg)
 		}
 
         sfree(first, 0, SALLOC_MSG);
+    }
+    else
+    {
+        set_error(SERR_NO_MSG);
     }
 
     return result;

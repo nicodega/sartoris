@@ -15,7 +15,6 @@ bits 32
 
 global get_current_task
 
-global set_thread_run_perms
 global set_thread_run_mode
 global run_thread
 global get_current_thread
@@ -33,6 +32,8 @@ global claim_mem
 global read_mem
 global write_mem
 global mem_size
+
+global last_error
 	
 get_current_task:
 	push ebp
@@ -41,18 +42,10 @@ get_current_task:
 	pop ebp
 	ret
 	
-set_thread_run_perms:	
-	push ebp
-	mov ebp, esp
-	pass_arguments 1
-	call SET_THREAD_RUN_PERMS : 0x00000000
-	pop ebp
-	ret
-
 set_thread_run_mode:	
 	push ebp
 	mov ebp, esp
-	pass_arguments 2
+	pass_arguments 3
 	call SET_THREAD_RUN_MODE : 0x00000000
 	pop ebp
 	ret
@@ -173,5 +166,12 @@ mem_size:
 	mov ebp, esp
 	pass_arguments 1
 	call MEM_SIZE : 0x00000000
+	pop ebp
+	ret
+	
+last_error:
+	push ebp
+	mov ebp, esp
+	call LAST_ERROR : 0x00000000
 	pop ebp
 	ret

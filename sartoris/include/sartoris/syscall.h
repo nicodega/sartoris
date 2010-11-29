@@ -29,8 +29,8 @@ int get_current_task(void);
 int create_thread(int id, struct thread *thr);
 int destroy_thread(int id);
 int run_thread(int id);
-int set_thread_run_perms(struct thread_perms *perms);
-int set_thread_run_mode(int priv, int mode);
+int set_thread_run_perms(int thr_id, struct thread_perms *perms);
+int set_thread_run_mode(int thr_id, int priv, int mode);
 int get_current_thread(void);
 
 /* paging */
@@ -61,6 +61,9 @@ int read_mem(int smo_id, int off, int size, void *dest);
 int write_mem(int smo_id, int off, int size, void *src);
 int pass_mem(int smo_id, int target_task);
 int mem_size(int smo_id);
+
+/* Errors */
+int last_error();
 
 #ifdef _METRICS_
 int get_metrics(struct sartoris_metrics *m);

@@ -53,6 +53,12 @@ global push_int
 global pop_int
 global resume_int
 
+global last_error
+
+%ifdef _METRICS_
+global get_metrics
+%endif
+
 create_task:
 	push ebp
 	mov ebp, esp
@@ -103,7 +109,7 @@ destroy_thread:
 set_thread_run_perms:	
 	push ebp
 	mov ebp, esp
-	pass_arguments 1
+	pass_arguments 2
 	call SET_THREAD_RUN_PERMS : 0x00000000
 	pop ebp
 	ret
@@ -111,7 +117,7 @@ set_thread_run_perms:
 set_thread_run_mode:	
 	push ebp
 	mov ebp, esp
-	pass_arguments 2
+	pass_arguments 3
 	call SET_THREAD_RUN_MODE : 0x00000000
 	pop ebp
 	ret
@@ -332,6 +338,13 @@ grant_page_mk:
 	mov ebp, esp
 	pass_arguments 1
 	call GRANT_PAGE_MK : 0x00000000
+	pop ebp
+	ret
+	
+last_error:
+	push ebp
+	mov ebp, esp
+	call LAST_ERROR : 0x00000000
 	pop ebp
 	ret
 	

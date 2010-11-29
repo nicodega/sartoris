@@ -135,11 +135,14 @@ int arch_request_page(void *laddr)
 	if(rq_physical == NULL)
 			return FAILURE;
 
-	map_page((pt_entry *)PG_ADDRESS(pdir_map[PG_LINEAR_TO_DIR(laddr)]));
+	map_page((pt_entry *)PG_ADDRESS(ptab_map[PG_LINEAR_TO_TAB(laddr)]));
 	
 	/* 
 	Since directories share the same page table for kernel addresses, we can
 	safely change it only once.
+    NOTE: Now dynamic page tables are not copied when pageing in a directory,
+    however when a thread accesses a missing dynamic page table, it will 
+    be automatically mapped.
 	*/
 	ptab_map[PG_LINEAR_TO_TAB(laddr)] = PG_ADDRESS(rq_physical) | PG_USER | PG_PRESENT | PGATT_WRITE_ENA;
 	

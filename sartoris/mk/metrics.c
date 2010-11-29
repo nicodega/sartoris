@@ -3,6 +3,7 @@
 #include <sartoris/kernel.h>
 #include <lib/indexing.h>
 #include <sartoris/critical-section.h>
+#include "sartoris/error.h"
 
 #ifdef _METRICS_
 
@@ -21,8 +22,13 @@ int get_metrics(struct sartoris_metrics *m)
 	{
         m = MAKE_KRN_PTR(m);
 		*m = metrics;
+        set_error(SERR_OK);
 		return SUCCESS;
 	}
+    else
+    {
+        set_error(SERR_INVALID_PTR);
+    }
 	return FAILURE;
 }
 

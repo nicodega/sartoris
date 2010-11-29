@@ -2,6 +2,8 @@
 The following features require more testing and might not work properly, because they have never been tested:
 
 - pop_int/push_int/resume_int
+- run_thread_int
 - Dynamic memory page allocation procedure
 - Thread/Ports permissions.
 - MemMap
+- SSE (right now int7 checks for MMX, should we also check SSE?)

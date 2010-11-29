@@ -11,9 +11,6 @@
 #define _KERNEL_H_
 
 #include <sartoris/types.h>
-#ifdef __KERNEL__
-#include <kernel-arch.h>
-#endif
 
 /* limitations and init params */
 #define MAX_ALLOC_LINEAR   0xC800000   /* 200 MB () */
@@ -53,6 +50,11 @@ enum usage_mode { PERM_REQ=0, PRIV_LEVEL_ONLY, DISABLED, UNRESTRICTED };
 #define SUCCESS    0
 #define FAILURE   -1
 
+/* Don't move this include to the top. It uses MAX_THR. */
+#ifdef __KERNEL__
+#include <kernel-arch.h>
+#endif
+
 /* Structures pre definition */
 struct c_task_unit;			// this structure comes from containers.h
 struct c_thread_unit;		// this structure comes from containers.h
@@ -78,7 +80,7 @@ struct task
 	struct smo *first_smo;
 	int smos;
 #endif
-};
+} __attribute__ ((__packed__));
 
 struct thread 
 {
@@ -91,10 +93,11 @@ struct thread
 #ifdef __KERNEL__
     struct thread_perms *run_perms;     // this is a pointer to a user space page!
     char page_faulted;					/* used to know if we have produced a page fault */
-	char padding[3];
+    char padding;
+	short last_error;                   // last error (see error.h)
 	struct c_thread_unit *next_free;	// used only when free	
 #endif
-};
+} __attribute__ ((__packed__));
 
 struct page_fault 
 {

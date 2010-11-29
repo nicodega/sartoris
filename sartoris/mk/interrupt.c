@@ -16,6 +16,7 @@
 #include "lib/indexing.h"
 #include <sartoris/critical-section.h>
 #include "sartoris/kernel-data.h"
+#include "sartoris/error.h"
 
 /* interrupt management implementation */
 
@@ -28,10 +29,13 @@ int create_int_handler(int number, int thread_id, int nesting, int priority)
     
     x = mk_enter(); /* enter critical block */
         
-    if (0 <= number && number < MAX_IRQ && TST_PTR(thread_id,thr) && int_handlers[number] < 0) 
+    if (0 <= number && number < MAX_IRQ && 
+        0 <= thread_id && thread_id < MAX_THR &&
+        TST_PTR(thread_id,thr) && int_handlers[number] < 0) 
 	{        
 		if (arch_create_int_handler(number) == 0) 
 		{
+            set_error(SERR_OK);
             result = SUCCESS;
 	
 			if (nesting) 
@@ -42,6 +46,19 @@ int create_int_handler(int number, int thread_id, int nesting, int priority)
 			int_handlers[number] = thread_id;
 			int_active[thread_id] = 0;
 		}
+        else
+        {
+            set_error(SERR_ERROR);
+        }
+    }
+    else
+    {
+        if(0 > number || number >= MAX_IRQ)
+            set_error(SERR_INVALID_INTERRUPT);
+        else if(int_handlers[number] >= 0)
+            set_error(SERR_INTERRUPT_HANDLED);
+        else
+            set_error(SERR_INVALID_THR);
     }
         
     mk_leave(x); /* exit critical block */
@@ -58,15 +75,27 @@ int destroy_int_handler(int number, int thread)
     
     x = mk_enter(); /* enter critical block */
 
-    if (number < MAX_IRQ && int_handlers[number] == thread) 
+    if (number >= 0 && number < MAX_IRQ && int_handlers[number] == thread) 
 	{
 		if (arch_destroy_int_handler(number) == 0) 
 		{
+            set_error(SERR_OK);
 			result = SUCCESS;
 			int_handlers[number] = -1;
 		}
+        else
+        {
+            set_error(SERR_ERROR);
+        }
     }
-    
+    else
+    {
+        if(0 > number || number >= MAX_IRQ)
+            set_error(SERR_INVALID_INTERRUPT);
+        else if(int_handlers[number] >= 0)
+            set_error(SERR_INVALID_THR);
+    }
+
     mk_leave(x); /* exit critical block */
     
     return result;
@@ -217,6 +246,7 @@ int ret_from_int(void)
 
 int get_last_int(void) 
 {
+    set_error(SERR_OK);
     return last_int;
 }
 
@@ -233,11 +263,15 @@ int pop_int()
 
 	if (int_stack_pointer > 0) 
     {
-
+        set_error(SERR_OK);
         result = SUCCESS;
 
         // we will leave the interrupt active
         int_stack_pointer--;
+    }
+    else
+    {
+        set_error(SERR_NO_INTERRUPT);
     }
 
 	mk_leave(x); /* exit critical block */
@@ -264,14 +298,31 @@ int push_int(int number)
 			{
 				if (int_stack_pointer == MAX_NESTED_INT) 
 				{
+                    set_error(SERR_INTERRUPTS_MAXED);
 					mk_leave(x); /* exit critical block */
 					return result;
 				}
+                 set_error(SERR_OK);
 				result = SUCCESS;
 				int_stack[int_stack_pointer++] = h;
 				last_int = number;
 			}
+            else
+            {
+                set_error(SERR_INTERRUPT_NOT_NESTING);
+            }
 		}
+        else
+        {
+            if(h == curr_thread)
+                set_error(SERR_INVALID_THR);
+            else
+                set_error(SERR_INTERRUPT_NOT_ACTIVE);
+        }
+    }
+    else
+    {
+        set_error(SERR_NO_INTERRUPT);
     }
 
 	mk_leave(x); /* exit critical block */
@@ -306,8 +357,13 @@ int resume_int()
 		curr_priv = task->priv_level;
 		arch_run_thread(curr_thread);
 
+        set_error(SERR_OK);
 		result = SUCCESS;
 	}
+    else
+    {
+        set_error(SERR_NO_INTERRUPT);
+    }
 
 	mk_leave(x); /* exit critical block */
     

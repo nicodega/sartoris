@@ -44,8 +44,10 @@
 %define PUSH_INT                 (0x27 << 3)
 %define RESUME_INT               (0x28 << 3)
 
+%define LAST_ERROR               (0x29 << 3)
+
 %ifdef _METRICS_
-%define GET_METRICS              (0x29 << 3)
+%define GET_METRICS              (0x2a << 3)
 %endif
 
 

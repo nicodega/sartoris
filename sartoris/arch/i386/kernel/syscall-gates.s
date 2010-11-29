@@ -95,12 +95,14 @@ global pass_mem_c
 
 extern mem_size
 global mem_size_c
-	
+
+extern last_error
+global last_error_c	
+
 %ifdef _METRICS_
 extern get_metrics
 global get_metrics_c
 %endif	
-
 
 extern run_thread_int
 global run_thread_int_c
@@ -162,15 +164,15 @@ destroy_thread_c:
 
 set_thread_run_perms_c:
 	mov ecx, set_thread_run_perms
-	mov edx, 1
-	call do_syscall
-	retf 4
-
-set_thread_run_mode_c:
-	mov ecx, set_thread_run_mode
 	mov edx, 2
 	call do_syscall
 	retf 8
+
+set_thread_run_mode_c:
+	mov ecx, set_thread_run_mode
+	mov edx, 3
+	call do_syscall
+	retf 12
 
 get_current_thread_c:
 	mov ecx, get_current_thread
@@ -359,6 +361,11 @@ resume_int_c:
 	mov ecx, resume_int
 	jmp do_syscall_no_args
 
+;; error
+
+last_error_c:
+	mov ecx, last_error
+	jmp do_syscall_no_args
 	
 ;; metrics
 			

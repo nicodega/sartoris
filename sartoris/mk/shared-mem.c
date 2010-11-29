@@ -20,7 +20,7 @@
 #include "lib/salloc.h"
 #include "lib/indexing.h"
 #include <sartoris/critical-section.h>
-
+#include "sartoris/error.h"
 
 /* shared memory subsystem implementation */
 
@@ -42,19 +42,44 @@ int share_mem(int target_task, int addr, int size, int rw)
 				result = get_new_smo(curr_task, target_task, addr, size, rw);
 
 				/* Atomicity might have been broken, test target task again */
-				if(result != FAILURE && !(TST_PTR(target_task,tsk) && GET_PTR(target_task,tsk)->state == ALIVE))
+				if(GET_PTR(target_task,tsk)->state != ALIVE)
 				{
+                    set_error(SERR_INVALID_TSK);
 					delete_smo(result,curr_task);
 					result = FAILURE;
 				}
+
+				if(result != FAILURE)
+                {
 #ifdef _METRICS_
-				if(result != FAILURE) metrics.smos++;
+                    metrics.smos++;
 #endif
+                    set_error(SERR_OK);
+                }
 			}
+            else
+            {
+                if(VALIDATE_PTR(addr))
+                    set_error(SERR_INVALID_PTR);
+                else
+                    set_error(SERR_INVALID_SIZE);
+            }
 		}
+        else
+        {
+            if(GET_PTR(curr_task,tsk)->smos < MAX_TSK_SMO)
+                set_error(SERR_TOO_MANY_SMOS);
+            else
+                set_error(SERR_INVALID_TSK);
+
+        }
 
 		mk_leave(x); /* exit critical block */
 	}
+    else
+    {
+        set_error(SERR_INVALID_TSK);
+    }
     
     return result;
 }
@@ -71,9 +96,17 @@ int claim_mem(int smo_id)
 		/* the rest of the validation is in delete_smo */
 		result = delete_smo(smo_id,curr_task);
 
-#ifdef _METRICS_
-		if(result == SUCCESS) metrics.smos--;
+		if(result == SUCCESS)
+        {
+            set_error(SERR_OK);
+#ifdef _METRICS_            
+            metrics.smos--;
 #endif
+        }
+    }
+    else
+    {
+        set_error(SERR_INVALID_SMO);
     }
     
     return result;
@@ -91,12 +124,11 @@ int read_mem(int smo_id, int off, int size, int *dest)
 	{
 		x = mk_enter(); /* enter critical block */
 				
-		if (TST_PTR(smo_id,smo) && VALIDATE_PTR(dest)) 
+		if (TST_PTR(smo_id,smo) && VALIDATE_PTR(dest) && my_smo->rights & READ_PERM) 
 		{			
 			my_smo = GET_PTR(smo_id,smo);
 
-			while (my_smo->target == curr_task && off + size <= my_smo->len 
-				   && (my_smo->rights & READ_PERM) && result != SUCCESS)
+			while (my_smo->target == curr_task && off + size <= my_smo->len && result != SUCCESS)
 			{                            
                 int bytes;
 					
@@ -108,8 +140,12 @@ int read_mem(int smo_id, int off, int size, int *dest)
 				*/
 				bytes = arch_cpy_from_task(my_smo->owner, (char*)src, (char*)dest, size, x);  
 				
-				if (!TST_PTR(smo_id,smo))
-				{					
+				if (!TST_PTR(smo_id,smo) || my_smo->target != curr_task )
+				{
+                    if(my_smo->target != curr_task)
+                        set_error(SERR_NOT_SMO_TARGET);
+                    else
+                        set_error(SERR_INVALID_SMO);
 					mk_leave(x);
 					return FAILURE;
 				}
@@ -119,12 +155,36 @@ int read_mem(int smo_id, int off, int size, int *dest)
 
 				if (size == 0) 
 				{
+                    set_error(SERR_OK);
 					result = SUCCESS; 
 				}
 			}
+            if(result != SUCCESS)
+            {
+                if(my_smo->target != curr_task)
+                    set_error(SERR_NOT_SMO_TARGET);
+                else
+                    set_error(SERR_INVALID_SIZE);
+            }
 		}
+        else
+        {
+            if(!TST_PTR(smo_id,smo))
+                set_error(SERR_INVALID_SMO);
+            else if(!VALIDATE_PTR(dest))
+                set_error(SERR_INVALID_PTR);
+            else
+                set_error(SERR_NO_PERMISSION);
+        }
       
 		mk_leave(x); /* exit critical block */
+    }
+    else
+    {
+        if(0 > smo_id || smo_id >= MAX_SMO)
+            set_error(SERR_INVALID_ID);
+        else
+            set_error(SERR_INVALID_SIZE);
     }
     
     return result;
@@ -142,22 +202,23 @@ int write_mem(int smo_id, int off, int size, int *src)
 	{
 		x = mk_enter(); /* enter critical block */
 
-		if (TST_PTR(smo_id,smo) && VALIDATE_PTR(src)) 
+		if (TST_PTR(smo_id,smo) && VALIDATE_PTR(src) && my_smo->rights & WRITE_PERM) 
 		{
 			my_smo = GET_PTR(smo_id,smo);
 
-			while (my_smo->target == curr_task && off + size <= my_smo->len 
-				   && (my_smo->rights & WRITE_PERM) && result != SUCCESS)                   
+			while (my_smo->target == curr_task && off + size <= my_smo->len && result != SUCCESS)                   
 			{                      
                 int bytes;
 
 				dest = (char *) ((unsigned int)my_smo->base + off);
 				bytes = arch_cpy_to_task(my_smo->owner, (char*)src, (char*)dest, size, x); 
 
-				if (!(TST_PTR(smo_id,smo) 
-					&& my_smo->target == curr_task && off + size <= my_smo->len 
-				    && (my_smo->rights & WRITE_PERM)))
+				if (!TST_PTR(smo_id,smo) || my_smo->target != curr_task )
 				{
+                    if(my_smo->target != curr_task)
+                        set_error(SERR_NOT_SMO_TARGET);
+                    else
+                        set_error(SERR_INVALID_SMO);
 					mk_leave(x);
 					return FAILURE;
 				}
@@ -167,13 +228,37 @@ int write_mem(int smo_id, int off, int size, int *src)
 
 				if (size == 0) 
 				{
+                    set_error(SERR_OK);
 					result = SUCCESS;
 				}
 			}
+            if(result != SUCCESS)
+            {
+                if(my_smo->target != curr_task)
+                    set_error(SERR_NOT_SMO_TARGET);
+                else
+                    set_error(SERR_INVALID_SIZE);
+            }
 		}
+        else
+        {
+            if(!TST_PTR(smo_id,smo))
+                set_error(SERR_INVALID_SMO);
+            else if(!VALIDATE_PTR(src))
+                set_error(SERR_INVALID_PTR);
+            else
+                set_error(SERR_NO_PERMISSION);
+        }
 
 		mk_leave(x); /* exit critical block */
 	}
+    else
+    {
+        if(0 > smo_id || smo_id >= MAX_SMO)
+            set_error(SERR_INVALID_ID);
+        else
+            set_error(SERR_INVALID_SIZE);
+    }
 
     return result;
 }
@@ -194,10 +279,24 @@ int pass_mem(int smo_id, int target_task)
 		if(smo->target == curr_task) 
 		{
 			smo->target = target_task;
+            set_error(SERR_OK);
 			result = SUCCESS;
 		}
+        else
+        {
+            set_error(SERR_NOT_SMO_TARGET);
+        }
 
 		mk_leave(x); /* exit critical block */
+    }
+    else
+    {   
+        if(0 > smo_id || smo_id >= MAX_SMO)
+            set_error(SERR_INVALID_ID);
+        else if(!TST_PTR(smo_id,smo))
+            set_error(SERR_INVALID_SMO);
+        else 
+            set_error(SERR_INVALID_TSK);
     }
     
     return result;
@@ -216,9 +315,21 @@ int mem_size(int smo_id)
 
 		if (smo->target == curr_task) 
 		{
+            set_error(SERR_OK);
 			result = smo->len;
 		}
+        else
+        {
+            set_error(SERR_NOT_SMO_TARGET);
+        }
 	}
+    else
+    {
+        if(0 > smo_id || smo_id >= MAX_SMO)
+            set_error(SERR_INVALID_ID);
+        else
+            set_error(SERR_INVALID_SMO);
+    }
 
 	return result;
 }
@@ -236,6 +347,7 @@ int get_new_smo(int task_id, int target_task, int addr, int size, int perms)
 
 	if(id == -1)
 	{
+        set_error(SERR_NO_IDS);
 		/* No free smo id's */
 		return FAILURE;
 	}
@@ -245,10 +357,18 @@ int get_new_smo(int task_id, int target_task, int addr, int size, int perms)
 
     if(smo == NULL)  /* No free smos */
     {
+        set_error(SERR_NO_MEM);
 		return FAILURE;
     }
 	    
 	task = GET_PTR(task_id,tsk);
+
+    if(task == NULL)
+    {
+        sfree(smo, id, SALLOC_SMO);
+        set_error(SERR_INVALID_TSK);
+        return FAILURE;
+    }
 
 	smo->next = task->first_smo;
 	smo->prev = NULL;
@@ -300,6 +420,10 @@ int delete_smo(int id, int task_id)
 		sfree(smo, id, SALLOC_SMO);
 
 		task->smos--;
+    }
+    else
+    {
+        set_error(SERR_SMO_NOT_OWNED);
     }
 
     mk_leave(x); /* exit critical block */
