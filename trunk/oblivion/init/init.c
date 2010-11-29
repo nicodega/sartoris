@@ -92,7 +92,24 @@ void create_service(int task, int thread, int slot, int invoke_level)
 
     if (create_thread(thread, &thr) < 0)
     {
-        string_print("INIT: Could not create Thread", 0, 0x7);
+        switch(thread)
+        {
+            case SCHED_THR:
+                string_print("INIT: Could not create SCHED Thread", 0, 0x7);
+                break;
+            case CONSM_THR:
+                string_print("INIT: Could not create CON Thread", 0, 0x7);
+                break;
+            case DMA_MAN_THR:
+                string_print("INIT: Could not create DMA_MAN Thread", 0, 0x7);
+                break;
+            case FDCM_THR:
+                string_print("INIT: Could not create FDC Thread", 0, 0x7);
+                break;
+            case RAMFS_THR:
+                string_print("INIT: Could not create RAMFS Thread", 0, 0x7);
+                break;
+        }
         STOP;
     }
 }

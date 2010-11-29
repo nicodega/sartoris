@@ -21,6 +21,10 @@ init.o : init.c
 
 print.o : print.c
 
+stdlibsim.o : stdlibsim.c
+
+string.o : string.c
+
 bfilesys.o : bfilesys.c ../include/lib/bfilesys.h
 
 clean : FORCE

@@ -11,7 +11,6 @@
 #include <sartoris/syscall.h>
 #include <oblivion/layout.h>
 #include <services/console/console.h>
-#include <services/ramfs/ramfs.h>
 #include <services/filesys/filesys.h>
 #include <drivers/pit/pit.h>
 #include <lib/reboot.h>
@@ -59,11 +58,14 @@ int input_smo[NUM_PROC];
 int command_smo[NUM_PROC];
 char restore_cmd[NUM_PROC];
 
-char load_buffer[NUM_PROC][BLOCK_SIZE];
+char load_buffer[NUM_PROC][PAGE_SIZE] __attribute__ ((aligned(PAGE_SIZE)));
 
 char serv_present[NUM_SERV_THR];
 
 int state[NUM_PROC];
+int loadservice[NUM_PROC];
+int prcsize[NUM_PROC];
+int loadaddr[NUM_PROC];
 
 int running;
 
@@ -223,15 +225,32 @@ void process_manager(void)
                 switch(state[i])
                 {
                     case LOADING:
-                        claim_mem(fs_res.smo_name);
-                        claim_mem(fs_res.smo_buff);
-                        if (fs_res.result<0) 
+                        if(fs_res.op == FS_SIZE)
                         {
-                            inform_load_error(i, FS_NO_SUCH_FILE);
-                        } 
-                        else 
-                        {
+                            prcsize[i] = fs_res.smo_buff;
                             do_load(i);
+                            fetch_file_begin(i, RAMFS_TASK);
+                        }
+                        else
+                        {
+                            claim_mem(fs_res.smo_name);
+                            claim_mem(fs_res.smo_buff);
+                            if (fs_res.result<0)
+                            {
+                                inform_load_error(i, FS_NO_SUCH_FILE);
+                            } 
+                            else 
+                            {
+                                if(prcsize[i] > 0)
+                                {
+                                    fetch_file_cont(i, RAMFS_TASK);
+                                }
+                                else
+                                {
+                                    // process is ready
+                                    state[i] = INITIALIZING;
+                                }
+                            }
                         }
                         break;
                 }
@@ -266,11 +285,11 @@ void process_manager(void)
                 {
                     case INITIALIZING:
                         
-                    csl[0] = i-BASE_PROC_TSK;
-                    csl[1] = command_smo[i-BASE_PROC_TSK]; 
+                    csl[0] = i;
+                    csl[1] = command_smo[i]; 
                     send_msg(i, 0, csl);
 
-                    state[i-BASE_PROC_TSK] = RUNNING;
+                    state[i] = RUNNING;
                     break;
                 }
             }
@@ -347,20 +366,74 @@ void get_input(int term)
             break;
         }
     }
-    fetch_file(term, RAMFS_TASK, RAMFS_INPUT_PORT);
+    get_size(term, RAMFS_TASK, RAMFS_INPUT_PORT);
 }
 
-void fetch_file(int term, int fs_task, int ret_port) 
+void get_size(int term, int fs_task, int ret_port) 
 {    
     struct fs_command io_msg;
 
     state[term] = LOADING;
+    loadservice[term] = 0;
+    int i;
+    for (i=0; i<INPUT_LENGTH; i++)
+    {
+        if (txt_input[term][i] == '&') 
+        {
+            txt_input[term][i] = '\0';
+            loadservice[term] = 1;
+            break;
+        }
+    }
+    
+    io_msg.op = FS_SIZE;
+    io_msg.smo_name = share_mem(fs_task, txt_input[term], INPUT_LENGTH, READ_PERM);
+    io_msg.id = term;
+    io_msg.ret_port = ret_port;
+
+    send_msg(fs_task, FS_CMD_PORT, &io_msg);
+}
+
+void fetch_file_begin(int term, int fs_task)
+{
+    struct fs_command io_msg;
+                   
+    io_msg.op = FS_READ;
+    io_msg.smo_name = share_mem(fs_task, txt_input[term], INPUT_LENGTH, READ_PERM);
+    io_msg.smo_buff = share_mem(fs_task, load_buffer[term], PAGE_SIZE, WRITE_PERM);
+    io_msg.id = term;
+    io_msg.ret_port = RAMFS_INPUT_PORT;
+    io_msg.count = (prcsize[term] < PAGE_SIZE)? prcsize[term] : PAGE_SIZE;
+    io_msg.offset = 0;
+   
+    loadaddr[term] = 0;
+    prcsize[term] -= PAGE_SIZE;
+
+    // map load_buffer address to the proc
+    // physical address
+    page_in(PMAN_TASK, (void*)(SARTORIS_PROC_BASE_LINEAR + (unsigned int)load_buffer[term]), (void*)(PRC_MEM_BASE + term * PRC_SLOT_SIZE), 2, PGATT_WRITE_ENA);
+
+    send_msg(fs_task, FS_CMD_PORT, &io_msg);
+}
+
+void fetch_file_cont(int term, int fs_task)
+{
+    struct fs_command io_msg;
 
     io_msg.op = FS_READ;
     io_msg.smo_name = share_mem(fs_task, txt_input[term], INPUT_LENGTH, READ_PERM);
-    io_msg.smo_buff = share_mem(fs_task, load_buffer[term], BLOCK_SIZE, WRITE_PERM);
+    io_msg.smo_buff = share_mem(fs_task, load_buffer[term], PAGE_SIZE, WRITE_PERM);
     io_msg.id = term;
-    io_msg.ret_port = ret_port;
+    io_msg.ret_port = RAMFS_INPUT_PORT;
+    io_msg.count = (prcsize[term] < PAGE_SIZE)? prcsize[term] : PAGE_SIZE;
+    io_msg.offset = loadaddr[term] + PAGE_SIZE;
+
+    loadaddr[term] += PAGE_SIZE;
+    prcsize[term] -= PAGE_SIZE;
+
+    // map load_buffer address to the proc
+    // physical address
+    page_in(PMAN_TASK, (void*)(SARTORIS_PROC_BASE_LINEAR + (unsigned int)load_buffer[term]), (void*)(PRC_MEM_BASE + term * PRC_SLOT_SIZE + loadaddr[term]), 2, PGATT_WRITE_ENA);
 
     send_msg(fs_task, FS_CMD_PORT, &io_msg);
 }
@@ -385,10 +458,6 @@ void inform_load_error(int term, int status)
     }
 }
 
-
-/* FIXME (do_load): when paging is enabled, do_load should take the last two pages
-out of the program segment (they are page tables) */
-
 void do_load(int term) 
 {
     struct task prc_task;
@@ -406,6 +475,10 @@ void do_load(int term)
             if (txt_input[term][i] == '\0') 
             {
                 txt_input[term][i] = ' ';
+                if(txt_input[term][i+1] == '\0')
+                {
+                    txt_input[term][i+1] = ' ';
+                }
                 break;
             }
         }
@@ -414,7 +487,10 @@ void do_load(int term)
     prc_task.mem_adr = (void*)SARTORIS_PROC_BASE_LINEAR;
 
     prc_task.size = PRC_SLOT_SIZE;
-    prc_task.priv_level = 2;
+    if(loadservice[term])
+        prc_task.priv_level = 0;
+    else
+        prc_task.priv_level = 2;
 
     if (create_task(BASE_PROC_TSK+term, &prc_task)) STOP;
 
@@ -436,8 +512,6 @@ void do_load(int term)
         physical += PAGE_SIZE; 
     }
 
-    if (init_task(BASE_PROC_TSK+term, (void*) load_buffer[term], BLOCK_SIZE)) STOP;
-
     /* pass the command line on */
     if (command_smo[term] != -1) 
     {
@@ -455,9 +529,7 @@ void do_load(int term)
     if(create_thread(BASE_PROC_THR+term, &prc_thread))
     {
         string_print("COULD NOT CREATE PROC THR!",23*160,12); STOP;
-    }
-    
-    state[term] = INITIALIZING;
+    }   
 }
 
 void do_unload(int term) {

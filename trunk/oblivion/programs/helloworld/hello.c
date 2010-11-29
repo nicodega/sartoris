@@ -19,10 +19,10 @@ void run(void) {
 	get_msg(0, csl, &i);
 
 	iomsg.command = CSL_WRITE;
-	iomsg.smo = share_mem(CONS_TASK, helloworld, 40, READ_PERM);
+	iomsg.smo = share_mem(CONS_TASK, helloworld, 15, READ_PERM);
 	iomsg.attribute = 11;
 	iomsg.response_code = 0;
-	send_msg(CONS_TASK, 8+csl[0], &iomsg);
+	send_msg(CONS_TASK, 1+csl[0], &iomsg);
 
 	// wait for messages to avoid SMO destruction //
 

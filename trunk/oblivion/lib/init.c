@@ -3,11 +3,13 @@
 #include <oblivion/layout.h>
 #include <lib/scheduler.h>
 #include <lib/printf.h>
+#include <lib/malloc.h>
 
 char arguments[80];
 int console;
 
 char *args[16];
+char *malloc_buff[1024];
 
 void init() {
     int init_data[4];
@@ -49,6 +51,8 @@ void init() {
             args[a++] = &arguments[i+1];
         }
     }
+
+    init_mem(malloc_buff, 1024);
 
     exit(main(a, args));
 

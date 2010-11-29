@@ -44,7 +44,9 @@ void console_begin(int term);
 void show_prompt(int term);
 void get_input(int term);
 
-void fetch_file(int term, int fs_task, int ret_port);
+void get_size(int term, int fs_task, int ret_port);
+void fetch_file_begin(int term, int fs_task);
+void fetch_file_cont(int term, int fs_task);
 void do_load(int term);
 void do_unload(int term);
 void inform_load_error(int term, int status);
