@@ -20,8 +20,8 @@ extern int get_current_task_c(void);
 
 extern int create_thread_c(int, struct thread*);
 extern int destroy_thread_c(int);
-extern int set_thread_run_perms_c(struct thread_perms *perm);
-extern int set_thread_run_mode_c(int priv, int mode);
+extern int set_thread_run_perms_c(int thr_id, struct thread_perms *perm);
+extern int set_thread_run_mode_c(int thr_id, int priv, int mode);
 extern int run_thread_c(int);
 extern int get_current_thread_c(int);
 
@@ -56,6 +56,8 @@ extern int ret_from_int_c(void);
 extern int push_int_c(int);
 extern int pop_int_c(void);
 extern int resume_int_c(void);
+
+extern int last_error_c(void);
 
 #ifdef _METRICS_
 extern int get_metrics_c(void);

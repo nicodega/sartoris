@@ -16,7 +16,7 @@
 #include "lib/bitops.h"
 #include "lib/indexing.h"
 #include "lib/salloc.h"
-
+#include "sartoris/error.h"
 #include "sartoris/kernel-data.h"
 #include <sartoris/critical-section.h>
 
@@ -59,9 +59,30 @@ int create_task(int id, struct task *tsk)
 					task->state = LOADING;
 					result = SUCCESS;
 				}
+                else
+                {
+                    set_error(SERR_NO_MEM);
+                }
 			}
+            else
+            {
+                set_error(SERR_INVALID_PRIV);
+            }
 		}
+        else
+        {
+            if(0 > id || id >= MAX_TSK)
+                set_error(SERR_INVALID_ID);
+            else if(TST_PTR(id,tsk))
+                set_error(SERR_INVALID_TSK);
+            else
+                set_error(SERR_INVALID_BASE);
+        }
 	}
+    else
+    {
+        set_error(SERR_INVALID_PTR);
+    }
 
 	mk_leave(x); /* exit critical block */
 
@@ -86,15 +107,17 @@ int create_task(int id, struct task *tsk)
 		{
 			task->open_ports[i] = NULL;
 		}
-						
+					
 		if (arch_create_task(id, task) == 0) 
-		{			
+		{
 			/* the task is officially alive, other syscalls should
 			operate on it, therefore: */
 			task->state = ALIVE;
+
 #ifdef METRICS
             metrics.tasks++;
 #endif
+            set_error(SERR_OK);
 		}
 		else 
 		{	
@@ -103,6 +126,7 @@ int create_task(int id, struct task *tsk)
 				No need to delete_task_smos/delete_task_ports, 
 			    there cannot be any 
 			*/
+            set_error(SERR_ERROR);
 
 			sfree(task, id, SALLOC_TSK);
 		
@@ -138,10 +162,33 @@ int init_task(int task, int *start, unsigned int size)
 						result = SUCCESS;
 						stask->state = LOADING;
 					}
+                    else
+                    {
+                        set_error(SERR_INVALID_SIZE);
+                    }
 				}
+                else
+                {
+                    set_error(SERR_INVALID_SIZE);
+                }
 			}
+            else
+            {
+                set_error(SERR_INVALID_PTR);
+            }
 		}
+        else
+        {
+            set_error(SERR_INVALID_TSK);
+        }
 	}
+    else
+    {
+        if(0 > task || task >= MAX_TSK)
+            set_error(SERR_INVALID_ID);
+        else
+            set_error(SERR_INVALID_TSK);
+    }
 
 	mk_leave(x);
 
@@ -157,7 +204,9 @@ int init_task(int task, int *start, unsigned int size)
 			size -= bytes;
             dest += bytes;
         }
-		stask->state = ALIVE;
+
+        stask->state = ALIVE;
+        set_error(SERR_OK);
 	}
 	
 	return result;
@@ -183,7 +232,21 @@ int destroy_task(int id)
 			result = SUCCESS;
 			tsk->state = UNLOADING;
 		}
+        else
+        {
+            if(curr_task == id)
+                set_error(SERR_SAME_TASK);
+            else
+                set_error(SERR_INVALID_TSK);
+        }
 	}
+    else
+    {
+        if(0 > id || id >= MAX_TSK)
+            set_error(SERR_INVALID_ID);
+        else
+            set_error(SERR_INVALID_TSK);
+    }
     
 	mk_leave(x); /* exit critical block */
 
@@ -199,6 +262,7 @@ int destroy_task(int id)
             metrics.tasks--;
 #endif			
 			sfree(tsk, id, SALLOC_TSK);
+            set_error(SERR_OK);
 		}		
 	}
 
@@ -207,5 +271,6 @@ int destroy_task(int id)
 
 int get_current_task(void) 
 {
+    set_error(SERR_OK);
 	return curr_task;
 }

@@ -142,7 +142,6 @@ void start_paging(struct i386_task *tinf)
                           "movl %%eax, %%cr0" :  :  : "cc", "eax" );
 }
 
-/* remember: physical should be a multiple of PG_SIZE */
 void map_page(void *physical) 
 {
     void *addr = AUX_PAGE_SLOT(curr_thread);
@@ -190,7 +189,8 @@ void *map_address(int task, void *laddr)
 		    if(ptab_map[i] != NULL)
             {
                 // we got the physical address, map it
-                map_page((void *)ptab_map[i]);
+                map_page((void*)ptab_map[i]);
+                return ptab_map;
             }
         }
     }

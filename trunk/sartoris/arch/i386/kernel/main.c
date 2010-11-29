@@ -70,8 +70,8 @@ void create_syscall_gates()
 
 	hook_syscall(4, 1, &create_thread_c, 2);
 	hook_syscall(5, 1, &destroy_thread_c, 1);
-	hook_syscall(6, 3, &set_thread_run_perms_c, 1);
-	hook_syscall(7, 3, &set_thread_run_mode_c, 2);
+	hook_syscall(6, 1, &set_thread_run_perms_c, 2);
+	hook_syscall(7, 3, &set_thread_run_mode_c, 3);
 	hook_syscall(8, 3, &run_thread_c, 1);
 	hook_syscall(9, 3, &get_current_thread_c, 0);
 
@@ -103,9 +103,11 @@ void create_syscall_gates()
 	hook_syscall(31, 3, &mem_size_c, 1);
 	hook_syscall(32, 1, &run_thread_int_c, 4);
 
-	hook_syscall(33, 1, &pop_int_c, 4);
-	hook_syscall(34, 1, &push_int_c, 4);
-	hook_syscall(35, 1, &resume_int_c, 4);
+	hook_syscall(33, 1, &pop_int_c, 0);
+	hook_syscall(34, 1, &push_int_c, 1);
+	hook_syscall(35, 1, &resume_int_c, 0);
+
+    hook_syscall(35, 3, &last_error_c, 0);
 
 #ifdef _METRICS_
 	hook_syscall(36, 1, &get_metrics_c, 0);

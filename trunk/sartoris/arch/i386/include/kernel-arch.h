@@ -12,20 +12,6 @@
 #endif
 /* Size needed for per-task information on arch dependant section */
 #define ARCH_TASK_SIZE (sizeof(struct i386_task))
-/* Kernel linear memory size (for mappings) */
-#define KERN_LMEM_SIZE  (0x200000 + (MAX_THR * PG_SIZE))  /* Size of sartoris Low Memory block (does not include dynamic memory): 1 page per thread + 1MB */
-#define KERN_MAPPINGS_START 0x200000
-/* kernel page table(s) for mapping, shared by everybody */
-#if (KERN_LMEM_SIZE % 0x400000) == 0
-    #define KERN_TABLES (KERN_LMEM_SIZE / 0x400000 )
-#else
-    #define KERN_TABLES ((KERN_LMEM_SIZE + (0x400000 - (KERN_LMEM_SIZE % 0x400000))) / 0x400000)
-#endif
-#if (KERN_MAPPINGS_START % 0x400000) == 0
-    #define KERN_STA_TABLES (KERN_MAPPINGS_START / 0x400000 )
-#else
-    #define KERN_STA_TABLES ((KERN_MAPPINGS_START + (0x400000 - (KERN_MAPPINGS_START % 0x400000))) / 0x400000)
-#endif
 
 /* Boot information and MMAP will be placed next to the mapping */
 #define BOOTINFO_SIZE	0x10000		/* This is the maximum size bootinfo and mmap will have (64kb) */
@@ -72,6 +58,30 @@
 #	define PG_LEVELS 3
 #	define IS_PAGE_FAULT(exc_num) ((char)((exc_num) == 14))
 #	define PAGE_FAULT_INT   14
+
+/* Kernel linear memory size (for mappings)
+NOTE: We will make it a 4MB multiple value, because
+right after it, dynamic memory pages will be mapped
+and we want them on different page tables.
+*/
+
+#if (0x200000 + (MAX_THR * PG_SIZE)) % PG_SIZE == 0
+    #define KERN_LMEM_SIZE  (0x200000 + (MAX_THR * PG_SIZE))  /* Size of sartoris Low Memory block (does not include dynamic memory): 1 page per thread + 1MB */
+#else
+    #define KERN_LMEM_SIZE  (0x200000 + (MAX_THR * PG_SIZE)) + (0x400000 - (0x200000 + (MAX_THR * PG_SIZE)) % 0x400000)
+#endif
+#define KERN_MAPPINGS_START 0x200000
+/* kernel page table(s) for mapping, shared by everybody */
+#if (KERN_LMEM_SIZE % 0x400000) == 0
+    #define KERN_TABLES (KERN_LMEM_SIZE / 0x400000 )
+#else
+    #define KERN_TABLES ((KERN_LMEM_SIZE + (0x400000 - (KERN_LMEM_SIZE % 0x400000))) / 0x400000)
+#endif
+#if (KERN_MAPPINGS_START % 0x400000) == 0
+    #define KERN_STA_TABLES (KERN_MAPPINGS_START / 0x400000 )
+#else
+    #define KERN_STA_TABLES ((KERN_MAPPINGS_START + (0x400000 - (KERN_MAPPINGS_START % 0x400000))) / 0x400000)
+#endif
 
 #endif /* PAGING */
 

@@ -34,7 +34,7 @@ void arch_init_global_tss()
 	curr_state = GET_THRSTATE_ARCH(0);    // first state on system will be the bogus task one
 
 	/* 
-	Set thr_states[0] sflags to 0, so mmx/fpu state
+	Set thr_states[0] sflags to 0, so mmx/fpu/sse state
 	for dummy task is not preserved!
 	*/
 	curr_state->sflags = 0;
@@ -100,8 +100,7 @@ void build_tss(struct thr_state *thr_state, int id, int task_num, int priv, void
 	if (priv < 2) 
 		thr_state->eflags = 0x00002002;
 	else 
-		thr_state->eflags = 0x00002202; /* bits 12,13: iopl=2; 
-					                           bit 9: int enable; bit 1: reserved */  
+		thr_state->eflags = 0x00002202; /* bits 12,13: iopl=2 bit 9: int enable; bit 1: reserved */  
 }
 
 
