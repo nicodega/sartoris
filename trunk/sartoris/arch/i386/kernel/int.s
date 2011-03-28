@@ -41,6 +41,7 @@ extern caps_exception
 	pushf ;; this is not necesary, interrupt calls preserve eflags
 	pusha
 	push dword %1
+
 	jmp int_run
 %endmacro
 
@@ -151,7 +152,7 @@ int_run:
 	push eax
 	call handle_int
 	add esp, 4
-	
+
 	pop es
 	pop ds
 	popa

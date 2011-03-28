@@ -68,7 +68,7 @@ arch_switch_thread:
 	;; ebp, ebx, esi, and edi must be preserved
 	push ebp
 	mov ebp, esp
-	
+
 	;; Preserve current thread state
 
 	;; ds:ecx will contain thread state 
@@ -95,7 +95,8 @@ arch_switch_thread:
 	mov eax, esp
 	mov [ecx + thr_state.esp], eax
 	
-	;; preserve general purpose registers now (I'll only preserve C registers here)
+	;; preserve general purpose registers now (I'll only preserve C registers here
+	;; since this is a call from sartoris code)
 	mov [ecx + thr_state.ebx], ebx
 	mov [ecx + thr_state.esi], esi
 	mov [ecx + thr_state.edi], edi

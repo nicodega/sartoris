@@ -129,7 +129,9 @@ struct port_perms
 #define PF_FLAG_NONE 0  // a normal page fault interrupt.
 #define PF_FLAG_FREE 1  // a page fault returning a page from the kernel.
 #define PF_FLAG_PG   2  // a page fault for a kernel page need.
-#define PF_FLAG_PGS(a) (a-1) // a page fault for the kernel asking for X-1 pages
+#define PF_FLAG_PGS(a) ((a << 2)+PF_FLAG_PG) // a page fault for the kernel asking for "a" pages
+
+#define PF_FLAG_GET_PGS(f) ((f-PF_FLAG_PG) >> 2) // a page fault for the kernel asking for "a" pages
 
 #ifdef __KERNEL__
 

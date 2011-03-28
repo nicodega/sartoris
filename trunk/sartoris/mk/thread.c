@@ -199,10 +199,9 @@ int run_thread(int id)
 		/* we cannot return to this thread... it's waiting for a page. */
 		return FAILURE;
 	}
-
-	if (0 <= id && id < MAX_THR && TST_PTR(id,thr))
-	{        
-		thread = GET_PTR(id,thr);
+    if (0 <= id && id < MAX_THR && TST_PTR(id,thr))
+	{
+        thread = GET_PTR(id,thr);
         
         // if invoke move is PERM_REQ, and the user loaded a bitmap for permissions
         // check for permissions.
@@ -234,10 +233,10 @@ int run_thread(int id)
         }
         
         if (thread->invoke_mode != DISABLED) 
-		{
+		{            
             if( curr_priv <= thread->invoke_level || thread->invoke_mode == UNRESTRICTED 
                  || thread->invoke_mode == PERM_REQ)
-			{
+			{                
     			if (id != curr_thread) 
 				{
 					prev_curr_thread = curr_thread;
@@ -251,7 +250,7 @@ int run_thread(int id)
 					result = arch_run_thread(id);
 
 					if ( result !=  SUCCESS ) 
-					{
+					{                        
                         set_error(SERR_ERROR);
 						thread = GET_PTR(prev_curr_thread,thr);
 						task = GET_PTR(thread->task_num,tsk);
