@@ -18,7 +18,7 @@ pd_entry dyn_tables[(MAX_ALLOC_LINEAR / 0x400000) - KERN_TABLES];
 
 #define DYN_TBL_INDEX(a) (a - KERN_TABLES)
 
-/* Page granted by OS */
+/* Pages granted by OS */
 void *rq_physical;
 
 /*
@@ -73,6 +73,8 @@ int arch_kernel_pf(void *laddr)
 /*
 This function must request a page from the operating system. It will
 do so by issuing a Page Fault interrupt.
+If a table is also needed another page fault will be generated, once the first
+one has been granted.
 IMPORTANT: It will return a linear sartoris address already mapped.
 NOTE: This function will break atomicity.
 */
@@ -83,8 +85,8 @@ int arch_request_page(void *laddr)
 	pt_entry *ptab_map = AUX_PAGE_SLOT(curr_thread);
 
 	/* 
-	We will request a page from underling OS by issuing a page fault 
-	with thread/task = -1 and linear 0x0.
+	We will request a page from underling OS by issuing a page fault.
+    Page fault flags will be set accordingly.
 	Yeap, we will be trusting our OS on top... not nice... but it 
 	provides dynamic memory until we figure out something better.
 	*/

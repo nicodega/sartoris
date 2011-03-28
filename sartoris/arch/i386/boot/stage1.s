@@ -37,7 +37,8 @@ times ((24 + 0xB) - ($-$$)) db 0x00
 
 ;; End of BIOS parameter block.
 
-;; stage 2 (or 1.5) first sector lba
+;; stage 2 (or 1.5) first sector lba. This is a known position parameter. 
+;; will be at pos: 0x23 on the MBR.
 stage2_sector:
 	dd 1
 

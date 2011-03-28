@@ -28,7 +28,7 @@ int grant_page_mk(void *physical)
 
 	if(dyn_pg_lvl == DYN_PGLVL_NONE && dyn_pg_nest == DYN_NEST_ALLOCATING)
 	{
-		ret = arch_grant_page_mk(physical);
+		ret = arch_grant_page_mk(physical, dyn_remaining);
 		/* 
 			We will return to the process which generated the need 
 			for dynamic memory in the first place. 
@@ -42,10 +42,6 @@ int grant_page_mk(void *physical)
 			dyn_pg_nest = DYN_NEST_ALLOCATED; // set pg_nest to DYN_NEST_ALLOCATED so run_thread wont fail
 
         set_error(SERR_OK);
-		if(int_nesting[PAGE_FAULT_INT])  // PAGE_FAULT_INT comes from ARCH
-			ret_from_int();
-		else
-			run_thread(dyn_pg_thread);
 	}
     else
     {

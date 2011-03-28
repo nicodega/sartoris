@@ -103,7 +103,7 @@ int arch_cpy_to_task(int task, char* src, char* dst, unsigned int len, int x)
 #endif
 				arch_issue_page_fault();
 #ifdef _SMP_
-				mk_enter(x);
+				x = mk_enter();
 #endif
 				break;
 			}
@@ -121,7 +121,7 @@ int arch_cpy_to_task(int task, char* src, char* dst, unsigned int len, int x)
 #endif
 			arch_issue_page_fault();
 #ifdef _SMP_
-			mk_enter(x);
+			x = mk_enter();
 #endif
 			break;
 		}
@@ -186,7 +186,7 @@ int arch_cpy_from_task(int task, char* src, char* dst, unsigned int len, int x)
 #endif
 				arch_issue_page_fault();
 #ifdef _SMP_
-				mk_enter(x);
+				x = mk_enter();
 #endif
 				break;
 			}
@@ -203,7 +203,7 @@ int arch_cpy_from_task(int task, char* src, char* dst, unsigned int len, int x)
 #endif
 			arch_issue_page_fault();
 #ifdef _SMP_
-			mk_enter(x);
+			x = mk_enter();
 #endif
 			break;
 		}
