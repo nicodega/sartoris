@@ -124,11 +124,9 @@ void handle_int(int number)
 		If dynamic memory request level is not NONE and it's not nested, or 
 		we are in the middle of freeing a page.
 		*/
-        if(dyn_pg_thread == curr_thread &&
-           dyn_pg_lvl != DYN_PGLVL_NONE && 
-           (dyn_pg_nest == DYN_NEST_NONE || dyn_pg_nest == DYN_NEST_ALLOCATED_TBL))
+        if(dyn_pg_thread == curr_thread)
         {
-		    bprintf(12, "\nmk/INTERRUPT.C: ALLOCATING");for(;;);
+		    bprintf(12, "\nmk/INTERRUPT.C: ALLOCATING\n");
 			dyn_pg_nest = DYN_NEST_ALLOCATING;
 
 			last_page_fault.task_id = -1;
@@ -140,7 +138,7 @@ void handle_int(int number)
         }
         else if(dyn_pg_ret_thread == curr_thread) // dynamic memory page is being freed?
 		{
-            bprintf(12, "\nmk/INTERRUPT.C: dyn_pg_ret NOT NULL");for(;;);
+            bprintf(12, "\nmk/INTERRUPT.C: RETURNING PAGE TO OS\n");for(;;);
 			last_page_fault.task_id = -1;
 			last_page_fault.thread_id = -1;
 			last_page_fault.linear = arch_get_freed_physical();
@@ -149,19 +147,17 @@ void handle_int(int number)
 		}
 		else
 		{
-			// a common page fault
+            // a common page fault
 			last_page_fault.task_id = curr_task;
 			last_page_fault.thread_id = curr_thread;
 			last_page_fault.linear = arch_get_page_fault(); 
 			last_page_fault.pg_size = PG_SIZE;
 			last_page_fault.flags = PF_FLAG_NONE;
-			
+
 			// did we pagefault on a kernel dynamic memory page?
 			if(last_page_fault.linear < (void*)MAX_ALLOC_LINEAR)
 			{
-                kprintf(12, "\nmk/INTERRUPT.C: PF ON KERNEL DYNAMIC");for(;;);
-				if(last_page_fault.linear < (void*)KERN_LMEM_SIZE)
-					k_scr_print("\nmk/INTERRUPT.C: KERNEL SPACE PAGE FAULT!",12);for(;;);
+                bprintf(12, "\nmk/INTERRUPT.C: PF ON KERNEL DYNAMIC\n");
 
 				// try to map an existing kernel table onto the task
 				if(last_page_fault.linear > (void*)KERN_LMEM_SIZE && arch_kernel_pf(last_page_fault.linear) != FAILURE)
@@ -295,7 +291,7 @@ int push_int(int number)
 					mk_leave(x); /* exit critical block */
 					return result;
 				}
-                 set_error(SERR_OK);
+                set_error(SERR_OK);
 				result = SUCCESS;
 				int_stack[int_stack_pointer++] = h;
 				last_int = number;
