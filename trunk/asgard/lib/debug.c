@@ -21,87 +21,134 @@
 
 int printRow=0;
 int printCol=0;
-int printLColor = 7;
-char	outtext[80];
+int printLColor = 12;
+char	outtext[256];
 char	num[20];
 int rows = 24;
-int cols = 160;
+int cols = 80;
+
+
+enum { EXPAND, VERBATIM }; 
+
+int di2a(int x, char *s);
+int di2ax(unsigned int i, char *s);
+int dsprintf_sprintf_strcp(char *str, char *buf);
+
+int dvsprintf(char *str, char *format, int *args) {
+	int a, i, j;
+	char c;
+	int state;	
 	
-void print (char *texto, unsigned int valor)
-{
-	char	aux;
-	int		i, j;
-	
-	// prepare the number string
-	i = 0;
-	if (valor == 0)
-	{
-		num[0] = 0x30;
-		i++;
-	}
-	else
-	{
-		while (valor != 0)
-		{
-			num[i] = (char) (valor % 10) + 0x30;
-			valor = valor / 10;
-			i++;
+	i=j=a=0;
+	state = VERBATIM;
+	while(c = *format++) {
+		switch (state) {
+		case VERBATIM:
+			switch (c) {
+			case '%':
+				state = EXPAND;
+				break;
+			default:
+				str[j++] = c;
+				break;
+			}
+			break;
+		case EXPAND:
+			switch (c) {
+			case '%':
+				str[j++] = c;
+				break;
+			case 'd': case 'D': case 'i': case 'I':
+				j += di2a(args[a++], &str[j]);
+				break;
+			case 'x': case 'X':
+				j += di2ax(args[a++], &str[j]);
+				break;
+			case 's': case 'S':
+				j += dsprintf_sprintf_strcp((char *) args[a++], &str[j]);
+			}
+			state = VERBATIM;
+			break;
 		}
 	}
+	
+	str[j] = '\0';
+	return 0; 
+	
+}
 
-	num[i] = '\0';
-
-	i--;
-	j = 0;
-	while (j < i)
-	{
-		aux = num[j];
-		num[j] = num[i];
-		num[i] = aux;
-		i--;
-		j++;
+int di2a(int x, char *s) {
+	char digits[10];
+	int i=0, j=0;
+	int retval;
+	
+	do {
+		digits[i++] = x % 10;
+		x = x / 10;
+	} while (x);
+	
+	retval = i; 	
+	
+	while (i--) {
+		s[j++] = '0' + digits[i];
 	}
+	
+	return retval;
+}
 
-
-	// prepare the output string
-
-	i = 0;
-	j = 0;
-	while (texto[i] != '\0')
-	{
-		outtext[j] = texto[i];
-		i++;
-		j++;
+int di2ax(unsigned int x, char *s) {
+	char digits[8];
+	int i=0, j=0;
+	int retval;
+	char c;
+	
+	
+	do {
+		digits[i++] = x % 16;
+		x = x / 16;
+	} while (x);
+	
+	s[0] = '0';
+	s[1] = 'x';
+	
+	retval = i+2;
+		
+	while (i--) {
+	  c = digits[i];
+	  if (c < 10) {
+	    c += '0';
+	  } else {
+	    c = c - 10 + 'a';
+	  }
+	  s[(j++) + 2] = c;
 	}
+	
+	return retval;
+}
 
-	outtext[j]=':';
-	outtext[j+1]=' ';
+/* don't copy the \0 */
 
-	j = j + 2;
-	i = 0;
-	while (num[i] != '\0')
-	{
-		outtext[j] = num[i];
-		i++;
-		j++;
-	}
-	outtext[j] = '\0';
+int dsprintf_sprintf_strcp(char *str, char *buf) {
+	int i=0;
+	char c;
+	
+	while( c=str[i] ) { buf[i++]=c; }
+	
+	return i;
+}
 
 
-	if ( texto[0] == '#' )
-	{
-		string_print (outtext, printCol + printRow * cols, printLColor++);
-		printRow = (printRow + 1) % rows;
-	}
-	else if ( texto[0] == '!' )
-	{
-		string_print (outtext, printCol + printRow * cols, printLColor++);
-	}
-	else
-	{
-		string_print (outtext, printCol + printRow * cols, 10);
-		printRow = (printRow + 1) % rows;
-	}
+int print(char *format, ...) 
+{
+	/* call dvsprintf to construct string */
+	dvsprintf(outtext, format, (int*) (&format + 1));
+
+    string_print(outtext, printRow * cols * 2, printLColor);
+    printRow++;
+	if(printRow > rows) printRow = 0;
+
+	return 0;	
+	
 }
 
 

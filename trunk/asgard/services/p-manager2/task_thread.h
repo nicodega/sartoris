@@ -45,6 +45,7 @@
 #define TSK_FLAG_LOADING		2   /* Task is being loaded                                */
 #define TSK_FLAG_SERVICE		8	/* this task is a service					           */
 #define TSK_FLAG_SYS_SERVICE	(TSK_FLAG_SERVICE | 16)  /* this task is a system service  */
+#define TSK_LOW_MEM             32	/* this task required low a physicall address	       */
 
 struct pm_task 
 {
@@ -95,7 +96,7 @@ struct pm_thread
 {
 	UINT16 id;			                    /* PMAN tread id											  */
 	UINT16 task_id;		                    /* PMAN task id												  */
-	UINT16 state;	                        /* one of THR_NOTHING, ... THD_KILLED                         */
+	UINT16 state;	                        /* one of THR_NOTHING, ... THR_KILLED                         */
 	UINT16 flags;
 
 	/* Scheduler Node */
@@ -134,6 +135,8 @@ struct pm_thread
 void thr_init();
 void tsk_init();
 
+struct pm_task *tsk_create(UINT16 id);
+
 struct pm_thread *thr_get(UINT16 id);
 struct pm_task *tsk_get(UINT16 id);
 
@@ -141,7 +144,7 @@ UINT16 tsk_get_id(UINT32 lower_bound, UINT32 upper_bound);
 UINT16 thr_get_id(UINT32 lower_bound, UINT32 upper_bound);
 
 int thr_destroy_thread(UINT16 thread_id);
-struct pm_thread *thr_create(short task_id, short flags, short interrupt, void *entry_point, int *ret);
+struct pm_thread *thr_create(UINT16 id, struct pm_task *task);
 
 BOOL tsk_destroy(struct pm_task *task);
 

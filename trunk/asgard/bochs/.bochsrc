@@ -19,7 +19,7 @@ magic_break: enabled=1
 # to emulate.  You may also pass the '-megs xyz' option to bochs
 #=======================================================================
 megs: 64
-
+port_e9_hack: enabled=1
 #=======================================================================
 # VGAROMIMAGE
 # You now need to load a VGA ROM BIOS into C0000.
@@ -63,7 +63,9 @@ floppya: 1_44=1.44a, status=inserted
 #ata0-master: type=disk, path=2M.hdb.ofs, mode=flat, cylinders=32, heads=8, spt=32, translation=none
 
 
-#diskc: file="2M.hda", cyl=32, heads=4, spt=32
+ata0-master: type=disk, path=10MB.hdb.ofs, mode=flat, cylinders=306, heads=4, spt=17, translation=none
+
+#diskc: file="10M.hdb.ofs", cyl=306, heads=4, spt=17
 #ata0-slave: file="2M.hdb", cyl=4, heads=16, spt=63
 
 #=======================================================================

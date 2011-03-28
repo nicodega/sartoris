@@ -75,12 +75,12 @@ struct taken_entry
 struct taken_table
 {
 	struct taken_entry entries[1024];
-} PACKED_ATT;
+};
 
 struct taken_directory
 {
 	struct taken_table *tables[1024];
-} PACKED_ATT;
+};
 
 /* Taken entry defines */
 #define TAKEN_FLAG			0x1			// record is taken

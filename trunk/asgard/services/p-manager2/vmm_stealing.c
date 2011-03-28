@@ -36,7 +36,7 @@ extern UINT32 curr_ag_region;
 
 /*
 Page Stealing Thread.
-This thread will go through PMAN page tables.
+This thread will go through taken entries stealing pages.
 */
 void vmm_page_stealer()
 {
@@ -106,7 +106,7 @@ void vmm_page_stealer()
 					at the middle of the operation 
 					NOTE2: Page faults are non maskable interrupts, but this implies no 
 					problem for us if we cli when modifying the free_pages list
-					for we won't page fault, and we will be the only one running.
+					for we won't page fault, and we will be the only thread running.
 				*/
 				
 				int_clear();
@@ -119,7 +119,8 @@ void vmm_page_stealer()
 					/* If its not a page table, or its a page table and we *really* need memory. */
 					if( (entry->data.b_pdir.tbl == 0) || ( pages_swapped < (pages_required >> 1) && pages_required > 30) )
 					{
-						/* ignore pman pages */
+						/* Ignore pman pages.
+                        Here I'm also ignored file memory maps, but we should consider them and flush them if needed. */
 						if(entry->data.b_pdir.tbl == 0 && (entry->data.b_pg.flags & (TAKEN_PG_FLAG_PMAN | TAKEN_PG_FLAG_PHYMAP | TAKEN_PG_FLAG_SHARED | TAKEN_PG_FLAG_FILE)))
 						{
 							int_set(0);
@@ -169,8 +170,7 @@ void vmm_page_stealer()
 				/* We will do a page out. And it's taken record won't be touched */
 				if(candidate_taken->data.b_pg.tbl == 1)
 				{
-					/* Unset PF and set IOLOCK */
-					candidate_taken->data.b_ptbl.eflags &= ~TAKEN_EFLAG_PF;
+					/* set IOLOCK */
 					candidate_taken->data.b_ptbl.eflags |= TAKEN_EFLAG_IOLOCK;
 				}
 				else
@@ -180,6 +180,14 @@ void vmm_page_stealer()
 					if accesed while swapping. 
 					*/
 					task = tsk_get(candidate_task_id);
+
+                    if(task == NULL)
+                    {
+                        // return the ioslot
+                        ioslot_return(ioslot_id);
+					    int_set(0);
+					    continue;
+				    }
 
 					/* Set swap info on process table */
 					pdir = task->vmm_inf.page_directory;

@@ -44,21 +44,32 @@ void console(void)
 {
 	struct directory_register reg_cmd;
 	struct directory_response dir_res;
-	int i, j, id_proc, port = 3, die = 0;
+	int i, j, id_proc, die = 0;
 
+    // open ports with permisions for services only (lv 0, 1, 2) //
+    open_port(3, 2, PRIV_LEVEL_ONLY);
+	open_port(STDSERVICE_PORT, 2, PRIV_LEVEL_ONLY);
+    open_port(CSL_STDDEV_PORT, 2, PRIV_LEVEL_ONLY);
+    open_port(CSL_STDCHARDEV_PORT, -1, UNRESTRICTED);
+    
 	/* initialization code */
 	__asm__ ("sti" : : );
 
 	// register with directory as tty
 	reg_cmd.command = DIRECTORY_REGISTER_SERVICE;
-	reg_cmd.ret_port = port;
+	reg_cmd.ret_port = 3;
 	reg_cmd.service_name_smo = share_mem(DIRECTORY_TASK, service_name, 12, READ_PERM);
 
-	send_msg(DIRECTORY_TASK, DIRECTORY_PORT, &reg_cmd);
+    while(send_msg(DIRECTORY_TASK, DIRECTORY_PORT, &reg_cmd) < 0)
+    { 
+        reschedule(); 
+    }
 
-	while (get_msg_count(port) == 0){ reschedule(); }
+	while (get_msg_count(3) == 0){ reschedule(); }
 
-	get_msg(port, &dir_res, &id_proc);
+	get_msg(3, &dir_res, &id_proc);
+
+    close_port(3);
 
 	claim_mem(reg_cmd.service_name_smo);
 
@@ -101,6 +112,8 @@ void console(void)
 	/* now enter the main loop. */
 	while(!die) 
 	{
+        string_print("CON ALIVE",20*160,i++);
+
 		die = process_stdservice();
 
 		process_stddev();
@@ -113,7 +126,6 @@ void console(void)
 	string_print("CONS: DIED ",0,7);
 	
 	send_msg(dieid, dieretport, &dieres);
-
 	for(;;);
 }
 
@@ -164,7 +176,6 @@ void do_io(void)
 	char *pstr = NULL;
 
 	/* process new requests */
-  
 	while (get_msg_count(CSL_STDCHARDEV_PORT) > 0) 
 	{
 		get_msg(CSL_STDCHARDEV_PORT , &iomsg, &id);
@@ -350,7 +361,7 @@ void do_io(void)
       		case CHAR_STDDEV_READ:
 				if(t[iomsg.dev].scanning)
 				{
-					// if scanning fail
+                    // if scanning fail
 					rmsg.ret = STDCHARDEV_ERR;
 					// pass smo
 					if(iomsg.command == CHAR_STDDEV_READ && (iomsg.flags & CHAR_STDDEV_READFLAG_PASSMEM)) 
@@ -359,13 +370,11 @@ void do_io(void)
 					send_msg(id, iomsg.ret_port, &rmsg);
 					continue;
 				}
-
-				t[iomsg.dev].scanc = ((iomsg.command == CHAR_STDDEV_READC)? 1 : 0);
+                t[iomsg.dev].scanc = ((iomsg.command == CHAR_STDDEV_READC)? 1 : 0);
 				t[iomsg.dev].passmem = (iomsg.flags & CHAR_STDDEV_READFLAG_PASSMEM)? 1 : 0;
 				t[iomsg.dev].usedelim = (!t[iomsg.dev].scanc && (iomsg.flags & CHAR_STDDEV_READFLAG_DELIMITED))? 1 : 0;
 				
-				t[iomsg.dev].scanning = 1;
-				
+				t[iomsg.dev].scanning = 1;				
 				
 				if(t[iomsg.dev].scanc)
 				{
@@ -374,16 +383,14 @@ void do_io(void)
 				else
 				{				
 					if (iomsg.byte_count <= IBUF_SIZE) 
-					{
-		  				t[iomsg.dev].max_input_len = iomsg.byte_count - ((t[iomsg.dev].usedelim)? 1 : 0);
-					} else {
-		  				t[iomsg.dev].max_input_len = IBUF_SIZE - ((t[iomsg.dev].usedelim)? 1 : 0);
-					}
+						t[iomsg.dev].max_input_len = iomsg.byte_count - ((t[iomsg.dev].usedelim)? 1 : 0);
+					else 
+                    	t[iomsg.dev].max_input_len = IBUF_SIZE - ((t[iomsg.dev].usedelim)? 1 : 0);
 				}
 
 				if(iomsg.flags & CHAR_STDDEV_READFLAG_BLOCKING)
 				{
-					t[iomsg.dev].command = iomsg.command;
+                    t[iomsg.dev].command = iomsg.command;
 					t[iomsg.dev].ret_port = iomsg.ret_port;
 					t[iomsg.dev].input_owner_id = id;
 					t[iomsg.dev].input_smo = iomsg.buffer_smo;
@@ -401,7 +408,7 @@ void do_io(void)
 				}
 				else
 				{
-					if(iomsg.command == CHAR_STDDEV_READ && t[iomsg.dev].passmem) 
+                    if(iomsg.command == CHAR_STDDEV_READ && t[iomsg.dev].passmem) 
 						pass_mem(iomsg.buffer_smo, id);
 
 					t[iomsg.dev].scanning = 0;
@@ -421,7 +428,7 @@ void do_io(void)
  	for (i=0; i<NUM_VIRTUAL; i++) 
 	{
     	if (t[i].scanning && t[i].modified) 
-		{
+		{            
 			t[i].modified = 0;
      
       		if (t[i].echo) 
@@ -435,7 +442,9 @@ void do_io(void)
       		}	  
     
       		if (t[i].done) 
-				finish_read(i);	      	
+            {
+                finish_read(i);	      	
+            }
 	    }
   	}
 }  
@@ -446,6 +455,7 @@ void finish_read(int i)
 	int ret_len, j;
 
 	t[i].scanning = 0;
+    t[i].done = 0;
 	ret_len = t[i].input_len;
 	//t[i].input_buf[ret_len++]=0; // this will be done by the fs
 
@@ -534,6 +544,7 @@ void get_keystrokes(void)
 			if(cur_screen >= NUM_VIRTUAL)
 			{
 				string_print("CONS: ASSERT 3",0,12);
+                __asm__ __volatile__ ("xchg %%bx, %%bx" ::);
 				for(;;);
 			}
 
@@ -544,7 +555,8 @@ void get_keystrokes(void)
 				cterm->modified = 1;
 
 				if (c==BACKSPACE) 
-				{                  // we eat the backspaces here //
+				{                  
+                    // we eat the backspaces here //
 					if (cterm->cursor_pos > 0) 
 					{
 						for (i = cterm->cursor_pos; i < cterm->input_len; i++) 
@@ -556,7 +568,8 @@ void get_keystrokes(void)
 	  				}
 				} 
 				else if (c==DEL) 
-				{                  // we eat the chars in front here //
+				{                  
+                    // we eat the chars in front here //
 					if (cterm->cursor_pos < cterm->input_len) 
 					{
 						cterm->cursor_pos++;

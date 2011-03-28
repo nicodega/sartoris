@@ -52,7 +52,7 @@ void exception_signal(UINT16 task_id, UINT16 thread_id, UINT16 exception)
 	struct event_cmd evt;
 	struct thr_signal signal;
 	
-	if(tsk->exeptions.exceptions_port == 0xFFFF)
+	if(tsk == NULL || tsk->exeptions.exceptions_port == 0xFFFF)
     {
 		fatal_exception(task_id, exception);
         return;
@@ -64,6 +64,8 @@ void exception_signal(UINT16 task_id, UINT16 thread_id, UINT16 exception)
 		signal.thread = thr_get(thread_id);
 		signal.id = 0;
 		signal.task = task_id;
+
+        if(signal.thread == NULL) return;
 
 		evt.command = EVENT;
 		evt.event_type = PMAN_EXCEPTION;

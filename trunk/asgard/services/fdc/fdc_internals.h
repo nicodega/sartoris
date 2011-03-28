@@ -69,10 +69,10 @@
 
 ; ///// TIMEOUT /////
 
-#define TIMEOUT 64
-#define INT_TIMEOUT 64
+#define TIMEOUT       64
+#define INT_TIMEOUT   64
 #define MOTOR_TIMEOUT 32
-#define RW_TRIES 3
+#define RW_TRIES      3
 
 /////// RET VALUES /////
 #define FDC_OK		0

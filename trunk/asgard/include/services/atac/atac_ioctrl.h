@@ -126,11 +126,11 @@ struct atac_enum_dev_info
 	unsigned short id;				// device id.
 	unsigned char ptype;			// partition type for the logic device
 	int bootable;					// 1 = return partition which is bootable, 0 otherwise.
-	char strtype[256];				// if partition type is 0x7F, this field will be used as the fs name for de alt os specification.
 	unsigned int start_lba;			// starting lba for the partition.
 	unsigned int size;				// partition size.
 	unsigned int metadata_end;
 	unsigned short pid;				// physical device id on which its located
+    char strtype[256];				// if partition type is 0x7F, this field will be used as the fs name for de alt os specification.
 } PACKED_ATT;
 
 struct atac_enum_dev_param

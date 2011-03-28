@@ -23,8 +23,6 @@
 *
 */
 
-enum { EXPAND, VERBATIM }; 
-
 // this version uses stdout
 int printf(char *format, ...) 
 {

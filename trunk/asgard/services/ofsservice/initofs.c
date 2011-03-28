@@ -86,14 +86,13 @@ void init_ofs(struct stdfss_init *init_cmd, struct stdfss_res **ret)
 	while(get_msg_count(OFS_BLOCKDEV_PORT) == 0){ reschedule(); }
 
 	get_msg(OFS_BLOCKDEV_PORT, &query_res, &id);
-
-	if(query_res.ret == STDSERVICE_RESPONSE_FAILED)
+    if(query_res.ret == STDSERVICE_RESPONSE_FAILED)
 	{
 		*ret = build_response_msg(init_cmd->command, STDFSSERR_DEVICE_ERROR);
 		free(str);
 		return;
 	}
-
+	
 	stddev_port = query_res.port;
 
 	// check device type //
@@ -112,7 +111,7 @@ void init_ofs(struct stdfss_init *init_cmd, struct stdfss_res **ret)
 		free(str);
 		return;
 	}
-	
+    	
 	// request device //
 	getdev_cmd.command = STDDEV_GET_DEVICEX;
 	getdev_cmd.ret_port = OFS_BLOCKDEV_PORT;
@@ -130,7 +129,7 @@ void init_ofs(struct stdfss_init *init_cmd, struct stdfss_res **ret)
 		free(str);
 		return;
 	}
-	
+
 	// query for stdblockdev //
 	query_cmd.command = STDSERVICE_QUERYINTERFACE;
 	query_cmd.uiid = STD_BLOCK_DEV_UIID;
@@ -161,7 +160,7 @@ void init_ofs(struct stdfss_init *init_cmd, struct stdfss_res **ret)
 	devinfo.dev = init_cmd->logic_deviceid;
 	devinfo.devinf_smo = share_mem(init_cmd->deviceid, &bdinf, sizeof(struct blockdev_info0), WRITE_PERM);
 	devinfo.devinf_id = DEVICEINFO_ID;
-	devinfo.ret_port = OFS_BLOCKDEV_PORT; // we will use stddev port for this.. even though it's a blockdev command.
+	devinfo.ret_port = OFS_BLOCKDEV_PORT; 
 	
 	send_msg(init_cmd->deviceid, query_res.port, &devinfo);
 
@@ -173,7 +172,7 @@ void init_ofs(struct stdfss_init *init_cmd, struct stdfss_res **ret)
 
 	if(block_res.ret != STDBLOCKDEV_OK)
 	{
-		send_msg(init_cmd->deviceid, stddev_port, &freedevice_cmd);
+        send_msg(init_cmd->deviceid, stddev_port, &freedevice_cmd);
 
 		while(get_msg_count(OFS_BLOCKDEV_PORT) == 0){reschedule();}
 
@@ -183,7 +182,7 @@ void init_ofs(struct stdfss_init *init_cmd, struct stdfss_res **ret)
 		free(str);
 		return;
 	}
-	
+    
 	// create mount structure for the path //
 	minf = (struct smount_info *)malloc(sizeof(struct smount_info));
 	minf->logic_deviceid = init_cmd->logic_deviceid;
@@ -216,9 +215,12 @@ void init_ofs(struct stdfss_init *init_cmd, struct stdfss_res **ret)
 	while(get_msg_count(OFS_BLOCKDEV_PORT) == 0){ reschedule(); }
 	
 	get_msg(OFS_BLOCKDEV_PORT, &block_res, &id);
-
-	if(block_res.ret == STDBLOCKDEV_ERR)
+    
+    if(block_res.ret == STDBLOCKDEV_ERR)
 	{
+        print("OFS ERROR 7");
+        __asm__ __volatile__ ("xchg %%bx, %%bx "::);
+		
 		send_msg(init_cmd->deviceid, stddev_port, &freedevice_cmd);
 
 		while(get_msg_count(OFS_BLOCKDEV_PORT) == 0){reschedule();}
@@ -233,6 +235,7 @@ void init_ofs(struct stdfss_init *init_cmd, struct stdfss_res **ret)
 		claim_mem(write_smo);
 		return;
 	}
+    
 
 	// copy write_smo data to the ofst //
 	mem_copy(buffer, (unsigned char *)&minf->ofst, sizeof(struct OFST));
@@ -240,6 +243,8 @@ void init_ofs(struct stdfss_init *init_cmd, struct stdfss_res **ret)
 	// check 4K block size and pointers on node //
 	if(minf->ofst.block_size != 4096 || minf->ofst.ptrs_on_node != PTRS_ON_NODE || minf->ofst.Magic_number != OFS_MAGIC_NUMBER)
 	{
+        print("OFS ERROR 8");
+        __asm__ __volatile__ ("xchg %%bx, %%bx "::);
 		send_msg(init_cmd->deviceid, stddev_port, &freedevice_cmd);
 
 		while(get_msg_count(OFS_BLOCKDEV_PORT) == 0){reschedule();}
@@ -274,9 +279,11 @@ void init_ofs(struct stdfss_init *init_cmd, struct stdfss_res **ret)
 	while(get_msg_count(OFS_BLOCKDEV_PORT) == 0){reschedule();}
 
 	get_msg(OFS_BLOCKDEV_PORT, &block_res, &id);
-
-	if(block_res.ret == STDBLOCKDEV_ERR)
+    
+    if(block_res.ret == STDBLOCKDEV_ERR)
 	{
+        print("OFS ERROR 9");
+        __asm__ __volatile__ ("xchg %%bx, %%bx "::);
 		send_msg(init_cmd->deviceid, stddev_port, &freedevice_cmd);
 
 		while(get_msg_count(OFS_BLOCKDEV_PORT) == 0){reschedule();}
@@ -291,7 +298,7 @@ void init_ofs(struct stdfss_init *init_cmd, struct stdfss_res **ret)
 		claim_mem(read_smo);
 		return;
 	}
-
+	
 	minf->group_size = OFS_BLOCKDEV_BLOCKSIZE + bitmaps_size(minf->ofst.nodes_per_group, minf->ofst.blocks_per_group) + OFS_BLOCKDEV_BLOCKSIZE * (minf->ofst.nodes_per_group / OFS_NODESPER_BLOCKDEV_BLOCK) + OFS_BLOCK_SIZE * minf->ofst.blocks_per_group;
 
 	// read group headers //
@@ -458,8 +465,6 @@ void init_ofs(struct stdfss_init *init_cmd, struct stdfss_res **ret)
 		// setup bitmap
 		init_bitmaparray(&minf->group_m_free_nodes[i], bits, minf->group_headers[i].nodes_per_group, bitmaps_size(minf->group_headers[i].nodes_per_group, 0) / OFS_BLOCKDEV_BLOCKSIZE, minf->ofst.nodes_per_group * i, 1);
 		
-		//int slot = get_m_free_slot(&minf->group_m_free_nodes[i]);
-
 		// read group m_free blocks array
 		bits = (char*)malloc(bitmaps_size(0, minf->group_headers[i].blocks_per_group));
 		mblock_read.buffer_smo = share_mem(init_cmd->deviceid, bits, bitmaps_size(0, minf->group_headers[i].blocks_per_group), WRITE_PERM);
@@ -518,7 +523,7 @@ void init_ofs(struct stdfss_init *init_cmd, struct stdfss_res **ret)
 	}
 
 	// get the base node of the partition //
-	// (in a future we should cache all first level directory on a dir_cache structure for the given mounted structure) //
+	// (in the future we should cache all first level directory on a dir_cache structure for the given mounted structure) //
 	block_read.buffer_smo = write_smo;
 	block_read.command = BLOCK_STDDEV_READ;
 	block_read.dev = init_cmd->logic_deviceid;

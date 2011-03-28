@@ -153,6 +153,7 @@ void create_channel_wp(struct ata_channel *channel)
 	{
 		__asm__ ("cli"::);
 		print(":(",0);
+        __asm__ __volatile__ ("xchg %%bx, %%bx "::);
 		for(;;);
 	}
 
@@ -174,7 +175,7 @@ int identify_device(struct ata_channel *channel, int devnum)
                1, 0 ))
 	{
 		__asm__ ("cli"::);
-		print("identify drive failed",0);
+		print("identify drive failed");
 		for(;;);
 	}
 #else
@@ -185,7 +186,7 @@ int identify_device(struct ata_channel *channel, int devnum)
                          1, 0 ))
 	{
 		__asm__ ("cli"::);
-		print("identify drive failed",0);
+		print("identify drive failed");
 		for(;;);
 	}
 #endif
@@ -199,7 +200,7 @@ int identify_device(struct ata_channel *channel, int devnum)
 	{
 		dev->sector_count = dev->heads * dev->sect_per_track * dev->cylinders;
 	}
-
+        
 	int i = 0;
 	char *ser = (char * )(((unsigned short*)channel->reg_buffer) + 10);
 	while(i < 20)

@@ -80,7 +80,10 @@ UINT32 loader_create_task(struct pm_task *task, char *path, UINT32 plength, UINT
 	mk_task.priv_level = tsk_priv[type];       
 
 	if(create_task(task->id, &mk_task))
+    {
 		pman_print_and_stop("Could not create task %i ", task->id);
+        return PM_ERROR;
+    }
 
 	/* Pagein the Page directory on task address space */
 	pm_page_in(task->id, 0, (ADDR)LINEAR2PHYSICAL(task->vmm_inf.page_directory), 0, 0);
@@ -194,7 +197,7 @@ INT32 loader_fileopen_finished(struct fsio_event_source *iosrc, INT32 ioret)
 {
 	struct pm_task *task = tsk_get(iosrc->id);
 
-	if(!(task->flags & TSK_FLAG_FILEOPEN)) 
+	if(task && !(task->flags & TSK_FLAG_FILEOPEN)) 
 	{		
 		if(ioret == IO_RET_OK) 
 		{
@@ -219,6 +222,7 @@ INT32 loader_fileopen_finished(struct fsio_event_source *iosrc, INT32 ioret)
 
 				send_msg(task->command_inf.creator_task_id, task->command_inf.response_port, &res_msg );
 			}
+            tsk_destroy(task);
 		}
 	}
 	return 1;

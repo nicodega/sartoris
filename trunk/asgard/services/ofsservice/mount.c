@@ -47,7 +47,7 @@ struct stdfss_res *mount_device(int wpid, struct working_thread *thread, struct 
 	// NOTE: if there where more than one device file for a device
 	// it could be mounted twice, or even opened as a file
 	// while mounting
-	// UPDATE: I don't know if this can really happen for the device
+	// UPDATE: I don't know if this can really happen, for the device
 	// itself will be locked too. But when I wrote the note 
 	// there was no device locking mechanism.
 
@@ -101,7 +101,7 @@ struct stdfss_res *mount_device(int wpid, struct working_thread *thread, struct 
 
 	// check mount path is a directory and it has no contents
 	// Path will be locked as a FILE and not a directory
-	// because latr we'll parse for device file, and that would 
+	// because latr will parse for device file, and that would 
 	// unlock the node.
 	parse_ret = parse_directory(FALSE, &target_node, OFS_NODELOCK_EXCLUSIVE | OFS_NODELOCK_BLOCKING, thread->command.command, thread, wpid, checkminf, str, len(strmatched), NULL, NULL, &dir_entries, NULL, &ret);
 
@@ -357,7 +357,7 @@ struct stdfss_res *mount_device(int wpid, struct working_thread *thread, struct 
 	{
 		free_device(wpid, deviceid, logic_deviceid, dinf, thread->command.command, &ret);
 
-		// fail, for the device is already mounted					
+		// fail, for the device is not a block device or its block size is not 4kb					
 		unlock_device(wpid);
 
 		free(str);
@@ -413,8 +413,7 @@ struct stdfss_res *mount_device(int wpid, struct working_thread *thread, struct 
 		thread->mounting = 0;
 
 		free_device(wpid, deviceid, logic_deviceid, dinf, thread->command.command, &ret);
-
-		// fail, for the device is already mounted					
+				
 		unlock_device(wpid);
 
 		free(str);
@@ -833,7 +832,7 @@ struct stdfss_res *mount_device(int wpid, struct working_thread *thread, struct 
 	// unlock the device
 	unlock_device(wpid);
 	
-	//free(str);
+	//free(str);  // dont delete str, it's needed for the path cache
 	free(strmatched);
 	free(devstrmatched);
 	free(devfile_name);

@@ -133,9 +133,8 @@ int main(int argc, char** args)
 			headers[i].image_size,
 			headers[i].image_pos,
 			((headers[i].flags & IFS2SRV_FLAG_LOWMEM)? "|lowmem" : ""),
-			((headers[i].flags & IFS2SRV_FLAG_PHYSTART)? "|phymsg" : ""),
 			((headers[i].pman_type & IFS2SRV_PMTYPE_MAINFS)? "|mainfs" : ""),
-			((headers[i].pman_type & IFS2SRV_PMTYPE_HDD)? "|hddc" : ""),
+			((headers[i].pman_type & IFS2SRV_PMTYPE_HDD)? "|hdd" : ""),
 			((headers[i].flags & IFS2SRV_FLAG_IGNORE)? "|DISABLED" : "")
 			);
 
@@ -223,10 +222,6 @@ void build_flags_tbl()
 					if(strstr(rbuff,"lowmem"))
 					{
 						hflags[i].flags = hflags[i].flags | IFS2SRV_FLAG_LOWMEM;
-					}
-					if(strstr(rbuff,"phystartmsg"))
-					{
-						hflags[i].flags = hflags[i].flags | IFS2SRV_FLAG_PHYSTART;
 					}
 					if(strstr(rbuff,"disabled"))
 					{

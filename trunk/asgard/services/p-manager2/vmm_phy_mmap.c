@@ -126,6 +126,9 @@ BOOL vmm_phy_mmap(struct pm_task *task, ADDR py_start, ADDR py_end, ADDR lstart,
 				NOTE: If a thread was working on this page, it'll page fault wen runned again.
 				*/
 				assigned = &vmm.assigned_dir.table[PM_LINEAR_TO_DIR(PHYSICAL2LINEAR(pstart + (UINT32)SARTORIS_PROCBASE_LINEAR))]->entries[PM_LINEAR_TO_TAB(PHYSICAL2LINEAR(pstart + (UINT32)SARTORIS_PROCBASE_LINEAR))];
+
+                if(tsk_get(assigned->task_id) == NULL) return 0;
+
 				pdir = tsk_get(assigned->task_id)->vmm_inf.page_directory;
 				ptbl = (struct vmm_page_table*)PG_ADDRESS(PHYSICAL2LINEAR(pdir->tables[assigned->dir_index].b));
 

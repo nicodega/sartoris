@@ -75,6 +75,8 @@ BOOL vmm_page_filemapped(struct pm_task *task, struct pm_thread *thread, ADDR pa
 	thread->vmm_info.page_perms = vmm_region_pageperms(mreg);	
 
 	/* Block thread */
+    sch_deactivate(thread);
+
 	thread->state = THR_BLOCKED;
 	thread->flags |= THR_FLAG_PAGEFAULT;
 	thread->vmm_info.fault_address = page_laddr;
@@ -107,6 +109,8 @@ UINT32 vmm_fmap(UINT16 task_id, UINT32 fileid, UINT16 fs_task, ADDR start, UINT3
 	UINT32 dindex, tindex, tindex_max, pg_addr;
 	struct pm_thread *thr = NULL;
 
+    if(task == NULL) return PM_TASK_ID_INVALID;
+
 	/* On this implementation we will require start to be page aligned along with start + size */
 	if((UINT32)start % 0x1000 != 0 || ((UINT32)start + size) % 0x1000 != 0)
 		return PM_INVALID_PARAMS;
@@ -115,7 +119,7 @@ UINT32 vmm_fmap(UINT16 task_id, UINT32 fileid, UINT16 fs_task, ADDR start, UINT3
 	if(task->vmm_inf.max_addr <= (UINT32)start + size)
 	{
 		/* FIXME: Should send an exception signal... */
-		return FALSE;
+		return PM_ERROR;
 	}
 
 	/* Translate address adding base. */
@@ -423,6 +427,8 @@ INT32 vmm_fmap_flush_callback(struct fsio_event_source *iosrc, INT32 ioret)
 	struct vmm_memory_region *mreg = vmm_region_get_bydesc(task, fm);
 	struct vmm_pman_assigned_record *assigned = NULL;
 
+    if(task == NULL) return 0;
+
 	if(ioret == IO_RET_OK)
 	{
 		/* Remove IOLOCK */
@@ -540,6 +546,8 @@ INT32 vmm_fmap_flush_seek_callback(struct fsio_event_source *iosrc, INT32 ioret)
 	struct vmm_page_table *tbl = NULL;
 	struct vmm_pman_assigned_record *assigned = NULL;
 
+    if(task == NULL) return 0;
+
 	tbl = (struct vmm_page_table *)PHYSICAL2LINEAR(PG_ADDRESS(pdir->tables[PM_LINEAR_TO_TAB(fm->release_addr)].b));
 		
 	if(ioret == IO_RET_OK)
@@ -581,6 +589,8 @@ INT32 vmm_fmap_realeased_callback(struct fsio_event_source *iosrc, INT32 ioret)
 	struct pm_task *task = tsk_get(fm->creating_task);
 	struct vmm_memory_region *mreg = vmm_region_get_bydesc(task, fm);
 
+    if(task == NULL) return 0;
+
 	if(ioret == IO_RET_OK)
 	{
 		/* Remove memory region from task list */
@@ -618,6 +628,8 @@ INT32 vmm_fmap_flushed_callback(struct fsio_event_source *iosrc, INT32 ioret)
 	struct pm_task *task = tsk_get(fm->creating_task);
 	struct vmm_memory_region *mreg = vmm_region_get_bydesc(task, fm);
 
+    if(task == NULL) return 0;
+
 	if(task->command_inf.callback != NULL) 
 			task->command_inf.callback(task, ioret);
 
@@ -633,6 +645,8 @@ INT32 vmm_fmap_seek_callback(struct fsio_event_source *iosrc, INT32 ioret)
 	struct vmm_memory_region *mreg = thr->vmm_info.fault_region;
 	struct pm_task *task = tsk_get(thr->task_id);
 	struct vmm_fmap_descriptor *fm = (struct vmm_fmap_descriptor*)mreg->descriptor;
+
+    if(task == NULL) return 0;
 
 	if(ioret == IO_RET_OK)
 	{
@@ -672,6 +686,8 @@ INT32 vmm_fmap_read_callback(struct fsio_event_source *iosrc, INT32 ioret)
 	struct pm_task *task = tsk_get(thread->task_id);
 	struct taken_entry *t = NULL;
 
+    if(task == NULL) return 0;
+
 	/* Unblock task threads */
 	thr = task->first_thread;
 
@@ -688,8 +704,6 @@ INT32 vmm_fmap_read_callback(struct fsio_event_source *iosrc, INT32 ioret)
 
 		/* Un set IOLCK and PF eflags on the page */
 		vmm_set_flags(thread->task_id, thread->vmm_info.page_in_address, TRUE, TAKEN_EFLAG_IOLOCK, FALSE);
-		
-		task = tsk_get(thread->task_id);
 
 		/* Remove page from pman address space and create assigned record. */
 		vmm_unmap_page(thread->task_id, PG_ADDRESS(thread->vmm_info.fault_address));

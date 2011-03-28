@@ -80,6 +80,7 @@ ADDR pop_page(struct page_stack *ps)
 		{
 			/* return page from top container, decrement top page occupation counter */
 			ret_page = (ADDR) ps->top_page->pages[ --ps->top_page_entries ];
+            ps->top_page->pages[ ps->top_page_entries+1 ] = NULL;
 		}
 		else
 		{

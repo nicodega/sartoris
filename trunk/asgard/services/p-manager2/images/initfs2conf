@@ -1,8 +1,9 @@
+# [empty line]
 # imagename (no extension)
-# flags (lowmem, phystartmsg, none, disabled) can be comma separated 
+# flags (lowmem, none, disabled) can be comma separated 
 # type (hdd, fs, normal) exclusive
-# task id (if -1 it will be ignored)
-# main thread id (if -1 it will be ignored)
+# task id (if -1 it will be ignored and assigned dinamically)
+# main thread id (if -1 it will be ignored and assigned dinamically)
 
 directory
 none
@@ -15,12 +16,12 @@ normal
 2
 
 fdc
-none,disabled
+none
 normal
 3
 
 dma_man
-lowmem,phystartmsg
+lowmem
 normal
 4
 

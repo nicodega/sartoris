@@ -27,7 +27,7 @@ list vars[NUM_TERMS + 1];
 
 list running;
 
-char txt_init[] = "\nAsgard release 0.1\nMicrokernel version 0.6.0 pre 12\n";
+char txt_init[] = "\nAsgard release 0.2\nMicrokernel version 2.0 alpha\n";
 char *txt_csl[] = { 
  "Console 0 ready.",
   "Console 1 ready.",
@@ -50,7 +50,7 @@ int csl_smo[NUM_TERMS];
 char str_buffer[BUFFER_SIZE];
 char out_buffer[BUFFER_SIZE];
 char in_buffer[BUFFER_SIZE];
-static char malloc_buffer[1024 * 30]; //  30 KB
+char malloc_buffer[1024 * 30]; //  30 KB
 
 int console_task;
 
@@ -79,19 +79,26 @@ void get_console_task()
 	resolve_cmd.ret_port = 1;
 	resolve_cmd.service_name_smo = share_mem(DIRECTORY_TASK, tty_service_name, 12, READ_PERM);
 	resolve_cmd.thr_id = get_current_thread();
+    
+    while(send_msg(DIRECTORY_TASK, DIRECTORY_PORT, &resolve_cmd) < 0)
+    { 
+        reschedule(); 
+    }
 
-	send_msg(DIRECTORY_TASK, DIRECTORY_PORT, &resolve_cmd);
-
-	while (get_msg_count(1) == 0) reschedule();
-
+	while (get_msg_count(1) == 0){ reschedule(); }
+    
 	get_msg(1, &dir_res, &sender_id);
 
 	claim_mem(resolve_cmd.service_name_smo);
 
 	if(dir_res.ret != DIRECTORYERR_OK)
+    {
 		console_task = -1;
+    }
 	else
+    {
 		console_task = dir_res.ret_value;	
+    }
 }
 
 /* entry point, interruptions are disabled */
@@ -108,43 +115,59 @@ void service_main (void)
 	seek0.flags = CHAR_STDDEV_SEEK_SET;
 	seek0.pos = 0;
 	seek0.ret_port = CSL_SEEK_PORT;
+        
+    // open ports
+	open_port(STDSERVICE_PORT, 2, PRIV_LEVEL_ONLY);
+    open_port(SHELL_PORT, -1, UNRESTRICTED);
+    open_port(CSL_SCAN_ACK_PORT, 2, PRIV_LEVEL_ONLY);
+    open_port(CSL_ACK_PORT, 2, PRIV_LEVEL_ONLY);
+    open_port(CSL_SIGNAL_PORT, 2, PRIV_LEVEL_ONLY);
+    open_port(CSL_SEEK_PORT, 2, PRIV_LEVEL_ONLY);
+    open_port(CSL_REQUEST_PORT, 2, PRIV_LEVEL_ONLY);
+    open_port(PM_TASK_ACK_PORT, 1, PRIV_LEVEL_ONLY);
+    open_port(PM_THREAD_ACK_PORT, 1, PRIV_LEVEL_ONLY);
+    open_port(SHELL_INITRET_PORT, -1, UNRESTRICTED);
+    open_port(IOLIB_PORT, 2, PRIV_LEVEL_ONLY);
+    open_port(DIRLIB_PORT, 2, PRIV_LEVEL_ONLY);
 	
 	_sti;
 	
 	init_mem(malloc_buffer, 1024 * 30);  
-
-	set_ioports(IOLIB_PORT);
-	initio();
-
-	/* Get console task from directory */
+     
+    /* Get console task from directory */
+    i = 7;
 	do
 	{
 		get_console_task();
 	}
 	while(console_task == -1);
-	
+	  
+    set_ioports(IOLIB_PORT);
+	initio();
+
 	init_environment();
-
+   
 	init_consoles();
-
-	init(&running);
-
+    init(&running);
+    
+    int k = 0;
 	/* Message loop */
-	while(1)
-	{
+	for(;;)
+	{   
+        string_print("SHELL ALIVE",22*160,k++);
+
 		/* process console read responses */
 		while (get_msg_count(CSL_SCAN_ACK_PORT)>0) 
 		{
 			get_msg(CSL_SCAN_ACK_PORT, &csl_res, &id);
-
-			if (id == CONS_TASK && csl_res.ret == STDCHARDEV_OK) 
+            if (id == CONS_TASK && csl_res.ret == STDCHARDEV_OK) 
 			{
-				i = csl_res.msg_id;
+                i = csl_res.msg_id;
 				if (0 <= i && i < NUM_TERMS && cslown[i].mode == SHELL_CSLMODE_SHELL) 
 				{
-					if(csl_cmd[i][0])
+            		if(csl_cmd[i][0] && csl_cmd[i][0] != '\n')
 					{
-						csl_cmd[i][MAX_COMMAND_LINE_LEN - 1] = '\0';
+            			csl_cmd[i][MAX_COMMAND_LINE_LEN - 1] = '\0';
 
 						if(strreplace(csl_cmd[i], 0, '\n', '\0'))
 	    				{
@@ -156,18 +179,19 @@ void service_main (void)
 	    				}
 	    				else
 	    				{
-							term_print(i, "Command is too long.\n");
+							term_print(i, "\nCommand is too long.\n");
 							show_prompt(i);
 	        			}
 	  				}
 					else
 					{
+                        term_print(i, "\nInvalid command.\n");
 						show_prompt(i);
 	  				}
 				}
 				else
 				{
-					print("Received invalid console ack",0);
+					__asm__ __volatile__ ("outb %1, %0" : : "dN" (0xe9), "a" (102));
 					for(;;);
 				}
 			}
@@ -263,7 +287,8 @@ int run_command(int term, char* cmd)
 
   if(streq(cmd_line, '\0'))
   {
-	return 0;
+        show_prompt(term);
+        return 0;
   }
 
   int i = 0, ln = len(cmd_line), brk = 0;
@@ -294,7 +319,8 @@ int run_command(int term, char* cmd)
 
   if(streq(cmd_line, '\0'))
   {
-	return 0;
+      show_prompt(term);
+	  return 0;
   }
 
   term_print(term, "\n");

@@ -131,17 +131,6 @@ void destroy_threads()
 /* functions */
 void create_timer_thread()
 {
-	/*
-	thr.task_num=FDC_TASK;
-	thr.invoke_mode=PRIV_LEVEL_ONLY;                      
-	thr.invoke_level=0;
-	thr.ep = timer;
-	thr.stack = stacks[1] - 0x4;
-
-	create_thread(TIMER_THR, &thr);
-	create_int_handler(40, TIMER_THR, true, 5);
-	// IRQ8 -> 40 in the IDT 
-	*/
 	struct pm_msg_create_thread msg_create_thr;
 	struct pm_msg_response      msg_res;
 	int sender_id;
@@ -166,14 +155,6 @@ void create_timer_thread()
 
 void create_fdc_thread()
 {
-	/*
-	thr.ep = irq_handler;
-	thr.stack = stacks[1] + 512 - 0x4;
-
-	create_thread(FDCI_THR, &thr);
-	create_int_handler(38, FDCI_THR, true, 6);
-	// IRQ6 -> 38 in the IDT 
-	*/
 	struct pm_msg_create_thread msg_create_thr;
 	struct pm_msg_response      msg_res;
 	int sender_id;
@@ -203,30 +184,34 @@ void get_dma_man_task()
 	struct directory_response dir_res;
 	int sender_id;
 
-	// resolve default fs service //
+	// resolve dma service //
 	resolve_cmd.command = DIRECTORY_RESOLVEID;
 	resolve_cmd.ret_port = FDC_PMAN_PORT;
 	resolve_cmd.service_name_smo = share_mem(DIRECTORY_TASK, service_name, 12, READ_PERM);
 	resolve_cmd.thr_id = get_current_thread();
+    
+	dma_man_task = -1;
+    
+    do
+    {
+	    while(send_msg(DIRECTORY_TASK, DIRECTORY_PORT, &resolve_cmd) < 0) 
+        { 
+            reschedule(); 
+        }
 
-	send_msg(DIRECTORY_TASK, DIRECTORY_PORT, &resolve_cmd);
+	    while (get_msg_count(FDC_PMAN_PORT) == 0) reschedule();
 
-	while (get_msg_count(FDC_PMAN_PORT) == 0) reschedule();
+	    get_msg(FDC_PMAN_PORT, &dir_res, &sender_id);
 
-	get_msg(FDC_PMAN_PORT, &dir_res, &sender_id);
+	    claim_mem(resolve_cmd.service_name_smo);
 
-	claim_mem(resolve_cmd.service_name_smo);
-
-	if(dir_res.ret != DIRECTORYERR_OK)
-	{
-		dma_man_task = -1;
-	}
-
-	dma_man_task = dir_res.ret_value;
+	    if(dir_res.ret == DIRECTORYERR_OK)
+	        dma_man_task = dir_res.ret_value;
+    }while(dma_man_task == -1);
 }
+
 void init_drive() 
 {
-
 	int die = 0, id_proc = -1, result, i = 0, res;
 	struct thread thr;
 	struct dma_command dma_msg;
@@ -244,20 +229,22 @@ void init_drive()
 	struct stdservice_res servres;
 	
 	init_rtc(0x0c);	/* initialize RTC at 16 ints x sec */
-		
-	__asm__ ("sti"::);
+
+    // open ports with permisions for services only (lv 0, 1, 2) //
+	open_port(STDSERVICE_PORT, 2, PRIV_LEVEL_ONLY);
+    open_port(STDDEV_PORT, 2, PRIV_LEVEL_ONLY);
+    open_port(STDDEV_BLOCK_DEV_PORT, 2, PRIV_LEVEL_ONLY);
+
+	__asm__ __volatile__ ("sti"::);
 
 	/* create timer thread */
 	create_timer_thread();
-	
+
 	/* Create floppy controler thread */
 	create_fdc_thread();
 
 	/* Get DMA MAN task from directory */
-	do
-	{
-		get_dma_man_task();
-	}while(dma_man_task == -1);
+	get_dma_man_task();
 
 	/* get DMA channel 2 from DMA manager */
 	dma_msg.op = GET_CHANNEL;
@@ -274,10 +261,11 @@ void init_drive()
 
 	if (dma_res.result != DMA_OK) 
 	{
-	  reset();
-	  destroy_threads();
-
-	  for(;;);   /* failed to initialize */
+        __asm__ __volatile__ ("cli"::);
+        string_print("FDC DMA GET FAILED",23*160,12);
+        reset();
+        destroy_threads();
+        for(;;);   /* failed to initialize */
 	}
 
 	dma_smo = dma_res.res1;   /* store the DMA buffer smo returned by the DMA manager */
@@ -286,10 +274,11 @@ void init_drive()
 	devinf.media_size = 1474048;
 	devinf.metadata_lba_end = 0;
 	
-	// register service with directory //
+    // register service with directory //
 	reg_cmd.command = DIRECTORY_REGISTER_SERVICE;
 	reg_cmd.ret_port = 1;
 	reg_cmd.service_name_smo = share_mem(DIRECTORY_TASK, service_name, 12, READ_PERM);
+
 	send_msg(DIRECTORY_TASK, DIRECTORY_PORT, &reg_cmd);
 
 	while (get_msg_count(1) == 0) { reschedule(); }
@@ -297,21 +286,25 @@ void init_drive()
 	get_msg(1, &dir_res, &id_proc);
 
 	claim_mem(reg_cmd.service_name_smo);
-
-	/* prepare the drive*/
+    
+    /* prepare the drive*/
 
 	// reset fdc
 	reset();
-
+    
 	// place the drive on a known state
 	reset_drive();
-
+    
 	/* now we enter an infinite loop, checking and procesing
 	   messages */
-
+    int k = 7;
 	while(!die)
 	{		
-		while (get_msg_count(STDSERVICE_PORT) == 0 && get_msg_count(STDDEV_PORT) == 0 && get_msg_count(STDDEV_BLOCK_DEV_PORT) == 0) { reschedule(); }
+		while (get_msg_count(STDSERVICE_PORT) == 0 && get_msg_count(STDDEV_PORT) == 0 && get_msg_count(STDDEV_BLOCK_DEV_PORT) == 0) 
+        {
+            string_print("FDC ALIVE",23*160,k++);
+            reschedule(); 
+        }
 
 		/* process stdservice commands */
 		service_count = get_msg_count(STDSERVICE_PORT);
@@ -793,11 +786,12 @@ void reset_drive()
 	fdc_track = 0;
 	sr0 = 0;
 
-	specify();	
+	specify();
 	motor_on();
 	seek(RESET_SEEK);
-	recalibrate();
+    recalibrate();
 	motor_off();
+    
 }
 
 void convert_from_LBA(int block, int *head, int *track, int *sector) 
@@ -1039,8 +1033,7 @@ void irq_handler() {
 
 void timer() {
 
-__asm__ ("cli"::); 	// I think this is not necesary... for this is a service and priv < 2, then interrupts are
-			// disabled by default on our TSS
+    __asm__ ("cli"::);
 
 	for(;;){
 		
@@ -1059,7 +1052,6 @@ __asm__ ("cli"::); 	// I think this is not necesary... for this is a service and
 		}
 	
 		/* read RTC status C so we can continue... */
-
 		read_rtc_status();
 
 		/* send EOI to master and slave pics */

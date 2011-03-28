@@ -67,7 +67,7 @@ void loader_init(ADDR init_image_laddress)
 	{
 		// Open next image.
 		if(pminit_elf_open(i))
-			pman_print_and_stop("Could not open service %i of %i", i, iheader->entries);
+			pman_print_and_stop("Could not open service %i of %i ", i, iheader->entries);
 		
 		msg = 0;
 		lowmem = 0;
@@ -77,7 +77,7 @@ void loader_init(ADDR init_image_laddress)
 			if(curr_header->main_thread != 0xFFFF)
 				thread = curr_header->main_thread;
 			else
-				thread = thr_get_id(MAX_THR, MAX_THR);
+				thread = thr_get_id(1, MAX_THR);
 
 			if(curr_header->task != 0xFFFF)
 				task = curr_header->task;
@@ -88,11 +88,6 @@ void loader_init(ADDR init_image_laddress)
 			{
 				lowmem = 1;
 				pman_print(" *Service will be loaded on low-memory area.");
-			}
-			if(curr_header->flags & IFS2SRV_FLAG_PHYSTART)
-			{
-				msg = 1;
-				pman_print(" *Service requires physical start message.");
 			}
 			if(curr_header->pman_type & IFS2SRV_PMTYPE_MAINFS)
 			{
@@ -107,13 +102,7 @@ void loader_init(ADDR init_image_laddress)
 		
 			pman_print("Loading service %s task: %x thread: %x , header thr %x ", curr_header->img_name, task, thread, curr_header->main_thread);
 
-			addr = (UINT32)create_service(task, thread, 0, PMAN_TASK_SIZE, lowmem, TRUE, curr_header->img_name);
-		
-			if(msg)
-			{
-				imsg[0] = addr;
-				send_msg(task, 0, imsg);
-			}			
+			addr = (UINT32)create_service(task, thread, 0, PMAN_TASK_SIZE, lowmem, TRUE, curr_header->img_name);		
 		}
 	}
 }
@@ -141,7 +130,9 @@ ADDR create_service(UINT16 task, UINT16 thread, INT32 invoke_level, UINT32 size,
 	path[i] = '\0';
 	
 	// Create a service task
-	ptask = tsk_get(task);
+	ptask = tsk_create(task);
+    if(ptask == NULL)
+        pman_print_and_stop("Error allocating task for %s", image_name);
 
 	if(loader_create_task(ptask, path, psize, 1, TRUE) != PM_OK)
 		pman_print_and_stop("Error creating task for %s", image_name);
@@ -152,6 +143,9 @@ ADDR create_service(UINT16 task, UINT16 thread, INT32 invoke_level, UINT32 size,
 	*/
 	ptask->flags = 0;
 	ptask->flags |= TSK_FLAG_SYS_SERVICE;
+
+    if(low_mem)
+        ptask->flags |= TSK_LOW_MEM;
 
 	/* Setup the task */
 	ptask->command_inf.creator_task_id = 0xFFFF;
@@ -164,21 +158,10 @@ ADDR create_service(UINT16 task, UINT16 thread, INT32 invoke_level, UINT32 size,
 		pman_print_and_stop("Elf parsing failed for %s", image_name);
 	
 	/* Setup first thread */
-	pthread = thr_get(thread);
-
-	ptask->first_thread = pthread;
-	ptask->num_threads = 1;
-
-	pthread->task_id = task;
+	pthread = thr_create(thread, ptask);
+    	
 	pthread->state = THR_WAITING;
-	pthread->flags = THR_FLAG_NONE;
-
-	vmm_init_thread_info(&pthread->vmm_info);
-	init_thr_signals(pthread);
-
-	pthread->next_thread = NULL; 
-	pthread->interrupt = 0;
-	
+		
 	/* Create microkernel thread */
 	mk_thread.task_num = task;
 	mk_thread.invoke_mode = PRIV_LEVEL_ONLY;
@@ -254,14 +237,14 @@ UINT32 put_pages(struct pm_task *task, BOOL use_fsize, BOOL low_mem)
 
 					task->vmm_inf.page_count++;
 				}
-
+                
 				pg = (ADDR)LINEAR2PHYSICAL(vmm_get_page_ex(task->id, page_addr, low_mem));
 				
 				pgp = (ADDR)PHYSICAL2LINEAR(pg);
 
 				/* Set page as service (won't be paged out) */
 				vmm_set_flags(task->id, pgp, TRUE, TAKEN_EFLAG_SERVICE, TRUE);
-
+                                
 				if(foffset < curr_header->image_size)
 				{
 					pminit_elf_seek(&task->io_event_src, foffset);
@@ -271,6 +254,9 @@ UINT32 put_pages(struct pm_task *task, BOOL use_fsize, BOOL low_mem)
 				if(page_in(task->id, (ADDR)page_addr, (ADDR)pg, 2, PGATT_WRITE_ENA) != SUCCESS)
 					pman_print_and_stop("Failed to page_in for laddress: %x, physical: %x ", page_addr, pg);
 				
+                /* unmap the page from pmanager, so it's assigned record is used. */
+                vmm_unmap_page(task->id, (ADDR)page_addr);
+
 				task->vmm_inf.page_count++;
 			
 				allocated += PAGE_SIZE;

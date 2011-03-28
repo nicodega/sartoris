@@ -55,7 +55,7 @@ BOOL avaliablePage(struct multiboot_info *multiboot, ADDR physical)
 				return FALSE;
 
 			size += mbe->size;
-			mbe = (struct mmap_entry*)( ((UINT32)mbe) + mbe->size);
+			mbe = (struct mmap_entry*)( (UINT32)mbe + mbe->size);
 		}
 	}
 	return TRUE;
@@ -71,16 +71,14 @@ INT32 vmm_init(struct multiboot_info *multiboot, UINT32 ignore_start, UINT32 ign
 	calc_mem(multiboot);
 
 	vmm.multiboot = multiboot;
-	vmm.vmm_start = (ADDR)PMAN_POOL_LINEAR;
-	vmm.vmm_size = POOL_MEGABYTES * 0x100000;	// size of the pool in bytes
-	vmm.vmm_tables = POOL_MEGABYTES / 4;
-
+	
 	pman_print_set_color(10);
-	pman_print("VMM: linear start: %x, size: %i b, tables: %i , phy start: %x ", vmm.vmm_start, vmm.vmm_size, vmm.vmm_tables, (UINT32)PMAN_POOL_PHYS);
+	pman_print("VMM: ignore start %x, end %x ", ignore_start, ignore_end);
+	pman_print("VMM: linear start: %x, size: %i MB, tables: %i , phy start: %x ", vmm.vmm_start, vmm.pool_MB, vmm.vmm_tables, (UINT32)PMAN_POOL_PHYS);
 	
 	/* 
 		We need page tables for the process manager, so we can access vmm memory 
-		lets take the first pages from pool space 
+		lets take the first pages from pool space for all tables
 	*/
 	map_pages(PMAN_TASK
 				, (UINT32)PMAN_POOL_LINEAR + (UINT32)SARTORIS_PROCBASE_LINEAR
@@ -89,7 +87,8 @@ INT32 vmm_init(struct multiboot_info *multiboot, UINT32 ignore_start, UINT32 ign
 				, PGATT_WRITE_ENA
 				, 1);
 
-	/* Now load whatever is left into the page tables. (Here we also map our own page tables, thats why I dont do: vmm.vmm_size / 0x1000 - vmm.vmm_tables) */
+	/* Now pagein whatever is left on the pool into the page tables. 
+    (Here we also map our own page tables, thats why I dont do: vmm.vmm_size / 0x1000 - vmm.vmm_tables) */
   	page_count = vmm.vmm_size / 0x1000;
 
 	map_pages(PMAN_TASK
@@ -106,8 +105,10 @@ INT32 vmm_init(struct multiboot_info *multiboot, UINT32 ignore_start, UINT32 ign
 	
 	init_page_stack(&vmm.low_pstack);
 
-    /* We must be careful here not to put services image pages on the pool */
-	/* Low mem stack will be loaded bottom-up */
+    /* We must be careful here not to put services image pages on the pool 
+    (they'll be added later once they are initialized) */
+	
+    /* Low mem stack will be loaded bottom-up */
     ignore_s = PHYSICAL2LINEAR(ignore_start);
     ignore_e = PHYSICAL2LINEAR(ignore_end);
 	ignored = 0;
@@ -118,11 +119,14 @@ INT32 vmm_init(struct multiboot_info *multiboot, UINT32 ignore_start, UINT32 ign
 		 
 		 // Check we are not inserting the init physical pages 
 		 if((add < ignore_s || add >= ignore_e) && avaliablePage(multiboot, (ADDR)(FIRST_PAGE(PMAN_POOL_PHYS) + (offset-1) * 0x1000)))
+         {
 		 	push_page(&vmm.low_pstack, (ADDR)add);
+		    vmm.available_mem += 0x1000; 
+         }
 		 else
+         {
 		 	ignored++;
-		 
-		 vmm.available_mem += 0x1000; 		 
+         }		 
     }
 
 	pman_print("VMM: Loaded low stack, total: %i, ignored: %i, pushed: %i ", lo_page_count, ignored, lo_page_count - ignored);
@@ -135,33 +139,38 @@ INT32 vmm_init(struct multiboot_info *multiboot, UINT32 ignore_start, UINT32 ign
 	ignored = 0;
 
     /* We must be careful here not to put services image pages on the pool */	     
-    for(offset = lo_page_count; offset < page_count; offset++) 
+    for(offset = 0; offset < page_count; offset++) 
 	{
-      	 add = FIRST_PAGE(PMAN_POOL_LINEAR) + offset * 0x1000;
+      	 add = PHYSICAL2LINEAR(0x1000000) + offset * 0x1000;
 
 		 // Check we are not inserting the init physical pages 
-		 if((add < ignore_s || add >= ignore_e) && avaliablePage(multiboot, (ADDR)(FIRST_PAGE(PMAN_POOL_PHYS) + offset * 0x1000)))
+		 if((add < ignore_s || add >= ignore_e) && avaliablePage(multiboot, (ADDR)(PHYSICAL2LINEAR(0x1000000) + offset * 0x1000)))
+         {
 		 	push_page(&vmm.pstack, (ADDR) (add));
+		    vmm.available_mem += 0x1000;
+         }
 		 else
+         {
 		 	ignored++;
-		 vmm.available_mem += 0x1000;
+         }
     }
 
 	pman_print("VMM: Loaded High Stack, total: %i, ignored: %i, pushed: %i ", page_count, ignored, page_count - ignored);
-
-	/* Stacks has been set up, take pages for our taken structure */
-	page_count = vmm.vmm_tables;
-
+    /* Stacks have been set up, take pages for our taken structure */
+	
 	/* 
-		First 2 tables will be taken by pman and pool page tables, and should never be used.
+		First tables (200MB + PMAN + MALLOC + POOL TABLES) will be taken by pman 
+        and pool page tables, and should never be used/accessed on the structure.
 		They'll remain to be 0.
 	*/
-	dentry = PM_LINEAR_TO_DIR(FIRST_PAGE(PMAN_POOL_LINEAR));
+	page_count = vmm.vmm_tables;
 
-	for(i = 0; i <= page_count; i++)
+	for(i = 0; i < page_count; i++)
 	{
-		vmm.taken.tables[dentry] = NULL;
+		vmm.taken.tables[i] = NULL;
 	}
+	
+    dentry = PM_LINEAR_TO_DIR(FIRST_PAGE(PMAN_POOL_LINEAR));
 
 	for(i = 0; i <= page_count; i++) 
 	{
@@ -169,26 +178,26 @@ INT32 vmm_init(struct multiboot_info *multiboot, UINT32 ignore_start, UINT32 ign
 		addr = (UINT32*)pop_page(&vmm.pstack);
 	
 		for(k = 0; k < 0x400; k++){ addr[k] = 0;}
-
-		vmm.available_mem -= 0x1000;
+        vmm.available_mem -= 0x1000;
 		
-		vmm.taken.tables[dentry] = (struct taken_table*)addr;
-		dentry++;
+		vmm.taken.tables[dentry + i] = (struct taken_table*)addr;
     }
 
 	pman_print("VMM: Taken Directory allocated. pages: %i, size: %x ", page_count, page_count * 0x1000);
 	
-	start = PMAN_POOL_LINEAR;
-	k = vmm.vmm_tables + PM_LINEAR_TO_DIR(PMAN_POOL_LINEAR + (UINT32)SARTORIS_PROCBASE_LINEAR);
+    start = PMAN_POOL_LINEAR;
+    i = PM_LINEAR_TO_DIR(PMAN_POOL_LINEAR + (UINT32)SARTORIS_PROCBASE_LINEAR);
+	k = vmm.vmm_tables + i;
 
 	/* Get pointers for our page tables. */
-	for(i = PM_LINEAR_TO_DIR(PMAN_POOL_LINEAR + (UINT32)SARTORIS_PROCBASE_LINEAR); i < k; i++) 
+	for(; i < k; i++) 
 	{
 		vmm.assigned_dir.table[i] = (struct vmm_pman_assigned_table*)start;
 		start += 0x1000;
 	}
+    
 	vmm_swap_init();
-
+    
 	/* Initialize memory regions. */
 	vmm.region_descriptors.first = NULL;
 	vmm.region_descriptors.total = 0;
@@ -214,9 +223,11 @@ INT32 vmm_add_mem(struct multiboot_info *multiboot, UINT32 start, UINT32 end)
 		for(cstart = 0x1000000 - start; cstart < cend; cstart += PAGE_SIZE) 
 		{      
 			if(avaliablePage(multiboot, (ADDR)LINEAR2PHYSICAL(cstart))) 
+            {
 				push_page(&vmm.low_pstack, (ADDR)cstart);
+		        vmm.available_mem += 0x1000;
+            }
 		}
-		vmm.available_mem += 0x1000;
 	}
 
 	/* Add High stack pages */
@@ -225,10 +236,12 @@ INT32 vmm_add_mem(struct multiboot_info *multiboot, UINT32 start, UINT32 end)
 		cstart = MAX(0x1000000, start);
 		for(; cstart < end; cstart += PAGE_SIZE) 
 		{      
-			if(avaliablePage(multiboot, (ADDR)LINEAR2PHYSICAL(cstart))) 
+			if(avaliablePage(multiboot, (ADDR)LINEAR2PHYSICAL(cstart)))
+            {
 	      		push_page(&vmm.pstack, (ADDR)cstart);
+		        vmm.available_mem += 0x1000;
+            }
 		}
-		vmm.available_mem += 0x1000;
 	}
 	return 1;
 }
@@ -263,12 +276,10 @@ void calc_mem(struct multiboot_info *mbinf)
 
 		while(size != mbinf->mmap_length)
 		{
-			/* FIX: We need to know max addressable address, not real memory not freed */
 			if(mbe->end > mmap_mem_size)
 				mmap_mem_size = mbe->end;
-			//mmap_mem_size += (UINT32)(mbe->end - mbe->start);
 			size += mbe->size;
-			mbe = (struct mmap_entry*)( ((UINT32)mbe) + mbe->size);			
+			mbe =  (struct mmap_entry *)((UINT32)mbe + mbe->size);	
 		}
 	}
 
@@ -277,12 +288,16 @@ void calc_mem(struct multiboot_info *mbinf)
 		vmm.pysical_mem = mmap_mem_size;
 	}
 	
-	/* substract from available physical memory used by sartoris */
-	vmm.pysical_mem -= PMAN_POOL_PHYS;
+    // now lets calculate pool megabytes
+    vmm.pool_MB = (vmm.pysical_mem - PMAN_POOL_PHYS) / 0x100000;
 
-	// now lets calculate pool megabytes
-	/* Pool MB must be a 4MB multiple */
-	vmm.pool_MB = (vmm.pysical_mem / 0x100000) - ((vmm.pysical_mem / 0x100000) % 4);
+    if(vmm.pool_MB % 4 != 0)
+        vmm.pool_MB -= (vmm.pool_MB % 4);
+
+    vmm.vmm_start = (ADDR)PMAN_POOL_LINEAR;
+	vmm.vmm_size = POOL_MEGABYTES * 0x100000;	// size of the pool in bytes
+	vmm.vmm_tables = POOL_MEGABYTES / 4;        // tables needed for the addressing all memory on the system
+
 }
 
 struct taken_entry *vmm_taken_get(ADDR laddress)
@@ -404,6 +419,8 @@ ADDR vmm_get_page_ex(UINT16 task_id, UINT32 proc_laddress, BOOL low_mem)
 
 	tsk = tsk_get(task_id);
 
+    if(tsk == NULL) return NULL;
+
 	/* Set the taken structure */
 	tentry = vmm_taken_get(page);
 
@@ -460,6 +477,8 @@ ADDR vmm_get_physical(UINT16 task, ADDR laddress)
 {
 	struct pm_task *tsk = tsk_get(task);
 
+    if(tsk == NULL) return NULL;
+
 	/* We have to get the physical address for this linear address */
 	struct vmm_page_directory *dir = tsk->vmm_inf.page_directory;
 	struct vmm_page_table *tbl = (struct vmm_page_table*)PHYSICAL2LINEAR(PG_ADDRESS(dir->tables[PM_LINEAR_TO_DIR(laddress)].b));
@@ -474,6 +493,8 @@ struct vmm_page_table *vmm_get_tbl_physical(UINT16 task, ADDR laddress)
 {
 	struct pm_task *tsk = tsk_get(task);
 
+    if(tsk == NULL) return NULL;
+
 	struct vmm_page_directory *dir = tsk->vmm_inf.page_directory;
 	return (struct vmm_page_table*)PG_ADDRESS(dir->tables[PM_LINEAR_TO_DIR(laddress)].b);
 }
@@ -481,6 +502,8 @@ struct vmm_page_table *vmm_get_tbl_physical(UINT16 task, ADDR laddress)
 void vmm_set_flags(UINT16 task, ADDR laddress, BOOL eflag, UINT32 flag, BOOL enabled)
 {
 	struct pm_task *tsk = tsk_get(task);
+
+    if(tsk == NULL) return;
 
 	/* Set the taken structure */
 	struct taken_entry *tentry = vmm_taken_get(laddress);
@@ -572,13 +595,15 @@ void vmm_claim(UINT16 task)
 }
 
 /*
-This function will perform a page in with the initial age.
+This function will perform a page-in with the initial age.
 */
 INT32 pm_page_in(UINT16 task_id, ADDR linear, ADDR physical, UINT32 level, INT32 attrib)
 {
 	struct vmm_page_directory *dir = NULL;
 	struct vmm_page_table *tbl = NULL;
 	struct pm_task *task = tsk_get(task_id);
+
+    if(task == NULL) return NULL;
 	
 	if((UINT32)physical <= 0x100000)
 		pman_print_and_stop("Attempt to page in phy: %x, task: %i, linear: %x ", physical, task_id, linear);
@@ -681,7 +706,6 @@ void vmm_close_task(struct pm_task *task)
 	/* Begin swap empty procedure. */
 	vmm_swap_empty(task, FALSE);
 }
-
 
 void vmm_init_task_info(struct task_vmm_info *vmm_inf)
 {

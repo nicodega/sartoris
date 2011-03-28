@@ -53,7 +53,7 @@ struct directory_register
 	int service_name_smo;
 	int thr_id;
 	int ret_port;
-}PACKED_ATT;
+} PACKED_ATT;
 
 struct directory_unregister
 {
@@ -61,7 +61,7 @@ struct directory_unregister
 	int padding0;
 	int thr_id;
 	int ret_port;
-}PACKED_ATT;
+} PACKED_ATT;
 
 struct directory_resolveid
 {
@@ -69,7 +69,7 @@ struct directory_resolveid
 	int service_name_smo;
 	int thr_id;
 	int ret_port;
-}PACKED_ATT;
+} PACKED_ATT;
 
 struct directory_resolvename
 {
@@ -78,7 +78,7 @@ struct directory_resolvename
 	short name_smo;
 	int thr_id;
 	int ret_port;
-}PACKED_ATT;
+} PACKED_ATT;
 
 
 struct directory_response
@@ -87,7 +87,7 @@ struct directory_response
 	int ret_value;	
 	int thr_id;
 	int ret;
-}PACKED_ATT;
+} PACKED_ATT;
 
 #endif
 

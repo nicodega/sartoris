@@ -316,7 +316,7 @@ char *build_file_path(char *cmd, int term)
 			i++;
 		}
 
-		free(paths);
+		if(paths) free(paths);
 		free(path);
 
 		return NULL;	

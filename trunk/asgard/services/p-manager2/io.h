@@ -28,10 +28,13 @@ struct pm_thread;
 struct pm_task;
 
 /* IO Init Stages */
-#define IO_STAGE_FINDDEV  0
-#define IO_STAGE_MOUNROOT 1
-#define IO_STAGE_SWAPDEV  2
-#define IO_STAGE_FINISHED 3
+#define IO_STAGE_WAITATAC 0
+#define IO_STAGE_FINDDEV  1
+#define IO_STAGE_WAITOFS  2
+#define IO_STAGE_MOUNROOT 3
+#define IO_STAGE_WAITATACSWP 4
+#define IO_STAGE_SWAPDEV  5
+#define IO_STAGE_FINISHED 6
 
 /* This must be designed independently from the IO event source */
 #define FILE_IO_TASK	1	// IO Source belongs to a task.
@@ -205,7 +208,7 @@ When completed, the Task swp_io_finished callback function will be invoked.
 BOOL io_begin_task_pg_read(UINT32 lba, ADDR ptr, struct pm_task *task);
 /*
 Begin an IO Slot write operation.
-Whe finished, IO Slot callback will be invoked.
+Whe finished, IO Slot callback will be invoked (from PMAN scheduler thread).
 */
 BOOL io_slot_begin_write(UINT32 possition, ADDR ptr, UINT32 ioslot_id);
 /*
@@ -213,6 +216,10 @@ Get a Free IO Slot ID.
 Returns 0xFFFFFFFF if there are no IO Slots available.
 */
 UINT32 ioslot_get_free();
+/*
+Return an ioslot to the free pool.
+*/
+void ioslot_return(UINT32 id);
 /*
 Begin a Takeover operation on STDFSS (used for FMAPS)
 Upon completion the source callback function will be invoked.

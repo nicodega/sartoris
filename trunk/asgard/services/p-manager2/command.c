@@ -77,6 +77,7 @@ void cmd_process_msg()
 	struct fmap_params params;
 	UINT16 destroy_task_id;
 	struct pending_command *cmd = NULL;
+    struct pm_msg_phymem_response pres;
 				
 	/*
 	For some commands like FMAP, we should only process one command at the same time for each task. 
@@ -92,7 +93,23 @@ void cmd_process_msg()
 		else if(get_msg(PMAN_COMMAND_PORT, &msg, &task_id) == SUCCESS) 
 		{			
 			switch(msg.pm_type) 
-			{
+			{                
+                case PM_PHYMEM: 
+				{
+					/* if it's a service, it's entitled to know 
+                    it's physical memory base address. */
+                    tsk = tsk_get(task_id);
+
+                    if(tsk != NULL && (tsk->flags & (TSK_FLAG_SERVICE|TSK_LOW_MEM))==(TSK_FLAG_SERVICE|TSK_LOW_MEM))
+                    {
+					    pres.pm_type = msg.pm_type;
+	                    pres.req_id  = msg.req_id;
+	                    pres.physical  = vmm_get_physical(task_id, (ADDR)((struct pm_msg_phymem*)&msg)->linear + SARTORIS_PROCBASE_LINEAR);
+	
+	                    send_msg(task_id, msg.response_port, &pres);
+                    }
+					break;
+				}
 				case PM_SHUTDOWN: 
 				{
 					/* Begin shutdown */
@@ -127,7 +144,7 @@ void cmd_process_msg()
 
 					tsk = tsk_get(destroy_task_id);
 
-					if(tsk->state != TSK_NOTHING && tsk->state != TSK_KILLING && tsk->state != TSK_KILLED) 
+					if(tsk && tsk->state != TSK_KILLING && tsk->state != TSK_KILLED) 
 					{
 						// If task is executing a command, fail
 						if(tsk->command_inf.executing != NULL)
@@ -173,7 +190,7 @@ void cmd_process_msg()
 
 					tsk = tsk_get(destroy_task_id);
 
-					if(tsk->state == TSK_NORMAL)
+					if(tsk && tsk->state == TSK_NORMAL)
 					{
 						if(thr_destroy_thread(((struct pm_msg_destroy_thread*)&msg)->thread_id))
 						{
@@ -184,6 +201,13 @@ void cmd_process_msg()
 							cmd_inform_result(&msg, task_id, PM_ERROR, 0, 0);
 						}
 					}
+                    else
+                    {
+                        if(!tsk)
+                            cmd_inform_result(&msg, task_id, PM_TASK_ID_INVALID, 0, 0);
+                        else
+                            cmd_inform_result(&msg, task_id, PM_ERROR, 0, 0);
+                    }
 					
 					break;
 				}
@@ -203,6 +227,13 @@ void cmd_process_msg()
 						tsk->io_finished.callback = cmd_task_destroyed_callback;
 						io_begin_close( &tsk->io_event_src );
 					}
+                    else
+                    {
+                        if(!tsk)
+                            cmd_inform_result(&msg, task_id, PM_TASK_ID_INVALID, 0, 0);
+                        else
+                            cmd_inform_result(&msg, task_id, PM_ERROR, 0, 0);
+                    }
 					break;
 				}
 				default:
@@ -230,7 +261,7 @@ void cmd_process_msg()
 
 	while(cmd != NULL) 
 	{
-		pman_print_and_stop("CMD: Got a queue COMMAND! STOP ");
+		pman_print_and_stop("COMMAND.c: Got a queue COMMAND! STOP ");
 
 		msg = cmd->msg;
 		task_id = (cmd->sender_task & 0x0000FFFF);
@@ -241,6 +272,8 @@ void cmd_process_msg()
 			case PM_FMAP: 
 			{
 				tsk = tsk_get(task_id);
+
+                if(!tsk) continue;
 
 				if(tsk->command_inf.executing != NULL)
 					break;
@@ -257,7 +290,6 @@ void cmd_process_msg()
 					}
 
 					tsk->command_inf.callback = cmd_finished__callback;
-					
 					tsk->command_inf.command_ret_port = msg.response_port;
 					tsk->command_inf.command_req_id = msg.req_id;
 					tsk->command_inf.command_sender_id = task_id;
@@ -278,6 +310,8 @@ void cmd_process_msg()
 			{
 				/* Close MMAP */
 				tsk = tsk_get(task_id);
+
+                if(!tsk) continue;
 
 				if(tsk->command_inf.executing != NULL)
 					break;
@@ -301,6 +335,8 @@ void cmd_process_msg()
 				/* Flush FMMAP */
 				tsk = tsk_get(task_id);
 
+                if(!tsk) continue;
+
 				if(tsk->command_inf.executing != NULL)
 					break;
 				cmd_queue_remove(cmd);
@@ -323,6 +359,8 @@ void cmd_process_msg()
 			{
 				/* Create PMMAP */
 				tsk = tsk_get(task_id);
+
+                if(!tsk) continue;
 
 				if(tsk->command_inf.executing != NULL)
 					break;
@@ -354,6 +392,8 @@ void cmd_process_msg()
 				/* Close MMAP */
 				tsk = tsk_get(task_id);
 
+                if(!tsk) continue;
+
 				if(tsk->command_inf.executing != NULL)
 					break;
 				cmd_queue_remove(cmd);
@@ -376,6 +416,8 @@ void cmd_process_msg()
 			{
 				/* Create a shared memory region */
 				tsk = tsk_get(task_id);
+
+                if(!tsk) continue;
 
 				if(tsk->command_inf.executing != NULL)
 					break;
@@ -400,6 +442,8 @@ void cmd_process_msg()
 				/* Close MMAP */
 				tsk = tsk_get(task_id);
 
+                if(!tsk) continue;
+
 				if(tsk->command_inf.executing != NULL)
 					break;
 				cmd_queue_remove(cmd);
@@ -422,6 +466,8 @@ void cmd_process_msg()
 			{
 				/* Create a shared memory region */
 				tsk = tsk_get(task_id);
+                
+                if(!tsk) continue;
 
 				if(tsk->command_inf.executing != NULL)
 					break;
@@ -478,7 +524,7 @@ void cmd_create_task(struct pm_msg_create_task *msg, UINT16 creator_task_id)
 		{
 			tsk = tsk_get(new_task_id);
 
-			if(tsk != NULL && tsk->state != TSK_NOTHING) 
+			if(tsk != NULL) 
 			{
 				/* new_task_id is not free to be used */
 				cmd_inform_result((struct pm_msg_generic *) msg, creator_task_id, PM_TASK_ID_TAKEN, 0, 0);
@@ -504,12 +550,18 @@ void cmd_create_task(struct pm_msg_create_task *msg, UINT16 creator_task_id)
         }
 	}
   
-	tsk = tsk_get(new_task_id);
+	tsk = tsk_create(new_task_id);
+    if(tsk == NULL)
+    {
+        cmd_inform_result((struct pm_msg_generic *) msg, creator_task_id, PM_NOT_ENOUGH_MEM, 0, 0);
+        return;
+    }
 	path = NULL;
 	psize = mem_size(msg->path_smo_id);
 
 	if(psize < 1)
 	{
+        tsk_destroy(tsk);
 		cmd_inform_result((struct pm_msg_generic *) msg, creator_task_id, PM_BAD_SMO, 0, 0);
 		return;
 	}
@@ -518,6 +570,7 @@ void cmd_create_task(struct pm_msg_create_task *msg, UINT16 creator_task_id)
 
 	if(path == NULL)
 	{
+        tsk_destroy(tsk);
 		cmd_inform_result((struct pm_msg_generic *) msg, creator_task_id, PM_NOT_ENOUGH_MEM, 0, 0);
 		return;
 	}
@@ -525,6 +578,7 @@ void cmd_create_task(struct pm_msg_create_task *msg, UINT16 creator_task_id)
 	/* Read Path */
 	if(read_mem(msg->path_smo_id, 0, psize, path) != SUCCESS) 
 	{
+        tsk_destroy(tsk);
 		cmd_inform_result((struct pm_msg_generic *) msg, creator_task_id, PM_BAD_SMO, 0, 0);
 		return;
 	}
@@ -544,9 +598,9 @@ void cmd_create_task(struct pm_msg_create_task *msg, UINT16 creator_task_id)
 
 	if(ret != PM_OK)
 	{
+        tsk_destroy(tsk);
 		kfree(path);
 		cmd_inform_result((struct pm_msg_generic *) msg, creator_task_id, ret, 0, 0);
-		tsk->state = TSK_NOTHING;
 	}	
 }
 
@@ -575,28 +629,22 @@ void cmd_create_thread(struct pm_msg_create_thread *msg, UINT16 creator_task_id)
 	}
 
 	/* Ok, task id is fine and we got a free thread id. Let's get through with it. */
-	thread = thr_get(new_thread_id);
+	thread = thr_create(new_thread_id, task);
+
+    if(thread == NULL) 
+	{
+		cmd_inform_result((struct pm_msg_generic *)msg, creator_task_id, PM_NOT_ENOUGH_MEM, 0, 0);
+		return;
+	}
 
 	/* save info */
-	thread->task_id = task->id;
 	thread->state = THR_WAITING;
-	thread->flags = THR_FLAG_NONE;
-
-	vmm_init_thread_info(&thread->vmm_info);
-	init_thr_signals(thread);
-
-	thread->next_thread = NULL; 
-	thread->interrupt = 0;
-	
+    	
 	/* Create microkernel thread */
 	mk_thread.task_num = msg->task_id;
 	mk_thread.invoke_mode = PRIV_LEVEL_ONLY;
 	mk_thread.invoke_level = 0;
 	mk_thread.ep = (ADDR)msg->entry_point;
-
-	io_init_source(&thread->io_event_src, FILE_IO_THREAD, thread->id);
-	io_init_event(&thread->io_finished, &thread->io_event_src);
-	thread->swp_io_finished.callback = NULL;
 
 	thread->io_event_src.file_id = task->io_event_src.file_id;
 	thread->io_event_src.fs_service = task->io_event_src.fs_service;
@@ -629,7 +677,8 @@ void cmd_create_thread(struct pm_msg_create_thread *msg, UINT16 creator_task_id)
 		/* Check interrupt is not already being handled */
 		if(!(task->flags & TSK_FLAG_SERVICE) || !int_can_attach(thread, msg->interrupt))
 		{
-			thread->state = THR_NOTHING;
+			thread->state = THR_KILLED;
+            thr_destroy_thread(thread->id);
 			cmd_inform_result((struct pm_msg_generic *) msg, creator_task_id, PM_THREAD_INT_TAKEN, 0, 0);
 			return;
 		}		
@@ -637,13 +686,14 @@ void cmd_create_thread(struct pm_msg_create_thread *msg, UINT16 creator_task_id)
 
 	if(create_thread(new_thread_id, &mk_thread))
 	{
-		thread->state = THR_NOTHING;
+		thread->state = THR_KILLED;
+        thr_destroy_thread(thread->id);
 		cmd_inform_result((struct pm_msg_generic *) msg, creator_task_id, PM_THREAD_FAILED, 0, 0);
 		return;
 	}
 	/* 
 		- Get a page for the stack if it's the first thread
-		  so we can put init info in there.
+		  so we can put init info for the task in there.
 	    - Get a page for the stack if it's an interrupt handler
 	*/
 	if((task->num_threads == 0 && !(task->flags & TSK_FLAG_SYS_SERVICE)) || msg->interrupt != 0)	
@@ -665,17 +715,17 @@ void cmd_create_thread(struct pm_msg_create_thread *msg, UINT16 creator_task_id)
 		if(pg == NULL)
 		{
 			cmd_inform_result((struct pm_msg_generic *) msg, creator_task_id, PM_THREAD_FAILED, 0, 0);
-			destroy_thread(new_thread_id);
-			thread->state = THR_NOTHING;
+			thr_destroy_thread(thread->id);
 			return;
 		}
 
-		/* If it's an int handler, lock the page */
+		/* If it's a page of a system service, lock the page */
 		if(task->flags & TSK_FLAG_SYS_SERVICE) 
 			vmm_set_flags(thread->task_id, pg, TRUE, TAKEN_EFLAG_SERVICE, TRUE);
 
 		pm_page_in(thread->task_id, (ADDR)((UINT32)thread->stack_addr + SARTORIS_PROCBASE_LINEAR), (ADDR)LINEAR2PHYSICAL(pg), 2, PGATT_WRITE_ENA);
 		
+        // set init data at the begining of the stack
 		if(pg != NULL && msg->interrupt == 0)
 		{			
 			UINT32 stackpad = (UINT32)thread->stack_addr % 0x1000;
@@ -692,14 +742,7 @@ void cmd_create_thread(struct pm_msg_create_thread *msg, UINT16 creator_task_id)
 
 		task->vmm_inf.page_count++;
 	}
-
-	/* Fix thread list */
-	if(task->first_thread != NULL)
-		thread->next_thread = task->first_thread;
-	
-	task->first_thread = thread;
-	task->num_threads++;
-
+    	
 	/* 
 	Protocol for PMAN thread creation does not support privileges,
 	so we assign the lowest value by default. 
@@ -714,8 +757,7 @@ void cmd_create_thread(struct pm_msg_create_thread *msg, UINT16 creator_task_id)
 		if(!int_attach(thread, msg->interrupt, (0x000000FF & msg->int_priority)))
 		{
 			cmd_inform_result((struct pm_msg_generic *) msg, creator_task_id, PM_THREAD_FAILED, 0, 0);
-			destroy_thread(new_thread_id);
-			thread->state = THR_NOTHING;
+			thr_destroy_thread(thread->id);
 			return;
 		}		
 	}
@@ -758,7 +800,7 @@ INT32 cmd_swap_freed_callback(struct fsio_event_source *iosrc, INT32 ioret)
 	struct pm_task *task = tsk_get(iosrc->id);
 
 	if(!tsk_destroy(task))
-		pman_print("ERR");
+		pman_print("PMAN: Could not destroy task");
 
 	// if there is a destroy sender, send an ok to the task
 	if( task->command_inf.command_sender_id != 0)

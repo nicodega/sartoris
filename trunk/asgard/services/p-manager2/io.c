@@ -71,6 +71,8 @@ void io_init_event(struct io_event *evt, struct fsio_event_source *iosrc)
 	evt->callback = NULL;
 }
 
+void io_findldev();
+
 /* Begin IO subsystem Initialization (find the filesystem root) */
 void io_begin_init()
 {
@@ -99,18 +101,49 @@ void io_begin_init()
 	ioslots.slots[i].type = IOSLOT_TYPE_FREE;
 	ioslots.free_count = PMAN_IOSLOTS;
 
-	/* Issue ATAC ATAC_IOCTRL_FINDLDEV */
-	iocmd.command = STDDEV_IOCTL;
+    if(atac_service != 0xFFFF)
+    {
+        if(filesystem_service == 0xFFFF)
+        {
+            // try to mount a swap drive
+            init_io_stage = IO_STAGE_SWAPDEV;
+
+		    io_swap_init();
+        }
+        else
+        {
+	        /* Issue ATAC ATAC_IOCTRL_FINDLDEV */
+	        io_findldev();
+        }
+    }
+    else
+    {
+        fsinitfailed = TRUE;
+        init_io_stage = IO_STAGE_FINISHED;
+    }
+}
+
+void io_findldev()
+{
+    struct atac_ioctl_finddev iocmd;
+
+    iocmd.command = STDDEV_IOCTL;
 	iocmd.request = ATAC_IOCTRL_FINDLDEV;
 	iocmd.msg_id = 0;
 	iocmd.ret_port = INITFS_PORT;
-	iocmd.find_dev_smo = atac_finddev_smo = share_mem(atac_service, &atacparams, sizeof(struct atac_find_dev_param), READ_PERM | WRITE_PERM);
+    if(init_io_stage == IO_STAGE_WAITATAC)
+        iocmd.find_dev_smo = atac_finddev_smo;
+    else
+	    iocmd.find_dev_smo = atac_finddev_smo = share_mem(atac_service, &atacparams, sizeof(struct atac_find_dev_param), READ_PERM | WRITE_PERM);
 		
 	/* Find a bootable OFS partition */
 	atacparams.ptype = 0xd0;
 	atacparams.bootable = 0;
 
-	send_msg(atac_service, 4, &iocmd);
+	if(send_msg(atac_service, 4, &iocmd) < 0)
+        init_io_stage = IO_STAGE_WAITATAC;
+    else
+        init_io_stage = IO_STAGE_FINDDEV;
 }
 
 /* Internal function, begin Swap partition search */
@@ -123,13 +156,38 @@ void io_swap_init()
 	iocmd.request = ATAC_IOCTRL_FINDLDEV;
 	iocmd.msg_id = 0;
 	iocmd.ret_port = INITFS_PORT;
-	iocmd.find_dev_smo = atac_finddev_smo = share_mem(atac_service, &atacparams, sizeof(struct atac_find_dev_param), READ_PERM | WRITE_PERM);
+    if(init_io_stage == IO_STAGE_WAITATACSWP)
+        iocmd.find_dev_smo = atac_finddev_smo;
+    else
+	    iocmd.find_dev_smo = atac_finddev_smo = share_mem(atac_service, &atacparams, sizeof(struct atac_find_dev_param), READ_PERM | WRITE_PERM);
 	
 	/* Find a bootable OFS partition */
 	atacparams.ptype = 0xe0;
 	atacparams.bootable = 0;
 
-	send_msg(atac_service, 4, &iocmd);
+	if(send_msg(atac_service, 4, &iocmd))
+        init_io_stage = IO_STAGE_WAITATACSWP;
+    else
+        init_io_stage = IO_STAGE_SWAPDEV;
+}
+
+void io_mount_root()
+{
+	struct stdfss_init init_msg;	
+    
+    init_msg.command = STDFSS_INIT;
+	init_msg.ret_port = INITFS_PORT;
+	init_msg.deviceid = atac_service;
+	init_msg.logic_deviceid = atacparams.ldevid;
+    if(init_io_stage == IO_STAGE_WAITOFS)
+        init_msg.path_smo = ofs_path_smo;
+    else
+        init_msg.path_smo = ofs_path_smo = share_mem(filesystem_service, path, 2, READ_PERM);
+	
+	if(send_msg(filesystem_service, STDFSS_PORT, &init_msg) < 0)
+        init_io_stage = IO_STAGE_WAITOFS;
+    else					
+	    init_io_stage = IO_STAGE_MOUNROOT; // mounting Root
 }
 
 /* Check If Initialization finished */
@@ -137,8 +195,23 @@ BOOL io_initialized()
 {
 	int taskid;
 	struct stddev_ioctrl_res res;
-	struct stdfss_init init_msg;	
 	struct stdfss_res ofsres;
+
+    // this is in case send message failed
+    switch(init_io_stage)
+    {
+        case IO_STAGE_WAITOFS:
+            io_mount_root();
+            return FALSE;
+        case IO_STAGE_WAITATACSWP:
+            io_swap_init();
+            return FALSE;
+        case IO_STAGE_WAITATAC:
+            io_findldev();
+            return FALSE;
+        default:
+            break;
+    }
 
 	while(get_msg_count(INITFS_PORT) > 0)
 	{		
@@ -149,7 +222,7 @@ BOOL io_initialized()
 			/* Message expected from atac */
 			if(taskid != atac_service) continue;
 
-			if(atac_finddev_smo != -1) 
+            if(atac_finddev_smo != -1) 
 				claim_mem(atac_finddev_smo);
 			atac_finddev_smo = -1;
 			
@@ -160,15 +233,7 @@ BOOL io_initialized()
 					case IO_STAGE_FINDDEV:
 						
 						/* Initialize ofs with the logic device found */
-						init_msg.command = STDFSS_INIT;
-						init_msg.path_smo = ofs_path_smo = share_mem(filesystem_service, path, 2, READ_PERM);
-						init_msg.ret_port = INITFS_PORT;
-						init_msg.deviceid = atac_service;
-						init_msg.logic_deviceid = atacparams.ldevid;
-
-						send_msg(filesystem_service, STDFSS_PORT, &init_msg);	
-						
-						init_io_stage = IO_STAGE_MOUNROOT; // mounting Root
+						io_mount_root();
 						break;
 					case IO_STAGE_SWAPDEV:
 						/* Results for swap check are present */
@@ -185,7 +250,7 @@ BOOL io_initialized()
 				switch(init_io_stage)
 				{
 					case IO_STAGE_FINDDEV:
-						fsinitfailed = 1;
+						fsinitfailed = TRUE;
 						break;
 					case IO_STAGE_SWAPDEV:
 						/* Results for swap check are present */
@@ -199,6 +264,7 @@ BOOL io_initialized()
 		}
 		else
 		{
+            /* mounting root */
 			get_msg(INITFS_PORT, &ofsres, &taskid);
 
 			if(taskid != filesystem_service) continue;
@@ -286,6 +352,13 @@ void io_process_msg()
 		{
 			/* Get iodesc */
 			thread = thr_get(fs_res.thr_id);
+
+            if(!thread)
+            {
+				count--;
+				continue; // this was not sent by io subsystem
+			}
+
 			iosrc = &thread->io_event_src; 
 
 			if(!(iosrc->flags & IOEVT_FLAG_WAITING_RESPONSE)) 
@@ -361,7 +434,7 @@ void io_process_msg()
 			thread = thr_get(res.msg_id); 
 
 			/* Invoke post processing function */
-			if(thread->swp_io_finished.callback != NULL)
+			if(thread && thread->swp_io_finished.callback != NULL)
 			{
 				UINT32 (*sc)(struct pm_thread *, UINT32) = thread->swp_io_finished.callback;
 				thread->swp_io_finished.callback = NULL;
@@ -459,10 +532,12 @@ BOOL io_begin_open(struct fsio_event_source *iosrc, char *filename, UINT32 flen,
 			task = tsk_get(iosrc->id);
 
 			/* Check if this source has pending IO */
-			if(iosrc->flags & IOEVT_FLAG_WAITING_RESPONSE) return FALSE;
+			if(!task || (iosrc->flags & IOEVT_FLAG_WAITING_RESPONSE)) return FALSE;
+
+			iosrc->smo = share_mem(filesystem_service, filename, flen+1, READ_PERM | WRITE_PERM);
+            if(iosrc->smo == -1) return FALSE;
 
 			iosrc->flags |= IOEVT_FLAG_WAITING_RESPONSE;
-			iosrc->smo = share_mem(filesystem_service, filename, flen+1, READ_PERM | WRITE_PERM);
 			
 			msg_open.command   = STDFSS_OPEN;
 			msg_open.thr_id    = task->id;
@@ -798,6 +873,20 @@ UINT32 ioslot_get_free()
 
 	slot = ioslots.free_first;
 	ioslots.free_first = slot->next_free;
+    ioslots.free_count--;
 	return (((UINT32)slot) - (UINT32)ioslots.slots) / sizeof(struct io_slot);
 }
 
+void ioslot_return(UINT32 id)
+{
+	struct io_slot *ioslot;
+
+	ioslot = &ioslots.slots[id];
+    			
+	/* Return ioslot to free list */
+	ioslot->next_free = ioslots.free_first;
+	ioslot->type = IOSLOT_TYPE_FREE;
+	ioslot->task_id = 0xFFFF;
+	ioslots.free_first = ioslot;
+	ioslots.free_count++;
+}

@@ -26,7 +26,8 @@
 
 void register_signal(int code, int term);
 
-void init_consoles(){
+void init_consoles()
+{
 	struct stddev_ioctl_cmd ioctl;
 	struct stddev_ioctrl_res ioctlres;
 	struct stdservice_query_interface query_cmd;
@@ -43,7 +44,7 @@ void init_consoles(){
 	send_msg(CONS_TASK, STDSERVICE_PORT, &query_cmd);
 
 	while (get_msg_count(CSL_REQUEST_PORT)==0){ reschedule(); }
-
+      
 	get_msg(CSL_REQUEST_PORT, &query_res, &id);
 
 	if(query_res.ret == STDSERVICE_RESPONSE_FAILED)
@@ -59,7 +60,7 @@ void init_consoles(){
 	send_msg(CONS_TASK, STDSERVICE_PORT, &query_cmd);
 
 	while (get_msg_count(CSL_REQUEST_PORT)==0){ reschedule(); }
-
+    
 	get_msg(CSL_REQUEST_PORT, &query_res, &id);
 
 	if(query_res.ret == STDSERVICE_RESPONSE_FAILED)
@@ -68,7 +69,7 @@ void init_consoles(){
 	}
 
 	console_stdchardev_port = query_res.port;
-
+    
 	// now initialize each console
 	for (i = 0; i < NUM_TERMS; i++)
 	{
@@ -102,7 +103,7 @@ void init_consoles(){
 		send_msg(CONS_TASK, console_stddev_port, &ioctl);
 
 		while (get_msg_count(CSL_ACK_PORT)==0){ reschedule(); }
-
+        
 		get_msg(CSL_ACK_PORT, &ioctlres, &id);
 
 		// register key up and down signals

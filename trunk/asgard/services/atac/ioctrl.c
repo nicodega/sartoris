@@ -518,14 +518,13 @@ int ioctrl_enumdevs(struct atac_ioctl_enumdevs *cmd, int task, struct stddev_ioc
 	/* Atemt reading params smo */
 	if(read_mem(cmd->enum_dev_smo, 0 , sizeof(struct atac_enum_dev_param), &params))
 	{
-		res->dev_error = ATAC_IOCTRLERR_INVALIDSMO;
+        res->dev_error = ATAC_IOCTRLERR_INVALIDSMO;
 		return 1;
 	}
 
 	unsigned short id = params.continuation;
 
 	/* Devices loop will go through physical, and then logical devices. */
-
 	int i = -1, a = 0, c = 0, d = 0, ld = 0;
 
 	for(a = 0; a < MAX_ADAPTERS && i < id; a++)
@@ -535,7 +534,7 @@ int ioctrl_enumdevs(struct atac_ioctl_enumdevs *cmd, int task, struct stddev_ioc
 			for(d = 0; d < 2 && i < id; d++)
 			{
 				if(ata_adapters[a].channels[c].devices[d].reg_config_info != REG_CONFIG_TYPE_NONE && ata_adapters[a].channels[c].devices[d].reg_config_info != REG_CONFIG_TYPE_UNKN)
-				{
+				{   
 					ldev = &ata_adapters[0].channels[0].devices[0].ldev;		
 					i++;
 
@@ -561,14 +560,14 @@ int ioctrl_enumdevs(struct atac_ioctl_enumdevs *cmd, int task, struct stddev_ioc
 		res->dev_error = ATAC_IOCTRLERR_ENUMFINISHED;
 		return 1;
 	}
-
-	/* Write device info */	
+    
+    /* Write device info */	
 	params.devinf.id = ldev->id;
 	params.devinf.ptype = ldev->ptype;
 	params.devinf.bootable = ldev->bootable;
 	params.devinf.start_lba = ldev->slba;
 	params.devinf.size = (ldev->elba - ldev->slba) + 1;
-	params.devinf.pid = (((ldev->channel*ldev->adapter) << 1) | ldev->drive) | STDDEV_PHDEV_FLAG;
+	params.devinf.pid = (((ldev->channel * ldev->adapter) << 1) | ldev->drive) | STDDEV_PHDEV_FLAG;
 	params.devinf.metadata_end = ldev->metadata_end;
 
 	/* Copy fs name if alt os type name */
@@ -586,7 +585,11 @@ int ioctrl_enumdevs(struct atac_ioctl_enumdevs *cmd, int task, struct stddev_ioc
 	params.continuation++;
 
 	/* Write device info an continuation */
-	write_mem(cmd->enum_dev_smo, 0 , sizeof(struct atac_enum_dev_param), &params);
+	if(write_mem(cmd->enum_dev_smo, 0 , sizeof(struct atac_enum_dev_param), &params) < 0)
+    {
+        res->dev_error = ATAC_IOCTRLERR_INVALIDSMO;
+		return 1;
+    }
 
 	res->dev_error = ATAC_IOCTRLERR_OK;
 	res->ret = STDDEV_OK;

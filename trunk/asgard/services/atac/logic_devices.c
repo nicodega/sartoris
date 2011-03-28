@@ -221,7 +221,7 @@ int ldev_find(struct ata_channel *channel, int dev)
 		do
 		{
 			if(channel_read(channel, dev, (unsigned int)channel->reg_buffer, extendedlba, 1))
-			{
+			{                
 				return 1;
 			}
 
@@ -241,7 +241,6 @@ int ldev_find(struct ata_channel *channel, int dev)
 
 			add_tail(&channel->devices[dev].ptables, ptinf);
 
-
 			for(i = 0;i < 4; i++)
 			{
 				/* Is partition valid? */
@@ -255,6 +254,7 @@ int ldev_find(struct ata_channel *channel, int dev)
 				}
 				else
 				{
+                    /* A common partition :) */
 					struct logic_device *ldev = (struct logic_device*)malloc(sizeof(struct logic_device));
 
 					ldev->adapter = channel->data_adapterid;	// adapter on which the channel is located

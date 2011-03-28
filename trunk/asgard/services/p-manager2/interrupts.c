@@ -63,7 +63,7 @@ void int_init()
 	create_int_handler(ALIG_CHK, EXC_HANDLER_THR, false, 0);
 	create_int_handler(SIMD_FAULT, EXC_HANDLER_THR, false, 0);
 
-	pmthr = thr_get(EXC_HANDLER_THR);
+    pmthr = thr_create(EXC_HANDLER_THR, NULL);
 	pmthr->task_id = PMAN_TASK;
 	pmthr->state = THR_INTHNDL;	// ehm... well... it IS an interrupt handler :D
 
@@ -79,7 +79,7 @@ void int_init()
 
 	create_int_handler(PAGE_FAULT, PGF_HANDLER_THR, FALSE, 0);
 
-	pmthr = thr_get(PGF_HANDLER_THR);
+    pmthr = thr_create(PGF_HANDLER_THR, NULL);
 	pmthr->task_id = PMAN_TASK;
 	pmthr->state = THR_INTHNDL;	
 
@@ -100,7 +100,7 @@ void int_init()
 		interrupt_signals[i].total = 0;
 	}
 
-	pmthr = thr_get(INT_HANDLER_THR);
+    pmthr = thr_create(INT_HANDLER_THR, NULL);
 	pmthr->task_id = PMAN_TASK;
 	pmthr->state = THR_INTHNDL;	
 }
@@ -183,7 +183,12 @@ void gen_ex_handler()
 		}
 		else
 		{
-			//pman_print_and_stop("System Service exception tsk=%i, thr=%i, ex=%i ", tsk->id, thr->id, exception);
+            if(thr == NULL)
+		    {
+			    pman_print_and_stop("EXCEPTION: NULL TASK");
+			    run_thread(SCHED_THR);
+		    }
+
 			pman_print_and_stop("System Service exception tsk=%i, thr=%i, ex=%i ", tsk->id, thr->id, exception);
 			
 			thr->state = THR_EXEPTION;
@@ -324,10 +329,8 @@ void int_common_handler()
 		/* FIX: Ack PICs if int is from hardware */
 
 		/* Tell Scheduler to move our current executing thread */
-		//sch_force_complete();
+		sch_force_complete();
 
-		// FIX: Nesting tasks must ret_from_int();
-		//run_thread(SCHED_THR);
 		ret_from_int();
 	}
 }

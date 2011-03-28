@@ -20,15 +20,20 @@
 
 #include "shell_iternals.h"
 
+void term_color_printf(int term, char* format, int color, ...){
+    vsprintf(out_buffer, format, (int*) (&color + 1));
+    term_color_prints(term, out_buffer, color, BUFFER_SIZE, 0);
+}
+
 /* 
  * Prints on the console waiting for console confirmation.
  */
 void term_print(int term, char* str){
-  term_color_print(term, str, 0x07);
+    term_color_print(term, str, 0x07);
 }
 
 void term_color_print(int term, char* str, int color){
-	term_color_prints(term, str, color, BUFFER_SIZE, 1);
+    term_color_prints(term, str, color, BUFFER_SIZE, 1);
 }
 
 void term_color_prints(int term, char* str, int color, int size, int buff)
@@ -52,7 +57,6 @@ void term_color_prints(int term, char* str, int color, int size, int buff)
 		smo = share_mem(CONS_TASK, str, size, READ_PERM);
 	}
 
-
 	// change att using IOCTRL
 	ioctl.command = STDDEV_IOCTL;
 	ioctl.request = CSL_IO_SETATT;
@@ -74,13 +78,13 @@ void term_color_prints(int term, char* str, int color, int size, int buff)
 	send_msg(CONS_TASK, console_stddev_port, &ioctl);
 
 	while (get_msg_count(CSL_ACK_PORT)==0){ reschedule(); }
-	
+
 	get_msg(CSL_ACK_PORT, &ioctlres, &id);
 
 	send_msg(CONS_TASK, console_stdchardev_port, &csl_io);
 
 	while (get_msg_count(CSL_ACK_PORT)==0){ reschedule(); }
-	
+
 	get_msg(CSL_ACK_PORT, &csl_res, &id);
 
 	claim_mem(smo);
@@ -105,7 +109,7 @@ void term_clean(int term)
 	while (get_msg_count(CSL_ACK_PORT)==0){ reschedule(); }
 	get_msg(CSL_ACK_PORT, &csl_res, &id);   
 }
-
+int k = 0;
 /*
  * Show console prompt and wait for command. (Non blocking)
  */
@@ -140,7 +144,10 @@ void term_prepare_input(int term, char echo)
 	csl_io.dev = term;
 	csl_io.ret_port = CSL_SCAN_ACK_PORT;
 
-	send_msg(CONS_TASK, console_stdchardev_port, &csl_io);
+	if(send_msg(CONS_TASK, console_stdchardev_port, &csl_io) < 0)
+    {
+        string_print("SHELL COULD NOT SEND CONSOLE MESSAGE",160*2 + 80,12);
+    }
 }
 
 int get_console(int term)

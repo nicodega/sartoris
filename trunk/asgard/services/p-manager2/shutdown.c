@@ -84,9 +84,7 @@ BOOL cmd_shutdown_step()
 					send_msg(tsk->id, STDSERVICE_PORT, &sht_cmd);
 				}
 				else if(tsk->state == TSK_LOADING)
-				{
-					tsk->state = TSK_NOTHING;
-
+				{					
 					/* Send a message to creating task so it knows task wont load */
 					if(tsk->command_inf.creator_task_id != 0xFFFF)
 					{
@@ -100,6 +98,7 @@ BOOL cmd_shutdown_step()
 
 						send_msg(tsk->command_inf.creator_task_id, tsk->command_inf.response_port, &msg_ans);  
 					}
+                    tsk_destroy(tsk);
 				}
 			}
 		}
@@ -126,7 +125,7 @@ BOOL cmd_shutdown_step()
 			if(get_msg(SHUTDOWN_PORT, &res, &task_id) == SUCCESS)
 			{
 				tsk = tsk_get(task_id);
-				if(res.command == STDSERVICE_DIE && res.ret == STDSERVICE_RESPONSE_OK)
+				if(tsk && res.command == STDSERVICE_DIE && res.ret == STDSERVICE_RESPONSE_OK)
 				{
 					/* Begin Unload */
 					tsk->command_inf.command_sender_id = 0;
@@ -163,8 +162,6 @@ BOOL cmd_shutdown_step()
 					}
 					else if(tsk->state == TSK_LOADING)
 					{
-						tsk->state = TSK_NOTHING;
-
 						/* Send a message to creating task so it knows task wont load */
 						if(tsk->command_inf.creator_task_id != 0xFFFF)
 						{
@@ -178,6 +175,7 @@ BOOL cmd_shutdown_step()
 
 							send_msg(tsk->command_inf.creator_task_id, tsk->command_inf.response_port, &msg_ans);  
 						}
+                        tsk_destroy(tsk);
 					}
 				}
 			}

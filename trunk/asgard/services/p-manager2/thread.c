@@ -26,8 +26,11 @@
 #include "scheduler.h"
 #include "io.h"
 #include "interrupts.h"
+#include "vm.h"
+#include "layout.h"
 
-static struct pm_thread thread_info[MAX_THR];
+static struct pm_thread *thread_info[MAX_THR];
+static struct pm_thread pman_sched_thr;
 
 void thr_init()
 {
@@ -35,35 +38,64 @@ void thr_init()
 
 	for (i=0; i<MAX_THR; i++) 
 	{
-		thread_info[i].id = i;
-		thread_info[i].state = THR_NOTHING;
-		thread_info[i].flags = THR_FLAG_NONE;
-		thread_info[i].next_thread = NULL;
-		thread_info[i].vmm_info.fault_next_thread = NULL;
-		thread_info[i].interrupt = -1;
-		thread_info[i].vmm_info.page_displacement = 0;
-		thread_info[i].vmm_info.page_in_address = NULL;
-
-		thread_info[i].stack_addr = NULL;
-		thread_info[i].vmm_info.swaptbl_next = NULL;
-		thread_info[i].task_id = -1;
-
-		sch_init_node(&thread_info[i].sch);		
-
-		io_init_source(&thread_info[i].io_event_src, FILE_IO_THREAD, i);
-		io_init_event(&thread_info[i].io_finished, &thread_info[i].io_event_src);
-		thread_info[i].swp_io_finished.callback = NULL;
-
-		init_thr_signals(&thread_info[i]);
+		thread_info[i] = NULL;
 	}
 }
 
+struct pm_thread *thr_create(UINT16 id, struct pm_task *task)
+{
+    if(thread_info[id] != NULL) return NULL;
+
+    if(task != NULL && task->id == 0 && id == SCHED_THR)
+        thread_info[id] = &pman_sched_thr;
+    else
+        thread_info[id] = (struct pm_thread *)kmalloc(sizeof(struct pm_thread));
+
+    if(thread_info[id] == NULL) return NULL;
+
+    struct pm_thread * thr = thread_info[id];
+
+    thr->id = id;
+
+    if(task == NULL) return thr;
+
+    thr->state = THR_NOTHING;
+    thr->flags = THR_FLAG_NONE;
+    thr->next_thread = NULL;
+    thr->vmm_info.fault_next_thread = NULL;
+    thr->interrupt = 0;
+    thr->vmm_info.page_displacement = 0;
+    thr->vmm_info.page_in_address = NULL;
+
+    thr->stack_addr = NULL;
+    thr->vmm_info.swaptbl_next = NULL;
+    thr->task_id = task->id;
+
+    sch_init_node(&thr->sch);		
+
+    io_init_source(&thr->io_event_src, FILE_IO_THREAD, id);
+    io_init_event(&thr->io_finished, &thr->io_event_src);
+    thr->swp_io_finished.callback = NULL;
+
+    init_thr_signals(thr);
+
+    vmm_init_thread_info(&thr->vmm_info);
+
+    /* Fix thread list */
+	if(task->first_thread != NULL)
+		thr->next_thread = task->first_thread;
+	
+	task->first_thread = thr;
+	task->num_threads++;
+
+    return thr;
+}
 
 // gets the specified thread
 struct pm_thread *thr_get(UINT16 id)
 {
 	if(id >= MAX_THR) return NULL;
-	return &thread_info[id];
+	return thread_info[id];
 }
 
 UINT16 thr_get_id(UINT32 lower_bound, UINT32 upper_bound) 
@@ -72,9 +104,8 @@ UINT16 thr_get_id(UINT32 lower_bound, UINT32 upper_bound)
 
 	for (i = 1; i <= MAX_THR; i++) 
 	{
-		if (thread_info[i].state == THR_NOTHING) 
-		return i;
-    
+		if (thread_info[i] == NULL) 
+            return i;
 	}
 
 	return 0xFFFF;
@@ -97,13 +128,13 @@ int thr_destroy_thread(UINT16 thread_id)
 	for this thread, and thread must stay KILLED.
 	*/
 
-	if(thr == NULL || thr->state == THR_NOTHING) 
+	if(thr == NULL) 
 	{
 		return -1;
 	} 
 	else 
 	{
-		if((thr->state != THR_KILLED) && destroy_thread(thread_id) != SUCCESS) 
+		if(thr->state != THR_KILLED && destroy_thread(thread_id) != SUCCESS) 
 		{
 			return -1;
 		} 
@@ -111,38 +142,43 @@ int thr_destroy_thread(UINT16 thread_id)
 		{
 			struct pm_task *task = tsk_get(thr->task_id);
 
-			task->num_threads--;
+            if(task == NULL) return -1;
 
-			/* Fix Task List */
-			if(task->first_thread == thr)
-			{
-				task->first_thread = thr->next_thread;
-			}
-			else
-			{
-				// add a prev thread !!! this is awful
-				struct pm_thread *currTrhead = task->first_thread;
-				while(currTrhead != NULL && currTrhead->next_thread != thr)
-				{
-					currTrhead = currTrhead->next_thread;
-				}
-				currTrhead->next_thread = thr->next_thread;
-			}
+			if(thr->state != THR_KILLED) 
+            {
+                task->num_threads--;
 
-			if(!(thr->state != THR_KILLED) && (thr->flags & (THR_FLAG_PAGEFAULT | THR_FLAG_PAGEFAULT_TBL)))
+			    /* Fix Task List */
+			    if(task->first_thread == thr)
+			    {
+				    task->first_thread = thr->next_thread;
+			    }
+			    else
+			    {
+				    // add a prev thread !!! this is awful
+				    struct pm_thread *currTrhead = task->first_thread;
+				    while(currTrhead != NULL && currTrhead->next_thread != thr)
+				    {
+					    currTrhead = currTrhead->next_thread;
+				    }
+				    currTrhead->next_thread = thr->next_thread;
+			    }
+            }
+
+			if(thr->state != THR_KILLED && (thr->flags & (THR_FLAG_PAGEFAULT | THR_FLAG_PAGEFAULT_TBL)))
 			{
                 /* Thread is waiting for a page fault (either swap or PF) */
-				thr->state       = THR_KILLED;
+				thr->state = THR_KILLED;
 				ret++;
 			}
 			else
 			{
-				thr->state       = THR_NOTHING;
-				thr->task_id     = 0xFFFF;
-				thr->next_thread = NULL;
+                thread_info[thr->id] = NULL;
+                kfree(thr);
+                thr = NULL;
 			}
 			
-			if(thr->state == THR_KILLED && task->killed_threads > 0) 
+			if(thr != NULL && thr->state == THR_KILLED) 
 				task->killed_threads--;
 
 			/* 
@@ -150,7 +186,7 @@ int thr_destroy_thread(UINT16 thread_id)
 			Should we implement files, or locked pages, a call to free them 
 			must be issued here 
 			*/
-			if(!(thr->state != THR_KILLED))
+			if(thr != NULL)
 			{
 				if(thr->interrupt != 0)	
 					int_dettach(thr);

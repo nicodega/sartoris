@@ -53,6 +53,33 @@ int sch_schedule()
 {	
 	static BOOL intraised = FALSE;
 	struct pm_thread *thread = NULL;
+
+/*  REMOVE THIS */
+   /* // dump the scheduler content
+    struct pm_thread *t = NULL;
+    int i = 0;
+    pman_print("Active thr %i ", scheduler.active_threads);
+    for(i = 0; i < SCHED_MAXPRIORITY; i++)
+    {
+        if(scheduler.first[i] != NULL)
+        {
+            t = scheduler.first[i];
+            while(t != NULL)
+            {
+                pman_print("waiting %i ", t->id);
+                t = t->sch.next;
+            }
+        }
+    }
+    // now dump blocked threads
+    t = scheduler.first_blocked;
+    while(t != NULL)
+    {
+        pman_print("blocked %i ", t->id);
+        t = t->sch.next;
+    }
+    for(;;);
+	*/
 	
 	/* Deal with last_runned thread */
 	if(scheduler.last_runned != NULL)
@@ -92,11 +119,10 @@ int sch_schedule()
 	
 	scheduler.running = scheduler.first[scheduler.list_selector];
 	scheduler.running->sch.quantums--; // spent a quantum
-
-	//pman_print("schedule %i q: %i ", scheduler.running->id, scheduler.running->sch.quantums);		
-	
+    	
 	scheduler.running->state = THR_RUNNING;
 	
+    //pman_print("Running %i ", scheduler.running->id);
 	/* Run next thread */
 	run_thread(scheduler.running->id);
 
@@ -109,7 +135,6 @@ int sch_schedule()
 	scheduler.last_runned = scheduler.running;
 	scheduler.running = NULL;
 
-	
 	return intraised;
 }
 
