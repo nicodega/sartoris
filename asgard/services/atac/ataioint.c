@@ -70,17 +70,6 @@ int int_enable_irq(struct ata_channel *channel)
 		return 2;
 
 	// create the int handler thread
-/*  struct thread thr;
-
-	thr.task_num = get_current_task();
-	thr.invoke_mode = PRIV_LEVEL_ONLY;                      
-	thr.invoke_level = 0;
-	thr.ep = &int_handler;
-	thr.stack = (void*)(channel->int_stack_size - 0x4);
-
-	create_thread(TIMER_THR, &thr);
-	create_int_handler(channel->irq + 32, thrid, true, 7 );
-*/
 	struct pm_msg_create_thread msg_create_thr;
 	
 	msg_create_thr.pm_type = PM_CREATE_THREAD;

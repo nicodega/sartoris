@@ -288,7 +288,6 @@ void cat(int term, char **args, int argc)
 		return;
 	}
 
-
 	while(finf->file_size > 0)
 	{
 		s = MIN(129, (unsigned int)finf->file_size);

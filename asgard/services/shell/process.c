@@ -186,8 +186,6 @@ void task_finished(int task, int code)
 	// show prompt
 	if(console != -1)
 	{
-		// if task died because of an exception, show a message
-
 		term_print(console, "\n");
 		show_prompt(console);		
 	}

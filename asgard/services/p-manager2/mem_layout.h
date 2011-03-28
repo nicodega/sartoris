@@ -27,24 +27,22 @@
 Memory Layout Defines 
 
 **********************************************/
+extern int edata[];
 
-/* PMANSIZE WILL BE SENT AS A COMPILATION PARAMETER */
-#ifndef PMAN_SIZE
-#define PMAN_SIZE 4
-#endif
+#define PMAN_SIZE (((int)edata % 0x1000 == 0)? (int)edata : (int)edata - ((int)edata % 0x1000) + 0x1000)
 
 #define PMAN_DEFAULT_MEM_SIZE       0x2000000                   // Default memory size = 32 MB 
 
-#define SARTORIS_PROCBASE_LINEAR    MIN_TASK_OFFSET             // base linear address used by sartoris
+#define SARTORIS_PROCBASE_LINEAR    MIN_TASK_OFFSET             // base linear address used by sartoris (on sartoris 2.0 it's 0xC800000 (200MB))
 
 /* Task defines */
 #define PMAN_TASK_SIZE              (0xFFFFFFFF - SARTORIS_PROCBASE_LINEAR)
-#define PMAN_THREAD_STACK_BASE      0x7FFFFFFF                  // 2GB 
-#define PMAN_MAPPING_BASE           0x80000000                  // 2GB this is where we will start mapping libs or other stuff
+#define PMAN_THREAD_STACK_BASE      0x7FFFFFFF                  // 2GB (and down)
+#define PMAN_MAPPING_BASE           0x80000000                  // 2GB from here we will start mapping libs or other stuff
 #define PMAN_TSK_MAX_ADDR           (0xFFFFFFFF - SARTORIS_PROCBASE_LINEAR) //(0x40000000 + SARTORIS_PROCBASE_LINEAR)      
 
 /* Memory regions size */
-#define PMAN_CODE_SIZE              0x200000                    // 2 MB for pman code
+#define PMAN_CODE_SIZE              0x200000                    // 2 MB for pman code (the stacks for PMAN will start here, so everything on PMAN must fit in less than 2MB)
 #define PMAN_MULTIBOOT_SIZE         0x10000                     // size of the multiboot region
 #define PMAN_MALLOC_SIZE            (((0x400000 - PMAN_MULTIBOOT_SIZE) - PMAN_CODE_SIZE))
 
@@ -57,10 +55,11 @@ Memory Layout Defines
 #define PMAN_MALLOC_PHYS            (PMAN_MULTIBOOT_PHYS + PMAN_MULTIBOOT_SIZE);
 #define PMAN_POOL_PHYS              (0x400000 + PMAN_CODE_PHYS)                   // the pool will begin at the end of the first PMAN 4MB
 #define PMAN_INIT_RELOC_PHYS        (PMAN_POOL_PHYS + 0x400000)                   // where we will relocate the init images 
-                                                                                  // (if this is changed stage 2 copy procedure must be changed too)
-
+                                                                                  // (if this is changed stage 2 copy procedure might have to be changed too)
+                                                                                  // always leave at least 4MB in case the system has 4GB and
+                                                                                  // we need 1024 page tables (they'll be taken from the pool)
 #define PMAN_SARTORIS_MMAP_PHYS     0x200000    // where bootinfo is left by sartoris on physical memory
-#define PMAN_SARTORIS_MMAP_LINEAR   0x3F0000    // where sartoris maps bootinfo on init task
+#define PMAN_SARTORIS_MMAP_LINEAR   0x3F0000    // where sartoris maps bootinfo on init task (linear address)
 #define PMAN_SARTORIS_INIT_PHYS     0x900000    // where sartoris left the init image
 
 /* PMAN linear memory layout */
@@ -71,7 +70,7 @@ Memory Layout Defines
 
 #define PMAN_STAGE1_MAPZONE         0x390000    // were we will map on stage 1 for copy (linear)
                                                 // this must be inside the init image page table (4MB starting at SARTORIS_PROCBASE_LINEAR).
-                                                // and shouldn't overlap with the init code.
+                                                // and shouldn't overlap with the init code or stack.
 #define PMAN_STAGE2_MAPZONE_SOURCE  0x210000    // were we will map on stage 2 for copy (linear) (next to multiboot mapping)
 #define PMAN_STAGE2_MAPZONE_DEST    0x211000    // were we will map on stage 2 for copy (linear)
 
@@ -80,6 +79,7 @@ Memory Layout Defines
 #define PMAN_MULTIBOOT_PAGES        (PMAN_MULTIBOOT_SIZE / PAGE_SIZE)
 #define PMAN_MALLOC_PAGES           (PMAN_MALLOC_SIZE / PAGE_SIZE)
 
+// these are virtual stack addresses
 #define PMAN_INTCOMMON_STACK_ADDR   (PMAN_CODE_SIZE - 0x10000)
 #define PMAN_STEALING_STACK_ADDR    (PMAN_CODE_SIZE - 0x8000)
 #define PMAN_AGING_STACK_ADDR       (PMAN_CODE_SIZE - 0x6000)    

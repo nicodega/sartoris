@@ -41,7 +41,7 @@ void vmm_page_aging()
 {
 	struct taken_table *ttable;
 	struct vmm_page_table *ptbl;
-	UINT32 pman_laddr, tbl_index, b, tindex, pass, dir_index;
+	UINT32 pman_laddr, tbl_index, b, tindex, pass, dir_index, delay;
 	struct vmm_pman_assigned_record *assigned;
 	struct pm_task *task;
 	struct vmm_page_directory *pdir;
@@ -76,6 +76,11 @@ void vmm_page_aging()
 
 					/* We can now read the entry on pman table, and get the table */
 					task = tsk_get(assigned->task_id);
+                    if(task == NULL)
+                    {
+                        int_set(0);
+                        continue;
+                    }
 					pdir = task->vmm_inf.page_directory;
 
 					if(pdir->tables[assigned->dir_index].ia32entry.present != 1)
@@ -86,14 +91,14 @@ void vmm_page_aging()
 					
 					ptbl = (struct vmm_page_table*)PHYSICAL2LINEAR(PG_ADDRESS(pdir->tables[assigned->dir_index].b));
 					
-					if(ptbl->pages[entry->data.b_pg.tbl_index].entry.ia32entry.present != 1)
+                    tbl_index = entry->data.b_pg.tbl_index;
+
+					if(ptbl->pages[tbl_index].entry.ia32entry.present != 1)
 					{
 						int_set(0);
 						continue;              // page is not present
 					}
-
-					tbl_index = entry->data.b_pg.tbl_index;
-
+                    
 					/* This is our page! */
 					if(pass == 0)
 					{
@@ -115,8 +120,15 @@ void vmm_page_aging()
 				{
 					/* It's a ptable entry */
 					task = tsk_get(entry->data.b_ptbl.taskid);
-					pdir = task->vmm_inf.page_directory;
 					
+                    if(task == NULL)
+                    {
+                        int_set(0);
+                        continue;
+                    }
+					
+                    pdir = task->vmm_inf.page_directory;
+
 					dir_index = entry->data.b_ptbl.dir_index;
 
 					/* This is our page! */
@@ -144,12 +156,21 @@ void vmm_page_aging()
 		if(pass == 0)
 		{
 			pass++;
+            // switch to scheduler again, so processes can 
+            // use their pages.
+            // I'll let the scheduler schedule twice.
+            delay = 0;
+            while(delay < 1)
+            {
+                run_thread(SCHED_THR);
+                delay++;
+            }
 		}
 		else
 		{
 			pass = 0;
 
-			/* Finished */
+			/* Finished aging this region */
 			int_clear();
 			if(ABS(curr_ag_region - curr_st_region) > vmm.swap_thr_distance)
 			{

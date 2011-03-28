@@ -43,9 +43,9 @@ void init_swap_bitmap();
 
 /* Point modifiers on the stealing thread for page candidate selection. */
 #define PS_POINTS_TBL_MODIFIER		2	// page is a page table
-#define PS_POINTS_TBL_SWP_MODIFIER	2	// page is a page table with records swapped (requires IO)
+#define PS_POINTS_TBL_SWP_MODIFIER	3	// page is a page table with records swapped (requires IO)
 #define PS_POINTS_DIRTY_MODIFIER	4	// page is dirty (requires IO)
-#define PS_POINTS_A_MODIFIER		2	// A bit is turned on.
+#define PS_POINTS_A_MODIFIER		2	// "A" bit is turned on.
 #define PS_POINTS_AGE_MODIFIER		2	// This value will be multiplied by the page age.
 
 #endif

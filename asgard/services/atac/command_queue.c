@@ -56,11 +56,10 @@ struct device_command *queue_getnext(struct command_queue *queue, int channelid)
 		SIGNALHANDLER sigh = wait_signal_async(CHANNEL_COMMAND_EVENT, get_current_task(), SIGNAL_TIMEOUT_INFINITE, channelid, SIGNAL_PARAM_IGNORE, NULL, NULL);
 			
 		leave_mutex(&queue->queue_mutex);
-
-		/* wait for the signal */
+        /* wait for the signal */
 		while(check_signal(sigh, NULL, NULL) == 0) { reschedule(); }
-
-		discard_signal(sigh);
+        
+        discard_signal(sigh);
 
 		wait_mutex(&queue->queue_mutex);
 		
@@ -121,7 +120,7 @@ void queue_enqueue(struct ata_channel *channel, int device, struct device_comman
 
 	if(length(&channel->queue.queue[device]) == 1 && length(&channel->queue.queue[(device - 1) & 0x1]) == 0)
 	{
-		send_event(get_current_task(), CHANNEL_COMMAND_EVENT, channel->id, 0, 0, 0);		
+        send_event(get_current_task(), CHANNEL_COMMAND_EVENT, channel->id, 0, 0, 0);		
 	}
 
 	leave_mutex(&channel->queue.queue_mutex);

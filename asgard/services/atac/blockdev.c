@@ -68,7 +68,7 @@ int process_blockdev(struct stdblockdev_cmd *bmsg, int task, struct stdblockdev_
 	device and lba is lower than metadata start lba, fail. */
 	if(!(bmsg->dev & STDDEV_PHDEV_FLAG) && (bmsg->command == BLOCK_STDDEV_WRITE || bmsg->command == BLOCK_STDDEV_WRITEM) && bmsg->pos < ldev->metadata_end)
 	{
-print("tried to write metadata on a logic device",0);
+        print("tried to write metadata on a logic device",0);
 		return 0;
 	}
 	

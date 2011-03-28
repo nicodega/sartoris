@@ -28,8 +28,7 @@ SECTIONS
   .rodata : { *(.rodata .rodata.* .gnu.linkonce.r.* ) }      /* defaults to :text */
   .rodata1 : { *(.rodata1) }
   PROVIDE (etext = .);
-  . = ALIGN(0x1000); /* move to a new page in memory */
-  .data : { *(.data .data.* .gnu.linkonce.d.*) } :data
+  .data ALIGN(0x1000) : { *(.data .data.* .gnu.linkonce.d.*) } :data
   PROVIDE (edata = .);
   .bss :
   {

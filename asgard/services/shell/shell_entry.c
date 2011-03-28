@@ -22,8 +22,6 @@
 
 void service_main (void);
 
-extern char *pipes_srv_name;
-
 void _start()
 {
 	service_main();

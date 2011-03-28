@@ -37,14 +37,26 @@ void _start()
 	struct directory_register reg_cmd;
 	struct directory_response dir_res;
 
-	__asm__ ("sti"::);
+    // open ports with permisions for services only (lv 0, 1, 2) //
+    open_port(1, 2, PRIV_LEVEL_ONLY);
+    open_port(ATAC_SIGNALS_PORT, 2, PRIV_LEVEL_ONLY);
+	open_port(STDSERVICE_PORT, 2, PRIV_LEVEL_ONLY);
+    open_port(STDDEV_PORT, 2, PRIV_LEVEL_ONLY);
+    open_port(STDDEV_BLOCK_DEV_PORT, 2, PRIV_LEVEL_ONLY);
+    open_port(ATAC_THREAD_ACK_PORT, 2, PRIV_LEVEL_ONLY);
+    
+    __asm__ __volatile__ ("sti"::);
 
-	/* Register with directory */
+    /* Register with directory */
 	reg_cmd.command = DIRECTORY_REGISTER_SERVICE;
 	reg_cmd.ret_port = 1;
 	reg_cmd.service_name_smo = share_mem(DIRECTORY_TASK, service_name, 13, READ_PERM);
-	send_msg(DIRECTORY_TASK, DIRECTORY_PORT, &reg_cmd);
-
+		
+    while(send_msg(DIRECTORY_TASK, DIRECTORY_PORT, &reg_cmd) < 0)
+    {
+        reschedule(); // directory has not opened it's port yet
+    }
+        
 	while (get_msg_count(1) == 0) { reschedule(); }
 
 	get_msg(1, &dir_res, &id);
@@ -54,26 +66,26 @@ void _start()
 	/* Resolve DMA with directory */
 	service_name = "system/dmac";
 	
-	// resolve default fs service //
 	resolve_cmd.command = DIRECTORY_RESOLVEID;
-	resolve_cmd.ret_port = 0;
+	resolve_cmd.ret_port = 1;
 	resolve_cmd.service_name_smo = share_mem(DIRECTORY_TASK, service_name, 12, READ_PERM);
 	resolve_cmd.thr_id = get_current_thread();
-
+        
 	do
 	{
 		send_msg(DIRECTORY_TASK, DIRECTORY_PORT, &resolve_cmd);
 
-		while (get_msg_count(0) == 0) reschedule();
+        while (get_msg_count(1) == 0){ reschedule(); }
 
-		get_msg(0, &dir_res, &id);
+		get_msg(1, &dir_res, &id);
 
 		if(dir_res.ret != DIRECTORYERR_OK)
 			dma_man_task = -1;
 		else
 			dma_man_task = dir_res.ret_value;
 	}while(dma_man_task == -1);
-
+   
+    close_port(1);
     claim_mem(resolve_cmd.service_name_smo);
 
 	dma_man_task = dir_res.ret_value;
@@ -85,16 +97,17 @@ void _start()
 
 	/* Find ata devices on system */
 	ata_find();
-
+    int k = 0;
 	/* Command processing queue */
 	while(!die)
 	{
-		while (get_msg_count(STDSERVICE_PORT) == 0 
+        while (get_msg_count(STDSERVICE_PORT) == 0 
 			&& get_msg_count(STDDEV_PORT) == 0 
 			&& get_msg_count(STDDEV_BLOCK_DEV_PORT) == 0 
 			&& get_msg_count(ATAC_THREAD_ACK_PORT) == 0)
 		{ 			
-			reschedule(); 
+			string_print("ATAC ALIVE",19*160 + 40,k++);
+		    reschedule(); 
 		}
 
 		while(get_msg_count(ATAC_THREAD_ACK_PORT) > 0)

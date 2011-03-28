@@ -87,8 +87,18 @@ void _start()
 	struct stdservice_res servres;
 	struct stdservice_res dieres;
 
+	/* open ports used */
+	open_port(OFS_DIRECTORY_PORT, 2, PRIV_LEVEL_ONLY);
+	open_port(OFS_CHARDEV_PORT, 2, PRIV_LEVEL_ONLY);
+	open_port(OFS_BLOCKDEV_PORT, 2, PRIV_LEVEL_ONLY);
+	open_port(STDFSS_PORT, -1, UNRESTRICTED);
+	open_port(STDSERVICE_PORT, 1, PRIV_LEVEL_ONLY); 		// should set perms only to the scheduler
+	open_port(OFS_STDDEVRES_PORT, 2, PRIV_LEVEL_ONLY);
+	open_port(OFS_PMAN_PORT, 0, PRIV_LEVEL_ONLY);
+
 	// set interrupts
 	__asm__ ("sti"::);
+
 	init_mem(mbuffer, 1024 * 1024);
 
 	ver_res.command = STDFSS_VER;
@@ -102,7 +112,11 @@ void _start()
 	reg_cmd.command = DIRECTORY_REGISTER_SERVICE;
 	reg_cmd.ret_port = OFS_DIRECTORY_PORT;
 	reg_cmd.service_name_smo = share_mem(DIRECTORY_TASK, service_name, 11, READ_PERM);
-	send_msg(DIRECTORY_TASK, DIRECTORY_PORT, &reg_cmd);
+
+	while (send_msg(DIRECTORY_TASK, DIRECTORY_PORT, &reg_cmd) < 0)
+    { 
+        reschedule(); 
+    }
 
 	while (get_msg_count(OFS_DIRECTORY_PORT) == 0) { reschedule(); }
 
@@ -133,18 +147,7 @@ void _start()
 	init(&opened_files);
 	lpt_init(&mounted);
 	avl_init(&tasks);
-
-	/* open ports used */
-	/*
-	open_port(OFS_DIRECTORY_PORT, 2, PRIV_LEVEL_ONLY);
-	open_port(OFS_CHARDEV_PORT, 2, PRIV_LEVEL_ONLY);
-	open_port(OFS_BLOCKDEV_PORT, 2, PRIV_LEVEL_ONLY);
-	open_port(STDFSS_PORT, -1, UNRESTRICTED);
-	open_port(STDSERVICE_PORT, 1, PRIV_LEVEL_ONLY); 		// should set perms only to the scheduler
-	open_port(OFS_STDDEVRES_PORT, 2, PRIV_LEVEL_ONLY);
-	open_port(OFS_PMAN_PORT, 0, PRIV_LEVEL_ONLY);
-	*/
-
+    
 #ifdef OFS_DEVBLOCK_CACHE
 	bc_init();
 #endif
@@ -158,6 +161,7 @@ void _start()
 			&& get_msg_count(OFS_STDDEVRES_PORT) == 0 
 			&& (!check_idle() || (length(&processing_queue) == 0 && check_waiting_commands() == 0) )
 		){ 
+            string_print("OFS ALIVE",21*160,i++);
 			reschedule(); 
 		}
 

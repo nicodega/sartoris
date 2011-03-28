@@ -26,6 +26,6 @@ extern int printRow;
 extern int printCol;
 extern int printLColor;
 
-void print (char*, unsigned int);
+int print(char *format, ...);
 void clrscr(void);
 #endif

@@ -27,6 +27,8 @@
 #include "kmalloc.h"
 #include <services/pmanager/services.h>
 
+INT32 elf_fileclosed_callback(struct fsio_event_source *iosrc, INT32 ioret);
+
 INT32 elf_read_finished_callback(struct fsio_event_source *iosrc, INT32 ioret)
 {
 	struct pm_msg_response res_msg;
@@ -45,6 +47,7 @@ INT32 elf_read_finished_callback(struct fsio_event_source *iosrc, INT32 ioret)
 		{
 			send_msg(task->command_inf.creator_task_id, task->command_inf.response_port, &res_msg );
 		}
+        tsk_destroy(task);
 	}
 	else
 	{
@@ -52,14 +55,8 @@ INT32 elf_read_finished_callback(struct fsio_event_source *iosrc, INT32 ioret)
 		{
 			res_msg.status  = PM_INVALID_FILEFORMAT;
 			send_msg(task->command_inf.creator_task_id, task->command_inf.response_port, &res_msg );
-			task->command_inf.command_sender_id = 0;
-			task->command_inf.creator_task_id = -1;
 			
-			if(task->loader_inf.elf_pheaders != NULL) kfree(task->loader_inf.elf_pheaders);
-			if(task->loader_inf.full_path != NULL) kfree(task->loader_inf.full_path);
-			task->loader_inf.elf_pheaders = NULL;
-			task->loader_inf.full_path = NULL;
-			task->loader_inf.path_len = 0;
+            task->io_finished.callback = elf_fileclosed_callback;
 
 			/* Close the file */
 			io_begin_close(iosrc);
@@ -87,6 +84,7 @@ INT32 elf_readph_finished_callback(struct fsio_event_source *iosrc, INT32 ioret)
 		{
 			send_msg(task->command_inf.creator_task_id, task->command_inf.response_port, &res_msg );
 		}
+        tsk_destroy(task);
 	}
 	else if(task->command_inf.creator_task_id != 0xFFFF)
 	{
@@ -120,14 +118,9 @@ INT32 elf_readph_finished_callback(struct fsio_event_source *iosrc, INT32 ioret)
 		{
 			res_msg.status  = PM_INVALID_FILEFORMAT;
 			send_msg(task->command_inf.creator_task_id, task->command_inf.response_port, &res_msg );
-			task->command_inf.command_sender_id = 0;
-			task->command_inf.creator_task_id = -1;
 			
-			if(task->loader_inf.elf_pheaders != NULL) kfree(task->loader_inf.elf_pheaders);
-			if(task->loader_inf.full_path != NULL) kfree(task->loader_inf.full_path);
-			task->loader_inf.elf_pheaders = NULL;
-			task->loader_inf.full_path = NULL;
-			task->loader_inf.path_len = 0;
+            task->io_finished.callback = elf_fileclosed_callback;
+
 			/* Close the file */
 			io_begin_close(iosrc);
 		}
@@ -152,11 +145,7 @@ INT32 elf_seek_finished_callback(struct fsio_event_source *iosrc, INT32 ioret)
 			res_msg.status  = PM_IO_ERROR;
 			send_msg(task->command_inf.creator_task_id, task->command_inf.response_port, &res_msg );
 
-			if(task->loader_inf.elf_pheaders != NULL) kfree(task->loader_inf.elf_pheaders);
-			if(task->loader_inf.full_path != NULL) kfree(task->loader_inf.full_path);
-			task->loader_inf.elf_pheaders = NULL;
-			task->loader_inf.full_path = NULL;
-			task->loader_inf.path_len = 0;
+            task->io_finished.callback = elf_fileclosed_callback;
 
 			io_begin_close(iosrc);
 		}
@@ -168,3 +157,8 @@ INT32 elf_seek_finished_callback(struct fsio_event_source *iosrc, INT32 ioret)
 	return 1;
 }
 
+INT32 elf_fileclosed_callback(struct fsio_event_source *iosrc, INT32 ioret)
+{
+    // file was closed because of an error, destroy the task
+    tsk_destroy(tsk_get(iosrc->id));
+}

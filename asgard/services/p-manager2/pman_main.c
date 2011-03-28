@@ -58,15 +58,10 @@ void process_manager()
 		/* Process Incoming Commands */
 		cmd_process_msg();
 			
-		done = io_initialized();	
+		done = io_initialized();
 	}
-
-	/* SEND A SIGNAL TO ALL INIT SERVICES 
-	TELLING THEM SYSTEM HAS BEEN INITIALIZED
-	AND THEY MIGHT NOW CREATE TASKS
-	*/
-
-	pman_stage = PMAN_STAGE_RUNING;
+    
+    pman_stage = PMAN_STAGE_RUNING;
 
 	/* Enter the main Loop */
 	done = FALSE;

@@ -38,6 +38,11 @@ pipes_main()
 	init_mem(malloc_buffer, 1024 * 30);
 	avl_init(&pipes);
 
+    // open ports with permisions for services only (lv 0, 1, 2) //
+    open_port(1, 2, PRIV_LEVEL_ONLY);
+	open_port(STDSERVICE_PORT, 2, PRIV_LEVEL_ONLY);
+    open_port(PIPES_PORT, 2, PRIV_LEVEL_ONLY);
+
 	_sti; // set interrupts
 
 	// register with directory
@@ -45,11 +50,17 @@ pipes_main()
 	reg_cmd.command = DIRECTORY_REGISTER_SERVICE;
 	reg_cmd.ret_port = 1;
 	reg_cmd.service_name_smo = share_mem(DIRECTORY_TASK, service_name, len(service_name) + 1, READ_PERM);
-	send_msg(DIRECTORY_TASK, DIRECTORY_PORT, &reg_cmd);
+
+	while (send_msg(DIRECTORY_TASK, DIRECTORY_PORT, &reg_cmd) < 0) 
+    {			
+        reschedule(); 
+    }
 
 	while (get_msg_count(1) == 0) { reschedule(); }
 
 	get_msg(1, &dir_res, &id);
+
+    close_port(1);
 
 	claim_mem(reg_cmd.service_name_smo);
 
@@ -57,7 +68,7 @@ pipes_main()
 	{
 		while(get_msg_count(PIPES_PORT) == 0 && get_msg_count(STDSERVICE_PORT) == 0)
 		{ 
-			reschedule(); 
+            reschedule(); 
 		}
 
 		// process incoming STDSERVICE messages

@@ -111,6 +111,8 @@ void vmm_share_remove(struct pm_task *task, struct vmm_memory_region *mreg)
 		{
 			child = tsk_get(i);
 
+            if(child == NULL) continue;
+
 			if(task->id != i && child != NULL && child->state != TSK_NOTHING && child->state != TSK_KILLING && child->state != TSK_KILLED)
 			{
 				/* Go through regions. */
@@ -455,6 +457,9 @@ Invoked when an executable seek has completed.
 INT32 vmm_share_create_exe_seek_callback(struct fsio_event_source *iosrc, INT32 ioret)
 {
 	struct pm_task *task = tsk_get(iosrc->id);
+
+    if(task == NULL) return 0;
+
 	UINT32 page_displacement, readsize;
 	struct vmm_shared_params *params = (struct vmm_shared_params*)task->io_finished.params[0];
 
@@ -474,6 +479,8 @@ Invoked when an executable read has completed.
 INT32 vmm_share_create_exe_callback(struct fsio_event_source *iosrc, INT32 ioret)
 {
 	struct pm_task *task = tsk_get(iosrc->id);
+
+    if(task == NULL) return 0;
 
 	return vmm_share_create_step(task, (struct vmm_shared_params*)task->io_finished.params[0], ioret);
 }
@@ -676,6 +683,11 @@ UINT32 vmm_share_map_callback(struct pm_task *task, UINT32 ioret)
 	if(mreg == NULL) return FALSE;
 
 	otask = tsk_get(desc->owner_task);
+    if(otask == NULL)
+    {
+        kfree(mreg);
+        return FALSE;
+    }
 	opdir = otask->vmm_inf.page_directory;
 
 	/* 

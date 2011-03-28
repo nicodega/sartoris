@@ -41,13 +41,12 @@
 #include "services/pmanager/services.h"
 
 
-#define MAX_INTERNAL_PARAMS	20
-#define MAX_COMMAND_LINE_LEN	256
-#define MAX_COMMAND_LEN		64
-#define NUM_TERMS		8
-#define BUFFER_SIZE		256
-#define MACHINE_NAME		"pistacho"
-
+#define MAX_INTERNAL_PARAMS     20
+#define MAX_COMMAND_LINE_LEN    256
+#define MAX_COMMAND_LEN         64
+#define NUM_TERMS               8
+#define BUFFER_SIZE             256
+#define MACHINE_NAME            "pistacho"
 
 #define CONS_TASK console_task
 

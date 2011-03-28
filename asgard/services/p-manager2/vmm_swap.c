@@ -72,6 +72,8 @@ BOOL vmm_check_swap_tbl(struct pm_task *task, struct pm_thread *thread, ADDR pg_
 		}	
 
 		/* Put the thread on hold for both the table and the page. */
+        sch_deactivate(thread);
+
 		thread->state = THR_BLOCKED;
 		thread->flags |= THR_FLAG_PAGEFAULT | THR_FLAG_PAGEFAULT_TBL;
 		thread->vmm_info.fault_address = pg_laddr;
@@ -173,6 +175,8 @@ BOOL vmm_check_swap(struct pm_task *task, struct pm_thread *thread, ADDR pg_ladd
 	vmm_set_flags(task->id, (ADDR)PHYSICAL2LINEAR(vmm_get_tbl_physical(task->id, pg_laddr)), TRUE, TAKEN_EFLAG_IOLOCK, TRUE);
 
 	/* if page was sent to swap, begin swap IO */
+    sch_deactivate(thread);
+
 	thread->state = THR_BLOCKED;
 	thread->flags |= THR_FLAG_PAGEFAULT;
 	thread->vmm_info.fault_address = pg_laddr;
@@ -298,13 +302,16 @@ UINT32 swap_page_read_callback(struct pm_thread *thread, UINT32 ioret)
 {
 	UINT32 perms = 0;
 	struct pm_thread *curr_thr = NULL;
+    struct pm_thread *othr = NULL;
 	struct pm_task *task = NULL;
+
+    // task can be killed, but it cannot be NULL, because there where swap operations pending
 
 	if(ioret != IO_RET_ERR)
 	{
 		/* Got a successfull response for a read command */		
 		task = tsk_get(thread->task_id);
-
+        
 		/* 
 			This read command might have raised because 
 			a table was being read
@@ -321,69 +328,55 @@ UINT32 swap_page_read_callback(struct pm_thread *thread, UINT32 ioret)
 			claim_mem(thread->vmm_info.fault_smo);
 			thread->vmm_info.fault_smo = -1;
 
-			if(thread->state == THR_KILLED)
+            /* Return page to our POOL if the task was killed */
+            if(task->state == TSK_KILLED)
+                vmm_put_page(thread->vmm_info.page_in_address);
+
+			while(thread && thread->state == THR_KILLED)
 			{
 				/* Thread was killed! */
-				if(task->state == TSK_KILLED)
-				{	
-					/* Task is also on death line */
-
-					/* Return page to our POOL */
-					vmm_put_page(thread->vmm_info.page_in_address);
-
-					/* If there are other threads waiting for our page, kill them */
-					if(thread->vmm_info.fault_next_thread != NULL)
-					{
-						curr_thr = thread->vmm_info.fault_next_thread;
-						
-						while(curr_thr != NULL)
-						{
-							if(curr_thr->state == THR_KILLED)
-								thr_destroy_thread(curr_thr->id);
-
-							curr_thr = curr_thr->vmm_info.fault_next_thread;							
-						}						
-					}
-
-					thr_destroy_thread(thread->id);
-
-					if(task->killed_threads == 0)
-						tsk_destroy(task);	
-
-					return 1;
-				}
-				else
+                thread->flags &= ~THR_FLAG_PAGEFAULT;
+				
+				/* Our thread was killed, see if there's other thread waiting for the same page */
+				if(thread->vmm_info.fault_next_thread != NULL)
 				{
-					thr_destroy_thread(thread->id);
-
-					/* Only our thread was killed, see if there's other thread waiting for the same page */
-					if(thread->vmm_info.fault_next_thread != NULL)
-					{
-						thread->vmm_info.fault_next_thread->vmm_info.page_in_address = thread->vmm_info.page_in_address;
-						thread = thread->vmm_info.fault_next_thread;
-					}
-					else 
-					{
-						vmm_put_page(thread->vmm_info.page_in_address);
-						return 1;
-					}
+					thread->vmm_info.fault_next_thread->vmm_info.page_in_address = thread->vmm_info.page_in_address;
+                    othr = thread;
+					thread = thread->vmm_info.fault_next_thread;
+                    thr_destroy_thread(othr->id);
+				}
+				else 
+				{
+					if(task != NULL && task->state != TSK_KILLED)
+                         vmm_put_page(thread->vmm_info.page_in_address);
+                    thr_destroy_thread(thread->id);
+                    return 1;
 				}
 			}
+            
+            if(task->state == TSK_KILLED && task->killed_threads == 0)
+            {
+                tsk_destroy(task);
+                return 1;
+            }
+
+            if(thread == NULL) // al threads waiting for this page where killed
+                return 1;
 
 			/* Page in */
-			pm_page_in(thread->task_id, thread->vmm_info.fault_address, (ADDR)LINEAR2PHYSICAL(thread->vmm_info.page_in_address), 2, perms);
+			pm_page_in(task->id, thread->vmm_info.fault_address, (ADDR)LINEAR2PHYSICAL(thread->vmm_info.page_in_address), 2, perms);
 
 			/* Remove IO lock from page */
-			vmm_set_flags(thread->task_id, (ADDR)PG_ADDRESS(thread->vmm_info.fault_address), TRUE, TAKEN_EFLAG_IOLOCK, FALSE);
+			vmm_set_flags(task->id, (ADDR)PG_ADDRESS(thread->vmm_info.fault_address), TRUE, TAKEN_EFLAG_IOLOCK, FALSE);
 
 			/* Unmap page from pman address space */
-			vmm_unmap_page(thread->id, PG_ADDRESS(thread->vmm_info.fault_address));
+			vmm_unmap_page(task->id, PG_ADDRESS(thread->vmm_info.fault_address));
 			
 			thread->flags &= ~THR_FLAG_PAGEFAULT;
 			
 			task->vmm_inf.page_count++;
 			task->vmm_inf.swap_page_count--;
-
+                        
 			/* Wake all pending threads */
 			vmm_wake_pf_threads(thread);
 		}
@@ -392,24 +385,33 @@ UINT32 swap_page_read_callback(struct pm_thread *thread, UINT32 ioret)
 	else
 	{
 		vmm_put_page(thread->vmm_info.page_in_address);
-		thread->vmm_info.page_in_address = NULL;
-		/* IO Error, raise an exception. (Terminate the task with error) */
+                
+        // remove page fault flag from threads so they are freed
+        curr_thr = thread->vmm_info.fault_next_thread;
+
+        while(curr_thr != NULL)
+        {
+            curr_thr->flags &= ~THR_FLAG_PAGEFAULT;
+            curr_thr = curr_thr->vmm_info.fault_next_thread;
+        }
+
+        /* IO Error, raise an exception. (Terminate the task with error) */
 		fatal_exception(thread->task_id, PG_IO_ERROR);
 	}
 	return 0;
 }
 
 /*
-A page table has been broght from swap file
+A page table has been brought from swap file
 */
 UINT32 swap_table_read_callback(struct pm_thread *thread, UINT32 ioret)
 {
-	struct pm_thread *curr_thr, *bcurr;
-	
+	struct pm_thread *curr_thr, *bcurr, *othr;
+    struct vmm_page_directory* pdir;
+	struct pm_task *task = tsk_get(thread->task_id);
+
 	if(ioret != IO_RET_ERR)
 	{
-		struct pm_task *task = tsk_get(thread->task_id);
-
 		/* 
 			This read command might have raised because 
 			a table was being read
@@ -419,63 +421,44 @@ UINT32 swap_table_read_callback(struct pm_thread *thread, UINT32 ioret)
 			/* Successfull Page lvl 1 (table) read */
 
 			/* Set swap address for the page as free (before page in) */
-			struct vmm_page_directory* pdir = task->vmm_inf.page_directory;
+            pdir = task->vmm_inf.page_directory;
 
 			swap_free_addr( pdir->tables[PM_LINEAR_TO_DIR(thread->vmm_info.fault_address)].record.addr );
-
-			claim_mem(thread->vmm_info.fault_smo);
+            
+            claim_mem(thread->vmm_info.fault_smo);
 			thread->vmm_info.fault_smo = -1;
 
-			/* Check thread was not killed */
-			if(thread->state == THR_KILLED)
+            while(thread && thread->state == THR_KILLED)
 			{
 				/* Thread was killed! */
-				if(task->state == TSK_KILLED)
-				{	
-					/* Task is also on death line */
-
-					/* Return table page to our pool */
-					vmm_put_page(thread->vmm_info.page_in_address);
-
-					/* If there are other threads waiting for our table , kill them */
-					if(thread->vmm_info.swaptbl_next != NULL)
-					{
-						curr_thr = thread->vmm_info.swaptbl_next;
-						
-						while(curr_thr != NULL)
-						{
-							if(curr_thr->state == THR_KILLED)
-								thr_destroy_thread(curr_thr->id);
-
-							curr_thr = curr_thr->vmm_info.swaptbl_next;							
-						}						
-					}
-
-					thr_destroy_thread(thread->id);
-
-					if(task->killed_threads == 0)
-						tsk_destroy(task);	
-
-					return 1;
-				}
-				else
+                thread->flags &= ~THR_FLAG_PAGEFAULT_TBL;
+				
+				/* Our thread was killed, see if there's other thread waiting for the same page */
+				if(thread->vmm_info.fault_next_thread != NULL)
 				{
-					thr_destroy_thread(thread->id);
-
-					/* Only our thread was killed, see if there's other thread waiting for the same table */
-					if(thread->vmm_info.swaptbl_next != NULL)
-					{
-						thread->vmm_info.swaptbl_next->vmm_info.page_in_address = thread->vmm_info.page_in_address;
-						thread = thread->vmm_info.swaptbl_next;
-					}
-					else 
-					{
-						vmm_put_page(thread->vmm_info.page_in_address);
-						return 1;
-					}
+					thread->vmm_info.fault_next_thread->vmm_info.page_in_address = thread->vmm_info.page_in_address;
+                    othr = thread;
+					thread = thread->vmm_info.fault_next_thread;
+                    thr_destroy_thread(othr->id);
+				}
+				else 
+				{					
+				    if(task != NULL && task->state != TSK_KILLED)
+                         vmm_put_page(thread->vmm_info.page_in_address);
+                    thr_destroy_thread(thread->id);
+                    return 1;
 				}
 			}
+            
+            if(task->state == TSK_KILLED && task->killed_threads == 0)
+            {
+                tsk_destroy(task);
+                return 1;
+            }
 
+            if(thread == NULL) // al threads waiting for this page where killed
+                return 1;
+            
 			/* 
 			Page in, and process each pending Page Fault for this page table.
 			This will be performed by going through the thread list for page tables.
@@ -495,7 +478,7 @@ UINT32 swap_table_read_callback(struct pm_thread *thread, UINT32 ioret)
 				curr_thr->vmm_info.fault_smo = -1;
 				curr_thr->flags &= ~THR_FLAG_PAGEFAULT_TBL;
 
-				/* 
+                /* 
 					If thread was not waiting for the same page, process 
 					it's page fault. 
 				*/
@@ -503,13 +486,23 @@ UINT32 swap_table_read_callback(struct pm_thread *thread, UINT32 ioret)
 				{
 					bcurr = curr_thr->vmm_info.swaptbl_next;
 
-					if(!vmm_handle_page_fault(&curr_thr->id, TRUE))
+                    while(curr_thr && curr_thr->state == THR_KILLED)
+                    {
+                        curr_thr->flags &= ~THR_FLAG_PAGEFAULT_TBL;
+
+                        // remove the threads killed
+                        othr = curr_thr;
+                        curr_thr = thread->vmm_info.fault_next_thread;
+                        thr_destroy_thread(othr->id);
+                    }
+                    
+					if(curr_thr && !vmm_handle_page_fault(&curr_thr->id, TRUE))
 					{
 						/* Wake all pending threads (same table, same page) */
 						vmm_wake_pf_threads(curr_thr);
 					}
 				}
-
+                
 				curr_thr = bcurr;
 			}
 
@@ -522,15 +515,27 @@ UINT32 swap_table_read_callback(struct pm_thread *thread, UINT32 ioret)
 
 			return 1;
 		}
-		else
-		{
-			vmm_put_page(thread->vmm_info.page_in_address);
-			thread->vmm_info.page_in_address = NULL;
-			/* IO Error, raise an exception. (Terminate the task with error) */
-			fatal_exception(thread->task_id, PG_IO_ERROR);
-		}
 		return 0;
 	}
+    else
+    {
+        vmm_put_page(thread->vmm_info.page_in_address);
+                
+        // remove page fault flag from threads so they are freed
+        curr_thr = thread->vmm_info.fault_next_thread;
+
+        while(curr_thr != NULL)
+        {
+            curr_thr->flags &= ~THR_FLAG_PAGEFAULT;
+            curr_thr = curr_thr->vmm_info.fault_next_thread;
+        }
+
+        if(task != NULL)
+        {
+		    /* IO Error, raise an exception. (Terminate the task with error) */
+		    fatal_exception(thread->task_id, PG_IO_ERROR);
+        }
+    }
 	return 0;
 }
 
@@ -538,20 +543,7 @@ UINT32 swap_table_read_callback(struct pm_thread *thread, UINT32 ioret)
 void vmm_swap_init()
 {
 	struct pm_thread *pmthr;
-
-	/* Setup paging thread info */
-	pmthr = thr_get(PAGEAGING_THR);
-	pmthr->task_id = PMAN_TASK;
-	pmthr->state = THR_INTERNAL;
-	pmthr->flags = 0;
-	pmthr->sch.priority = 2;
-	
-	pmthr = thr_get(PAGESTEALING_THR);
-	pmthr->task_id = PMAN_TASK;
-	pmthr->state = THR_INTERNAL;
-	pmthr->flags = 0;
-	pmthr->sch.priority = 2;
-
+    	
 	/* 
 	Using available mem calculate mem thresholds.
 	TODO: Set this numbers to a more accurate value.
@@ -624,17 +616,21 @@ void vmm_swap_found(UINT32 partition_size, UINT32 ldevid)
 		STOP;
 	}
 
-	pmthr = thr_get(PAGEAGING_THR);
-	
+	pmthr = thr_create(PAGEAGING_THR, NULL);
+
+	pmthr->state = THR_INTERNAL;
+	pmthr->sch.priority = 2;
+		
 	/* Activate Virtual Memory Threads. */
-	/*
 	sch_add(pmthr);
 	sch_activate(pmthr);
 	
-	pmthr = thr_get(PAGESTEALING_THR);
+	pmthr = thr_create(PAGESTEALING_THR, NULL);
+        
+	pmthr->state = THR_INTERNAL;
+	pmthr->sch.priority = 2;
 
 	sch_add(pmthr);
 	sch_activate(pmthr);
-	*/
 }
 

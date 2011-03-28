@@ -40,7 +40,7 @@
 #define PHYSICAL2LINEAR(x) ( (((unsigned int)x) - PMAN_POOL_PHYS) + PMAN_POOL_LINEAR )
 /* This will map a pool linear address to the physical address */
 #define LINEAR2PHYSICAL(x) ( (((unsigned int)x) - PMAN_POOL_LINEAR) + PMAN_POOL_PHYS )
-/* Translate a task address to sartoris address casting to the specified type. */
+/* Translate a task linear address to sartoris address casting to the specified type. */
 #define TRANSLATE_ADDR(addr, type) ((type)((UINT32)addr + SARTORIS_PROCBASE_LINEAR))
 
 /* 
@@ -277,7 +277,7 @@ struct vmm_main
 	UINT32 vmm_size;        // pool size
 	UINT32 vmm_tables;      // pool size in tables
 
-	UINT32 pysical_mem;     // physical memory on the system
+	UINT32 pysical_mem;     // physical memory on the system (max address)
 	UINT32 pool_MB;         // pool memory in megabytes
 	
 	/*
@@ -288,7 +288,7 @@ struct vmm_main
 	UINT32 available_mem;	// pool available memory
 	UINT32 max_mem;		    // System has enough memory and does not need more
 	UINT32 mid_mem;         // System has enough memory but lets keep on strealing a few pages
-	UINT32 min_mem;         // If reached we are starving for memory
+	UINT32 min_mem;         // If reached this value we are starving for memory
 
 	UINT32 swap_size;	        // total swap size in pages
 	UINT32 swap_available;	    // total swap available pages
@@ -347,8 +347,6 @@ void vmm_close_task(struct pm_task *task);
 void vmm_unmap_page(UINT16 task_id, UINT32 proc_laddress);
 // Page in, setting initial age
 INT32 pm_page_in(UINT16 task_id, ADDR linear, ADDR physical, UINT32 level, INT32 attrib);
-
-
 /* Swap */
 
 BOOL vmm_check_swap_tbl(struct pm_task *task, struct pm_thread *thread, ADDR pg_laddr);
@@ -429,14 +427,14 @@ BOOL vmm_share_map(UINT16 descriptor_id, struct pm_task *task, ADDR laddr, UINT3
 
 /******************************************************************************************
 
-Minimal metadata system adaptation for page preservation and memory mappings.
+Minimal metadata system adaptation for page swapping and memory mappings.
 
 The main idea is to use only 32 bits per page.
 
 METADATA:
 
 In order to improve performance, and avoiding page_in/page_out for page tables when checking if a page is swapped, 
-what we will do is maintain another set of tables, with an interger per physical memory page. (hence no more than 4MB will be used). 
+what we will do is maintain another set of tables, with an interger per physical memory page. (hence no more than 4MB will be used on a 4GB system). 
 We will call this structure the taken tables. This structure will be used this way:
 
 If a physical slot has been granted to a task, record will be set like this:
@@ -455,7 +453,7 @@ Taken structure entry format:
 
 	- If T is 1 the record is valid. Else page is not taken.
 
-	- If DIR is 1 this record has been assigned to a pag directory. Info will contain the task id.
+	- If DIR is 1 this record has been assigned to a page directory. Info will contain the task id.
 
 	- if TBL is 1 this record has been asigned to a page table. Info will have the folowing format:
 		
@@ -489,7 +487,7 @@ Taken structure entry format:
 		If S is 1 this page is shared. index on table contains an index onto
 		an internal pman list of shared pages. 
 
-	Also the process manager table will be not present and the record will indicate the task/table index 
+	Also the process manager table entry will be not marked as not present and the record will indicate the task/table index 
 	owning the page.
 
 		31   ...  12 | 11  ...   6 | 5 4 3 2 1 | 0
@@ -499,10 +497,10 @@ Taken structure entry format:
 
 When a page table/ lvl 2 page is assigned to a task, its entry on the task's page dir/table will have the following format:
 
-	    31 ........ 12 | 11 .. 1 | 0
-          file index   |       F | 0
+	    31 ........ 12 | 11 ..  1  | 0
+          file index   |       SWP | 0
 
-If F is 1 page is on swap file and file index is it's file offset. File offset is in 4kb multiples.
+If SWP is 1 the page is on swap file and file index is it's file offset. File offset is in 4kb multiples.
 
 *******************************************************************************************/
 

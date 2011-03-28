@@ -26,8 +26,10 @@
 #include "loader.h"
 #include "vm.h"
 #include "kmalloc.h"
+#include "layout.h"
 
-static struct pm_task task_info[MAX_TSK];
+static struct pm_task *task_info[MAX_TSK];
+static struct pm_task pman_task;
 
 static int tsk_priv[] = { /* Proc */ 2, /* Serv */ 0 };
 
@@ -37,40 +39,64 @@ void tsk_init()
 
 	for(i=0; i<MAX_TSK; i++) 
 	{
-		task_info[i].id = i;
-		task_info[i].state = TSK_NOTHING;
-		task_info[i].flags = TSK_FLAG_NONE;
-		task_info[i].first_thread = NULL;
-		task_info[i].num_threads = 0;
-
-		/* Exceptions send port */
-		task_info[i].exeptions.exceptions_port = 0xFFFF;
-
-		/* Init Command Info */
-		cmd_info_init(&task_info[i].command_inf);
-				
-		/* Init loader info */
-		loader_info_init(&task_info[i].loader_inf);
-
-		/* Init vmm info */
-		vmm_init_task_info(&task_info[i].vmm_inf);
-		
-		/* Init IO info */
-		io_init_source(&task_info[i].io_event_src, FILE_IO_TASK, i);
-		io_init_event(&task_info[i].io_finished, &task_info[i].io_event_src);
-		task_info[i].swp_io_finished.callback = NULL;
-
-		task_info[i].vmm_inf.regions.first = NULL;
-		task_info[i].vmm_inf.regions.total = 0;
-		task_info[i].killed_threads = 0;
+        task_info[i] = NULL;
+        /*
+        task_info[i].id = i;
+		init_task();
+        */
 	}
+}
+
+struct pm_task *tsk_create(UINT16 id)
+{
+    if(task_info[id]) return NULL;
+
+    struct pm_task *t;
+    
+    if(id != PMAN_TASK)
+        t = kmalloc(sizeof(struct pm_task));
+    else
+        t = &pman_task;
+
+    if(!t) return NULL;
+
+    task_info[id] = t;
+
+    t->id = id;
+	t->state = TSK_NOTHING;
+	t->flags = TSK_FLAG_NONE;
+	t->first_thread = NULL;
+	t->num_threads = 0;
+
+	// Exceptions send port //
+	t->exeptions.exceptions_port = 0xFFFF;
+
+	// Init Command Info //
+	cmd_info_init(&t->command_inf);
+				
+	// Init loader info //
+	loader_info_init(&t->loader_inf);
+
+	// Init vmm info //
+	vmm_init_task_info(&t->vmm_inf);
+		
+	// Init IO info //
+	io_init_source(&t->io_event_src, FILE_IO_TASK, id);
+	io_init_event(&t->io_finished, &t->io_event_src);
+	t->swp_io_finished.callback = NULL;
+    
+	t->vmm_inf.regions.first = NULL;
+	t->vmm_inf.regions.total = 0;
+	t->killed_threads = 0;
+
+    return t;
 }
 
 // Gets the specified task
 struct pm_task *tsk_get(UINT16 id)
 {
-	if(id >= MAX_TSK) return NULL;
-	return &task_info[id];
+	if(id >= MAX_TSK || task_info[id] == NULL) return NULL;
+	return task_info[id];
 }
 
 UINT16 tsk_get_id(UINT32 lower_bound, UINT32 upper_bound) 
@@ -79,8 +105,8 @@ UINT16 tsk_get_id(UINT32 lower_bound, UINT32 upper_bound)
 
 	for(i=lower_bound; i <= upper_bound; i++) 
 	{
-		if (task_info[i].state == TSK_NOTHING) 
-			return i;		
+		if (task_info[i] == NULL || task_info[i]->state == TSK_NOTHING) 
+			return i;
 	}
   
 	return 0xFFFF;
@@ -92,20 +118,26 @@ BOOL tsk_destroy(struct pm_task *task)
 	struct pm_thread *thread = NULL;
 	int ret = 0;
     
-    if(task->state == TSK_NOTHING) 
+    if(!task) 
 		return FALSE;
+
+    if(task->state == TSK_NOTHING)
+    {
+        task_info[task->id] = NULL;
+        kfree(task);
+        return TRUE;
+    }
 
 	if(task->state == TSK_KILLED)
 	{
 		task->first_thread = NULL;
 		task->num_threads = 0;
-
-		io_init_source(&task->io_event_src, FILE_IO_TASK, task->id);
-		
+        		
 		/* We cannot claim memory if we are waiting for a swap read/write */
 		vmm_claim(task->id);
 
-		task->state = TSK_NOTHING;
+        task_info[task->id] = NULL;
+		kfree(task);
 		return TRUE;
 	}
     
@@ -123,9 +155,9 @@ BOOL tsk_destroy(struct pm_task *task)
     if(destroy_task(task->id) != SUCCESS) 
 	    return FALSE;
     
-    kfree(task->loader_inf.full_path);
+    if(task->loader_inf.full_path != NULL) kfree(task->loader_inf.full_path);
 	task->loader_inf.full_path = NULL;
-	kfree(task->loader_inf.elf_pheaders);
+	if(task->loader_inf.elf_pheaders != NULL) kfree(task->loader_inf.elf_pheaders);
 	task->loader_inf.elf_pheaders = NULL;
 
 	if(ret == 0)
@@ -137,7 +169,8 @@ BOOL tsk_destroy(struct pm_task *task)
 		/* We cannot claim memory if we are waiting for a swap read/write */
 		vmm_claim(task->id);
 
-		task->state = TSK_NOTHING;	
+        task_info[task->id] = NULL;
+		kfree(task);
 	}
 	else
 	{

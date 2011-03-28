@@ -21,6 +21,7 @@
 #include <lib/structures/list.h>
 #include <lib/const.h>
 #include <lib/scheduler.h>
+#include <services/pmanager/services.h>
 
 /* REMOVEME */
 #include <lib/debug.h>
@@ -51,6 +52,13 @@ void dma_srv()
   char *service_name = "system/dmac";
   struct directory_register reg_cmd;
   struct directory_response dir_res;
+  struct pm_msg_phymem pmem;
+  struct pm_msg_phymem_response pres;
+
+  // open port with permisions for services only (lv 0, 1, 2) //
+  open_port(STDSERVICE_PORT, 2, PRIV_LEVEL_ONLY);
+  open_port(DMA_COMMAND_PORT, 2, PRIV_LEVEL_ONLY);
+  open_port(2, 2, PRIV_LEVEL_ONLY);
 
   __asm__ ("sti": :);
 
@@ -61,32 +69,46 @@ void dma_srv()
 
   for(i = 0; i < 8; i++) channels[i].task = -1;
 
-  /* we need to know our physical address, the process manager will send us
-  a message to port 0 telling us where we are. */
-  while(get_msg_count(0) == 0){ reschedule(); }
+  /* we need to know our physical address */
+  pmem.pm_type = PM_PHYMEM;
+  pmem.req_id = 0;
+  pmem.response_port = 2;
+  pmem.linear = 0;
+  
+  send_msg(PMAN_TASK, PMAN_COMMAND_PORT, &pmem);
 
-  unsigned int imsg[4];
-  get_msg(0, imsg, &id);
-  phys = imsg[0]; // first int will contain physical address
+  while(get_msg_count(2) == 0)
+  { 
+      reschedule(); 
+  }
+
+  get_msg(2, &pres, &id);
+  
+  phys = pres.physical; // this will contain the physical address
 
   /* Register service with directory */
   reg_cmd.command = DIRECTORY_REGISTER_SERVICE;
-  reg_cmd.ret_port = 1;
+  reg_cmd.ret_port = 2;
   reg_cmd.service_name_smo = share_mem(DIRECTORY_TASK, service_name, 12, READ_PERM);
-  send_msg(DIRECTORY_TASK, DIRECTORY_PORT, &reg_cmd);
+  
+  while(send_msg(DIRECTORY_TASK, DIRECTORY_PORT, &reg_cmd) < 0)
+  { 
+      reschedule(); 
+  }
 
-  while (get_msg_count(1) == 0) { reschedule(); }
+  while (get_msg_count(2) == 0) { reschedule(); }
 
-  get_msg(1, &dir_res, &id);
+  get_msg(2, &dir_res, &id);
 
+  close_port(2);
   claim_mem(reg_cmd.service_name_smo);
 
   while (!die) 
   {
     
     /* wait for a message to come */
-
     while(get_msg_count(DMA_COMMAND_PORT) == 0 && get_msg_count(STDSERVICE_PORT) == 0) {
+        string_print("DMA ALIVE",19*160,i++);
       reschedule();
     }
 

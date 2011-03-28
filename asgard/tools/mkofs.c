@@ -126,7 +126,7 @@ int format(char *device_filename, unsigned int storage_size, unsigned int metada
 	printf("Metadata size=%x, sect=%x\n", metadatasize, metadata_sec);
 	
 	// create OFS Table
-	ofst.first_group = 1 + skip_blocks + metadata_sec;
+	ofst.first_group = 1 + skip_blocks + metadata_sec;  // table + boot record and such + metadata
 	ofst.group_count = 1;
 	ofst.mount_count = 0;
 	ofst.block_size = OFS_BLOCK_SIZE;

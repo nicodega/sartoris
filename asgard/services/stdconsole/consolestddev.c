@@ -34,7 +34,7 @@ int process_stdservice(void)
 	{
 		get_msg(STDSERVICE_PORT, &service_cmd, &id_proc);
 
-		servres.ret = STDSERVICE_RESPONSE_OK;
+        servres.ret = STDSERVICE_RESPONSE_OK;
 		servres.command = service_cmd.command;
 
 		if(service_cmd.command == STDSERVICE_DIE || service_cmd.command == STDSERVICE_FORCEDIE)
@@ -131,7 +131,7 @@ void process_stddev(void)
 				ioctl = (struct stddev_ioctl_cmd*)&stddev_msg;
 				res.ret = STDDEV_ERR;
 				res.logic_deviceid = ioctl->logic_deviceid;
-
+                
 				//if(!check_ownership(ioctl->logic_deviceid, sender_id)) break;
 				if(res.logic_deviceid < 0 || res.logic_deviceid >= NUM_VIRTUAL)
 					string_print("CONS: ASSERT 1",0,7);

@@ -43,17 +43,19 @@ void directory_main()
 	struct stdservice_res dieres;
 	int dieid;
 	int dieretport, i=0;
+    char *name;
+
+    // open the port with permisions for services only (lv 0, 1, 2) //
+	open_port(STDSERVICE_PORT, 2, PRIV_LEVEL_ONLY);
+    open_port(DIRECTORY_PORT, 2, PRIV_LEVEL_ONLY);
 
 	// set interrupts
-#ifndef WIN32DEBUGGER
-	__asm__ ("sti"::);
-	init_mem(dmbuffer, 1024 * 10);
-#endif
+	__asm__ __volatile__ ("sti"::);
+	
+    init_mem(dmbuffer, 1024 * 10);
+
 	avl_init(&services_by_id);
 	lpt_init(&services_by_name);
-
-	// open the port with permises for services only (lv 0, 1, 2) //
-	open_port(DIRECTORY_PORT, 2, PRIV_LEVEL_ONLY);
 
 	while(!die)
 	{
@@ -65,8 +67,11 @@ void directory_main()
 		service_count = get_msg_count(STDSERVICE_PORT);
 		
 		while(service_count != 0)
-		{
+		{            
 			get_msg(STDSERVICE_PORT, &service_cmd, &id);
+            __asm__ __volatile__ ("cli"::);
+            print("DIR DIE from task %i ", id);
+            for(;;);
 
 			servres.ret = STDSERVICE_RESPONSE_OK;
 			servres.command = service_cmd.command;
@@ -98,112 +103,122 @@ void directory_main()
 			response.thr_id = command.thr_id;
 			response.ret = DIRECTORYERR_OK;
 
+            //print("DIR CMD: %i, task %i ", command.command, id);
+
 			switch(command.command)
 			{
-			case DIRECTORY_REGISTER_SERVICE:
-				// see if it's already registered
-				entry = (struct servdirectory_entry *)avl_getvalue(services_by_id, id);
+			    case DIRECTORY_REGISTER_SERVICE:
+				    // see if it's already registered
+				    entry = (struct servdirectory_entry *)avl_getvalue(services_by_id, id);
 
-				if(entry != NULL)
-				{		
-					/*
-						NOTE: In a future, we could check with samurai if this is the
-						same service who registered before and if so update its
-						id on the entry. (and fix the trees)
-					*/
-					response.ret = DIRECTORYERR_ALREADYREGISTERED;
+				    if(entry != NULL)
+				    {		
+					    /*
+						    NOTE: In a future, we could check with samurai if this is the
+						    same service who registered before and if so update its
+						    id on the entry. (and fix the trees)
+					    */
+					    response.ret = DIRECTORYERR_ALREADYREGISTERED;
 
-					break;
-				}
+					    break;
+				    }
 
-				entry = (struct servdirectory_entry *)malloc(sizeof(struct servdirectory_entry));
-				entry->service_name = get_string(((struct directory_register *)&command)->service_name_smo);
-				entry->serviceid = id;
+                    name = get_string(((struct directory_register *)&command)->service_name_smo);
 
-				avl_insert(&services_by_id, entry, id);
-				lpt_insert(&services_by_name, entry->service_name, entry);
+                    if(name == NULL)
+                    {
+                        print("DIR Invalid SMO %i, task %i ", ((struct directory_register *)&command)->service_name_smo, id);
+                        for(;;);
+                    }
 
-				break;
-			case DIRECTORY_UNREGISTER_SERVICE:
-				/*
-					NOTE: again, here we should check if it really is the same service
-					or someone impersonated it (cheating is baaad :) )
-				*/
+                   // print("DIR REGISTER %s task %i ", name, id);
 
-				entry = (struct servdirectory_entry *)avl_getvalue(services_by_id, id);
+				    entry = (struct servdirectory_entry *)malloc(sizeof(struct servdirectory_entry));
+				    entry->service_name = name;
+				    entry->serviceid = id;
 
-				if(entry == NULL)
-				{		
-					/*
-						NOTE: In a future, we could check with samurai if this is the
-						same service who registered before and if so update its
-						id on the entry. (and fix the trees)
-					*/
-					response.ret = DIRECTORYERR_NOTREGISTERED;
+				    avl_insert(&services_by_id, entry, id);
+				    lpt_insert(&services_by_name, entry->service_name, entry);
 
-					break;
-				}
+				    break;
+			    case DIRECTORY_UNREGISTER_SERVICE:
+				    /*
+					    NOTE: again, here we should check if it really is the same service
+					    or someone impersonated it (cheating is baaad :) )
+				    */
 
-				avl_remove(&services_by_id, id);
-				lpt_remove(&services_by_name, entry->service_name);
+				    entry = (struct servdirectory_entry *)avl_getvalue(services_by_id, id);
 
-				free(entry->service_name);
-				free(entry);
+				    if(entry == NULL)
+				    {		
+					    /*
+						    NOTE: In a future, we could check with samurai if this is the
+						    same service who registered before and if so update its
+						    id on the entry. (and fix the trees)
+					    */
+					    response.ret = DIRECTORYERR_NOTREGISTERED;
 
-				break;
-			case DIRECTORY_RESOLVEID:
+					    break;
+				    }
 
-				resolving_service = get_string(((struct directory_resolveid *)&command)->service_name_smo);
+				    avl_remove(&services_by_id, id);
+				    lpt_remove(&services_by_name, entry->service_name);
 
-				entry = (struct servdirectory_entry *)lpt_getvalue(services_by_name, resolving_service);
+				    free(entry->service_name);
+				    free(entry);
+
+				    break;
+			    case DIRECTORY_RESOLVEID:
+
+				    resolving_service = get_string(((struct directory_resolveid *)&command)->service_name_smo);
+
+                    if(resolving_service == NULL)
+                    {
+                        print("DIR Invalid SMO %i, task %i ", ((struct directory_register *)&command)->service_name_smo, id);
+                        for(;;);
+                    }
+
+				    entry = (struct servdirectory_entry *)lpt_getvalue(services_by_name, resolving_service);
 	
-				if(entry == NULL)
-				{		
-					/*
-						NOTE: In a future, we could check with samurai if this is the
-						same service who registered before and if so update its
-						id on the entry. (and fix the trees)
-					*/
-					response.ret = DIRECTORYERR_NOTREGISTERED;
+                    //print("DIR RESOLVE %s ", resolving_service);
 
-					free(resolving_service);
+				    if(entry == NULL)
+				    {
+					    response.ret = DIRECTORYERR_NOTREGISTERED;
 
-					break;
-				}
-				response.ret_value = entry->serviceid;
-				free(resolving_service);
+					    free(resolving_service);
 
-				break;
-			case DIRECTORY_RESOLVENAME:
+					    break;
+				    }
+				    response.ret_value = entry->serviceid;
+				    free(resolving_service);
 
-				entry = (struct servdirectory_entry *)avl_getvalue(services_by_id, ((struct directory_resolvename *)&command)->serviceid);
+				    break;
+			    case DIRECTORY_RESOLVENAME:
 
-				if(entry == NULL)
-				{		
-					/*
-						NOTE: In a future, we could check with samurai if this is the
-						same service who registered before and if so update its
-						id on the entry. (and fix the trees)
-					*/
-					response.ret = DIRECTORYERR_NOTREGISTERED;
+				    entry = (struct servdirectory_entry *)avl_getvalue(services_by_id, ((struct directory_resolvename *)&command)->serviceid);
 
-					break;
-				}
+				    if(entry == NULL)
+				    {
+					    response.ret = DIRECTORYERR_NOTREGISTERED;
 
-				// write on name smo
-				int size = mem_size(((struct directory_resolvename *)&command)->name_smo);
+					    break;
+				    }
 
-				if(len(entry->service_name) > size)
-				{
-					response.ret = DIRECTORYERR_SMO_TOOSMALL;
-					response.ret_value = size;
-				}
-				else
-				{
-					write_mem(((struct directory_resolvename *)&command)->name_smo, 0, size, entry->service_name);
-				}
+				    // write on name smo
+				    int size = mem_size(((struct directory_resolvename *)&command)->name_smo);
 
-				break;
+				    if(len(entry->service_name) > size)
+				    {
+					    response.ret = DIRECTORYERR_SMO_TOOSMALL;
+					    response.ret_value = size;
+				    }
+				    else
+				    {
+					    write_mem(((struct directory_resolvename *)&command)->name_smo, 0, size, entry->service_name);
+				    }
+
+				    break;
 			}
 			
 			send_msg(id, command.ret_port, &response);
@@ -233,23 +248,20 @@ void directory_main()
 	send_msg(dieid, dieretport, &dieres);
 
 	for(;;);
-
-#ifdef WIN32DEBUGGER
-	return 0;
-#endif
 }
 
-#ifndef WIN32DEBUGGER
 char *get_string(int smo)
 {
 	//get_string: gets a string from a Shared Memory Object
 	int size = mem_size(smo);
 
-	char *tmp = (char *)malloc(size);
+    if(size <= 0) return NULL;
+
+    char *tmp = (char *)malloc(size);
 
 	if(tmp == NULL)
 	{
-		print("DIR: NULL MALLOC");
+		print("DIR: NULL MALLOC size %i ", size);
 		for(;;);
 	}
 	if(read_mem(smo, 0, size, tmp))
@@ -283,5 +295,4 @@ void process_query_interface(struct stdservice_query_interface *query_cmd, int t
 	// send response
 	send_msg(task, query_cmd->ret_port, &qres);
 }
-#endif
 

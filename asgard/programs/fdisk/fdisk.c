@@ -144,10 +144,10 @@ int main(int argc, char **argv)
 
 	protocol_port = query_res.port;
 
-	build_partition_list();
-
 	/* All set to comunicate with atac service. 
 	Fetch devices with IOCTRL enum devices command. */
+	build_partition_list();
+
 	printf("\nfdisk 0.00001 (pediatrical version)\n\nEnter h for help.\n\nCommand: ");
 	
 	char cmd;

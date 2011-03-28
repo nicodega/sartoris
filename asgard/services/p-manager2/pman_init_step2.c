@@ -33,6 +33,7 @@
 #include "scheduler.h"
 #include "pman_print.h"
 #include "formats/initfs2.h"
+#include "task_thread.h"
 
 void process_manager();
 int init_reloc();
@@ -51,17 +52,7 @@ void pman_init_stage2()
 	struct pm_task *pmtsk = NULL;
 	int i = 0;
     int init_size = 0;
-
-	/*
-		//////////////// IMPORTANT NOTE ///////////////
-
-		DO NOT UNDER ANY CIRCUNSTANCE PRINT OR ACCESS
-		GLOBAL VARIABLES UNTIL INIT IMAGE HAS BEEN 
-		COPIED!! IT WOULD DESTROY IMAGE DATA
-
-		///////////////////////////////////////////////
-	*/
-
+    
 	/* get rid of the init stuff */
 	destroy_thread(INIT_THREAD_NUM);
 	destroy_task(INIT_TASK_NUM);
@@ -87,9 +78,9 @@ void pman_init_stage2()
 	/* Reallocate init image */
 	init_size = init_reloc();
 
-	/* NOTE: Now it's safe to print, for we moved the init image */
+    pman_print_set_color(0x7);
 	pman_print("Mapping Malloc %i pages", PMAN_MALLOC_PAGES);
-		
+       
 	/* Pagein remaining pages for kmalloc */
 	linear = PMAN_MALLOC_LINEAR + SARTORIS_PROCBASE_LINEAR; // place after multiboot (this will invalidate the map src/dest linear address, 
                                                             // we cannot use that area anymore, but it's ok, we used it for init copy only.)
@@ -98,17 +89,13 @@ void pman_init_stage2()
 	map_pages(PMAN_TASK, linear, physical, PMAN_MALLOC_PAGES, PGATT_WRITE_ENA, 2);
 
 	pman_print("Initializing tasks/threads.");
-	
-	tsk_init();
-	thr_init();
 
     /* Show MMAP information */
 	if(((struct multiboot_info*)PMAN_MULTIBOOT_LINEAR)->flags & MB_INFO_MMAP && ((struct multiboot_info*)PMAN_MULTIBOOT_LINEAR)->mmap_length > 0)
-	{
-		/* 
-		Calculate multiboot mmap linear address.
-		Sartoris loader left MMAP just after multiboot info structure.
-		*/
+	{		 
+		//Calculate multiboot mmap linear address.
+		//Sartoris loader left MMAP just after multiboot info structure.
+		
 		((struct multiboot_info*)PMAN_MULTIBOOT_LINEAR)->mmap_addr = PMAN_MULTIBOOT_LINEAR + sizeof(struct multiboot_info);
 
 		pman_print("Multiboot MMAP Size: %i ", ((struct multiboot_info*)PMAN_MULTIBOOT_LINEAR)->mmap_length);
@@ -129,22 +116,24 @@ void pman_init_stage2()
 	{
 		pman_print("No MMAP present.");
 	}
-	
-	/* Initialize vmm subsystem */
+
+    /* Initialize vmm subsystem */
 	vmm_init((struct multiboot_info*)PMAN_MULTIBOOT_LINEAR, PMAN_INIT_RELOC_PHYS, PMAN_INIT_RELOC_PHYS + init_size);
 	
+    tsk_init();
+	thr_init();
+
 	/* Mark SCHED_THR as taken! */
-	pmthr = thr_get(SCHED_THR);
+	pmtsk = tsk_create(PMAN_TASK);
+	pmtsk->state = TSK_NORMAL;
+
+    pmthr = thr_create(SCHED_THR, pmtsk);
 	pmthr->state = THR_INTHNDL;		// ehm... well... it IS an interrupt handler :D
 	pmthr->task_id = PMAN_TASK;
 	pmthr->state = THR_INTHNDL;	
-
-	pmtsk = tsk_get(PMAN_TASK);
-	pmtsk->state = TSK_NORMAL;
-
+    
 	pman_print("Initializing allocator and interrupts.");
-
-	/* Initialize kernel memory allocator */
+    /* Initialize kernel memory allocator */
 	kmem_init(PMAN_MALLOC_LINEAR, PMAN_MALLOC_PAGES);
 	
 	/* get our own interrupt handlers, override microkernel defaults */
@@ -152,13 +141,13 @@ void pman_init_stage2()
 	
 	/* Initialize Scheduler subsystem */
 	sch_init();
-
+    
 	pman_print("InitFS2 Service loading...");
 	
 	/* Load System Services and init Loader */
 	loader_init((ADDR)PHYSICAL2LINEAR(PMAN_INIT_RELOC_PHYS));
 
-	pman_print_clr(7);
+	//pman_print_clr(7);
 	pman_print("Loading finished, return INIT image memory to POOL...");
 
 	/* Put now unused Init-Fs pages onto vmm managed address space again. */
@@ -182,14 +171,15 @@ void pman_init_stage2()
 	/* Create Scheduler int handler */
 	if(create_int_handler(32, SCHED_THR, FALSE, 0) < 0)
 		pman_print_and_stop("Could not create Scheduler thread.");
-	
+
 	/* This is it, we are finished! */
 	process_manager();
 }
 
 int init_reloc()
 {
-	UINT32 i, physical, left, physicaldest; 
+	UINT32 i, physical, physicaldest; 
+    int left, size;
 	char *dest, *src;
 	struct ifs2_header *h = NULL;
 	
@@ -198,13 +188,24 @@ int init_reloc()
 	   image to PMAN_INIT_RELOC_PHYS on physical memory, so 
 	   pool page tables won't overlap 
 	*/
-
-	// test for ifs2
+    
+    // test for ifs2
 	page_in(PMAN_TASK, (ADDR) (PMAN_STAGE2_MAPZONE_SOURCE + SARTORIS_PROCBASE_LINEAR), (ADDR)(PMAN_SARTORIS_INIT_PHYS + PMAN_SIZE), 2, PGATT_WRITE_ENA);
 	h = (struct ifs2_header*)PMAN_STAGE2_MAPZONE_SOURCE;
 	
 	if(h->ifs2magic != IFS2MAGIC)
-		pman_print_and_stop("Init Fs 1 format is no longer supported by PMAN");
+		pman_print_and_stop("Init Fs 1 format is no longer supported by PMAN. PMAN_SIZE %x ", PMAN_SIZE);
+
+    if( h->size % PAGE_SIZE == 0)
+    {
+        size = h->size;
+    }
+    else
+    {
+        size = (h->size - (h->size % PAGE_SIZE)) + PAGE_SIZE;
+    }
+
+    pman_print("Relocating Image size: %i, phystart: %x, phydest: %x.", size, PMAN_SARTORIS_INIT_PHYS + PMAN_SIZE + size - 0x1000, PMAN_INIT_RELOC_PHYS + size - 0x1000);
 	
 	// ifs2 header found, check for LZW and decompress if necesary!
 	if(h->flags & IFS2_FLAG_LZW)
@@ -212,17 +213,16 @@ int init_reloc()
 		/* NOT IMPLEMENTED: I won't implement it until I test the rest of PMAN */
 	}
 	else
-	{
+	{        
         // uncompressed IFS
-		left = h->size;
-
-		/* Sartoris left the image at position PMAN_SARTORIS_INIT_PHYS 
+		left = size;
+        /* Sartoris left the image at position PMAN_SARTORIS_INIT_PHYS 
 		and we want it on PMAN_INIT_RELOC_PHYS. PMAN_INIT_RELOC_PHYS is greater
 		than PMAN_SARTORIS_INIT_PHYS. we will copy 4kb at the time from 
 		bottom up, this means PMAN_INIT_RELOC_PHYS - PMAN_SARTORIS_INIT_PHYS has to be
 		greater or equal than 0x1000. */
-		physical = PMAN_SARTORIS_INIT_PHYS + PMAN_SIZE + h->size - 0x1000;	// start copy at the last page
-		physicaldest = PMAN_INIT_RELOC_PHYS + h->size - 0x1000;				// destination
+		physical = PMAN_SARTORIS_INIT_PHYS + PMAN_SIZE + size - 0x1000;	// start copy at the last page
+		physicaldest = PMAN_INIT_RELOC_PHYS + size - 0x1000;				// destination
 		
 		dest = (char*)PMAN_STAGE2_MAPZONE_DEST;
 		src = (char*)PMAN_STAGE2_MAPZONE_SOURCE;
@@ -243,7 +243,9 @@ int init_reloc()
 			physical -= PAGE_SIZE;
 			
 		}while(left > 0);
+        	
 	}
-    return h->size;
+    
+    return size;
 }
 

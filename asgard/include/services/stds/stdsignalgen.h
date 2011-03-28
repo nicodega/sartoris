@@ -40,11 +40,11 @@
 struct stdsignal_suscribe
 {
 	int command;	
-	int listener_port; 	// por on the sending task where signals will be received
-	int signal;		// an int value representing a signal on the generator service
-	short params_smo;		// an smo pointing to a generator defined struct for this signal
-				// params
-	short ret_port;		// port for this message response
+	int listener_port; 	// port on the sending task where signals will be received
+	int signal;         // an int value representing a signal on the generator service
+	short params_smo;   // an smo pointing to a generator defined struct for this signal
+                        // params
+	short ret_port;     // port for this message response
 };
 
 /* UNSUSCRIBE MESSAGE */ 

@@ -45,6 +45,7 @@
 #define PM_MMAP_CREATE	    0x30
 #define PM_MMAP_REMOVE	    0x31
 #define PM_INITIALIZING	    0x32
+#define PM_PHYMEM           0x33
 #define PM_TASK_FINISHED    0xFF
 
 /* flags for task creation */
@@ -90,6 +91,23 @@ struct pm_msg_generic {
   short req_id;
   short response_port;
   char padding[10];
+} PACKED_ATT;
+
+struct pm_msg_phymem {
+  unsigned char pm_type;
+  unsigned char padding0;
+  short req_id;
+  short response_port;
+  unsigned int linear;
+  char padding[6];
+} PACKED_ATT;
+
+struct pm_msg_phymem_response {
+  unsigned char pm_type;
+  unsigned char padding0;
+  short req_id;
+  unsigned int  physical;
+  char padding[8];
 } PACKED_ATT;
 
 struct pm_msg_create_task {

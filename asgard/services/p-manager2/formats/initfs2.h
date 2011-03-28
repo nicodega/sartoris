@@ -65,9 +65,7 @@ struct ifs2srv_header
 
 #define IFS2SRV_FLAG_NONE       0
 #define IFS2SRV_FLAG_LOWMEM     1  // Must be loaded on low memory
-#define IFS2SRV_FLAG_PHYSTART   2  // Upon loading, pmanager will send the service a message
-                                   // with it's physical address
-#define IFS2SRV_FLAG_IGNORE		4  // PMAN should not load this service (used for inhibiting services to debug PMAN)
+#define IFS2SRV_FLAG_IGNORE		2  // PMAN should not load this service (used for inhibiting services to debug PMAN)
 
 #define IFS2SRV_PMTYPE_NORMAL     0		// nothing to care
 #define IFS2SRV_PMTYPE_MAINFS     1		// this is the main FS service (or fs hub whatever)

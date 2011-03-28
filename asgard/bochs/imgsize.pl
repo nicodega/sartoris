@@ -1,12 +1,12 @@
 #!/usr/bin/perl
 
-$size = (stat($ARGV[0]))[7];
+$size = 0;
 
-@Info = stat("../bin/asgard.img");
+@Info = stat($ARGV[0]);
 
 $size = $Info[7] + (($Info[7] % 512 == 0)? 0 : (512 - ($Info[7] % 512)));
 
-if($ARGV[0] eq "-f")
+if($ARGV[1] eq "-f")
 {
     #generate a file with the size
     open FILE, ">", "./length.hdb" or die $!;
@@ -21,7 +21,7 @@ if($ARGV[0] eq "-f")
 }
 else
 {
-    printf "%i","$size";    
+    printf "%i","$size";
 }
 
 

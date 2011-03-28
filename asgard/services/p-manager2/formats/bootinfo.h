@@ -116,3 +116,4 @@ struct mmap_entry
 	unsigned long type;
 };
 
+#define MULTIBOOT_MMAP_AVAILABLE 1

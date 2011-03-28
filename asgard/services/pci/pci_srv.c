@@ -47,6 +47,10 @@ void _start()
 	init_mem(malloc_buffer, 1024 * 30);
 	init(&pci_devices);
 
+    // open ports with permisions for services only (lv 0, 1, 2) //
+	open_port(STDSERVICE_PORT, 2, PRIV_LEVEL_ONLY);
+    open_port(PCI_PORT, 2, PRIV_LEVEL_ONLY);
+
 	__asm__ ("sti" ::);
 
 	// register with directory
@@ -54,7 +58,8 @@ void _start()
 	reg_cmd.command = DIRECTORY_REGISTER_SERVICE;
 	reg_cmd.ret_port = 1;
 	reg_cmd.service_name_smo = share_mem(DIRECTORY_TASK, service_name, 11 + 1, READ_PERM);
-	send_msg(DIRECTORY_TASK, DIRECTORY_PORT, &reg_cmd);
+
+	while (send_msg(DIRECTORY_TASK, DIRECTORY_PORT, &reg_cmd) == -1) { reschedule(); }
 
 	while (get_msg_count(1) == 0) { reschedule(); }
 

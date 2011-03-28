@@ -707,7 +707,7 @@ static int exec_pio_data_in_cmd( struct ata_channel *channel, int dev,
 		// If there was a time out error, go to READ_DONE.
 		if ( channel->reg_cmd_info.ec )
 		{
-			break;   // go to READ_DONE
+            break;   // go to READ_DONE
 		}
 
 		// If BSY=0 and DRQ=1, transfer the data,
@@ -828,7 +828,7 @@ static int exec_pio_data_in_cmd( struct ata_channel *channel, int dev,
 	// ATAIO.H.
 
 	if ( channel->reg_cmd_info.ec )
-		return 1;
+		return 1;			
 	return 0;
 }
 
