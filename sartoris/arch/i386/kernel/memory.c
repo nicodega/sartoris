@@ -43,12 +43,11 @@ int arch_cpy_from_task(int task, char*src, char* dst, unsigned int len, int x)
 /* we have to temporary map the dst
    area of memory in order to copy it */
 
-/* in this incarnation, we have num_thread one-page slots in
+/* in this incarnation, we have MAX_THR one-page slots in
    the linear space. */
 
 /* yes, it's just _linear_ space, of which the kernel has
-   at its disposal the first 8 megabytes, we're using
-   some room just beyond the 3rd megabyte mark. */
+   at its disposal the first 200 megabytes. */
 
 /* this functions are sometimes called within critical blocks.
    when we provoke a page fault, we must return informing how

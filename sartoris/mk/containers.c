@@ -135,7 +135,7 @@ void *csalloc(int type)
 	/* Find a container for this type with free entries */
 	if(c == NULL)
 	{		
-		kprintf(12, "mk/dynmem.c: ASKING FOR PAGE type: %i ", type);
+		bprintf(12, "mk/containers.c: ASKING FOR PAGE type: %i \n", type);
 	    /* No free container available */
 		c = containers.first_free[type] = (struct c_header *)dyn_alloc_page(CONT_ALLOC2DYN(type));
 
@@ -267,7 +267,8 @@ void csfree(void *ptr, int type)
 	}
 
 	/* Will we return this page to the OS? */	
-	if(((c->flags & CONT_FLAGS_PREALLOC) != CONT_FLAGS_PREALLOC) && c->free == entries)
+	if(((c->flags & CONT_FLAGS_PREALLOC) != CONT_FLAGS_PREALLOC) 
+        && c->free == entries)
 	{
 		/*
 		We will free the page, if total free structures
