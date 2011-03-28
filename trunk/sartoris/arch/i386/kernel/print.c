@@ -263,3 +263,21 @@ int kprintf(unsigned char att, char *format, ...)
     return 0;	
 }
 
+void bochs_console_print(char *str)
+{
+    int i = 0;
+    while(str[i] != '\0')
+    {
+        __asm__ __volatile__ ("outb %1, %0" : : "dN" (0xe9), "a" (str[i]));
+        i++;
+    }
+}
+
+int bprintf(unsigned char att, char *format, ...) 
+{	/* call vsprintf to construct string */
+    vsprintf(buf, format, (int*) (&format + 1));
+
+    bochs_console_print(buf);
+
+    return 0;	
+}

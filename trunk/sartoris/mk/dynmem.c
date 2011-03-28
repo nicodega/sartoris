@@ -33,8 +33,8 @@ int dyn_pg_lvl;			// If DYN_PGLVL_NONE, no dynamic memory operations are being p
 int dyn_pg_nest;		// Dynamic memory nesting. 0 = none, 1 = already allocated waiting to run thread, 2 = waiting for allocation.
 						// When nesting is 0 we can allocate dynamic memory, if not, there's already a dynamic memory allocation going on.
 int dyn_pg_thread;		// Thread where dynamic memory request originated
-int dyn_remaining;		// how many pages must the OS still provide. 
-int dyn_pg_ret;			// If 0 no page is being returned to the OS.
+int dyn_pg_ret_thread;  // Thread returning pages to the OS.
+int dyn_remaining;		// how many pages must the OS still provide.
 
 /*
 Bitmap used for memory allocation
@@ -49,8 +49,8 @@ void dyn_init()
 
 	dyn_pg_lvl = DYN_PGLVL_NONE;
 	dyn_pg_nest = 0;
-	dyn_pg_thread = 0;
-	dyn_pg_ret = 0;
+	dyn_pg_thread = -1;
+	dyn_pg_ret_thread = -1;
 	dyn_free_first = NULL;
 	f_alloc = 0;
 	f_count = DYN_GRACE_PERIOD;
@@ -116,15 +116,20 @@ void *dyn_alloc_page(int lvl)
 
 	if(i * 32 + j >= DYN_PAGES) return NULL;
 	
-	dyn_pg_lvl = lvl;	// indicate we are on a dynamic memory PF
-    kprintf(12, "mk/dynmem.c: ASKING FOR PAGE type: %i ", lvl);
-	int ret = arch_request_page(laddr);
+    dyn_pg_thread = curr_thread; // we need this in order to generate the interrupt
+	dyn_pg_lvl = lvl;	         // indicate we are on a dynamic memory PF
+    
+    bprintf(12, "mk/dynmem.c: ASKING FOR PAGE type: %i \n", lvl);
+	    
+    int ret = arch_request_page(laddr);
 	
 	dyn_pg_lvl = DYN_PGLVL_NONE;
+    dyn_pg_thread = -1;
 	
 	if(ret == FAILURE) return NULL;
 
 	setbit(pg_bitmap, (unsigned int)(((unsigned int)laddr - KERN_LMEM_SIZE) / PG_SIZE), 1);
+
 #ifdef METRICS
     metrics.dynamic_pages++;
 #endif
@@ -133,8 +138,8 @@ void *dyn_alloc_page(int lvl)
 
 /*
 Free a page used by sartoris.
-This function asumes we are on an atomic block.
-This will break atomicity.
+- This function asumes we are on an atomic block.
+- This will break atomicity.
 */
 void dyn_free_page(void *linear, int lvl)
 {
@@ -155,35 +160,36 @@ void dyn_free_page(void *linear, int lvl)
 		pg->prev = NULL;
 	}
 	dyn_free_first = pg;
+    f_alloc++;
+
 #ifdef METRICS
     metrics.dynamic_pages--;
     metrics.alloc_dynamic_pages++;
 #endif
+
 	/* Check if some other thread is busy freeing. */
-	if(dyn_pg_ret != 0)
+	if(dyn_pg_ret_thread != NULL)
 	{
-		f_alloc++;
 		return;
 	}
 		
-	dyn_pg_ret++;				// this value will be checked on interrupt.c
-
-	if(f_alloc == DYN_THRESHOLD)
-	{
-		f_count = DYN_GRACE_PERIOD;
-	}
-	
-	f_alloc++;
-
 	if(f_alloc > DYN_THRESHOLD)
 	{
 		if(f_count == 0)
-			dyn_free_queued(DYN_THRESHOLD >> 1);
+        {
+            dyn_pg_ret_thread = curr_thread;
+			dyn_free_queued(DYN_THRESHOLD >> 1); // atomicity might be broken in here!
+            dyn_pg_ret_thread = -1;
+        }
 		else
+        {
 			f_count--;
+        }
 	}
-	
-	dyn_pg_ret--; 
+    else if(f_alloc == DYN_THRESHOLD)
+	{
+		f_count = DYN_GRACE_PERIOD;
+	}
 }
 
 void dyn_free_queued(int count)
@@ -200,7 +206,7 @@ void dyn_free_queued(int count)
 		*/
 		pg = dyn_free_first;
 		dyn_free_first = pg->next;
-
+        
 		ret = arch_return_page(pg);
 
 		/* Atomicity might have been broken here, be careful */
@@ -227,12 +233,9 @@ void dyn_free_queued(int count)
             metrics.alloc_dynamic_pages--;
 #endif
 			/* Set page as free on bitmap */
-			laddr = (unsigned int)pg;
-            laddr -= KERN_LMEM_SIZE;
-	        laddr = laddr / PG_SIZE;
 	        setbit(pg_bitmap, (unsigned int)(((unsigned int)laddr - KERN_LMEM_SIZE) / PG_SIZE), 0);
 
-			f_count--;
+            f_alloc--;
 		}
 		count--;
 	}	

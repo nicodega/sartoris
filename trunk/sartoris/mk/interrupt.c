@@ -18,8 +18,6 @@
 #include "sartoris/kernel-data.h"
 #include "sartoris/error.h"
 
-extern int dyn_pg_thread; // thread where dynamic page fault occurred
-
 /* interrupt management implementation */
 
 int create_int_handler(int number, int thread_id, int nesting, int priority) 
@@ -114,44 +112,41 @@ void handle_int(int number)
 	struct task *task;
     
 #ifdef PAGING
-    if (IS_PAGE_FAULT(number)) 
+    /* IS_PAGE_FAULT comes from kernel-arch.h */
+	if (IS_PAGE_FAULT(number)) 
 	{		
         thread = GET_PTR(curr_thread, thr);
         task = GET_PTR(thread->task_num,tsk);
 
-		/* IS_PAGE_FAULT comes from kernel-arch.h */
 		thread->page_faulted = 1;
 
 		/*
 		If dynamic memory request level is not NONE and it's not nested, or 
 		we are in the middle of freeing a page.
 		*/
-        if(dyn_pg_thread == curr_thread)
+        if(dyn_pg_thread == curr_thread &&
+           dyn_pg_lvl != DYN_PGLVL_NONE && 
+           (dyn_pg_nest == DYN_NEST_NONE || dyn_pg_nest == DYN_NEST_ALLOCATED_TBL))
         {
-		    if(dyn_pg_lvl != DYN_PGLVL_NONE && dyn_pg_nest == DYN_NEST_NONE)
-		    {			
-                kprintf(12, "\nmk/INTERRUPT.C: ALLOCATING");for(;;);
-			    dyn_pg_nest = DYN_NEST_ALLOCATING;
+		    bprintf(12, "\nmk/INTERRUPT.C: ALLOCATING");for(;;);
+			dyn_pg_nest = DYN_NEST_ALLOCATING;
 
-			    last_page_fault.task_id = -1;
-			    last_page_fault.thread_id = curr_thread;
-			    last_page_fault.linear = NULL; 
-			    last_page_fault.pg_size = PG_SIZE;
-			    dyn_remaining = arch_req_pages();
-			    last_page_fault.flags = PF_FLAG_PGS(dyn_remaining);
-			    dyn_pg_thread = curr_thread;	// we will use this to return here 
-											    // when grant_page_mk(..) is issued
-		    }
-		    else if(dyn_pg_ret != 0) // dynamic memory page is being freed?
-		    {
-                kprintf(12, "\nmk/INTERRUPT.C: dyn_pg_ret NOT NULL");for(;;);
-			    last_page_fault.task_id = -1;
-			    last_page_fault.thread_id = -1;
-			    last_page_fault.linear = arch_get_freed_physical();
-			    last_page_fault.pg_size = PG_SIZE;
-			    last_page_fault.flags = PF_FLAG_FREE;
-		    }
+			last_page_fault.task_id = -1;
+			last_page_fault.thread_id = curr_thread;
+			last_page_fault.linear = NULL; 
+			last_page_fault.pg_size = PG_SIZE;
+            dyn_remaining = arch_req_pages();
+			last_page_fault.flags = PF_FLAG_PGS(dyn_remaining);
         }
+        else if(dyn_pg_ret_thread == curr_thread) // dynamic memory page is being freed?
+		{
+            bprintf(12, "\nmk/INTERRUPT.C: dyn_pg_ret NOT NULL");for(;;);
+			last_page_fault.task_id = -1;
+			last_page_fault.thread_id = -1;
+			last_page_fault.linear = arch_get_freed_physical();
+			last_page_fault.pg_size = PG_SIZE;
+			last_page_fault.flags = PF_FLAG_FREE;
+		}
 		else
 		{
 			// a common page fault

@@ -26,6 +26,12 @@ int grant_page_mk(void *physical)
 #ifdef PAGING
 	int x = mk_enter();
 
+    if(physical == NULL)
+    {
+        set_error(SERR_INVALID_PTR);
+        return ret;
+    }
+
 	if(dyn_pg_lvl == DYN_PGLVL_NONE && dyn_pg_nest == DYN_NEST_ALLOCATING)
 	{
 		ret = arch_grant_page_mk(physical, dyn_remaining);
@@ -40,6 +46,8 @@ int grant_page_mk(void *physical)
 
 		if(dyn_remaining == 0)
 			dyn_pg_nest = DYN_NEST_ALLOCATED; // set pg_nest to DYN_NEST_ALLOCATED so run_thread wont fail
+        else
+            dyn_pg_nest = DYN_NEST_ALLOCATED_TBL;
 
         set_error(SERR_OK);
 	}

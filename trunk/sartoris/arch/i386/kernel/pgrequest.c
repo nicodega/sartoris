@@ -75,8 +75,9 @@ This function must request a page from the operating system. It will
 do so by issuing a Page Fault interrupt.
 If a table is also needed another page fault will be generated, once the first
 one has been granted.
-IMPORTANT: It will return a linear sartoris address already mapped.
-NOTE: This function will break atomicity.
+IMPORTANT: 
+    - It will return a linear sartoris address already mapped.
+    - This function WILL break atomicity.
 */
 int arch_request_page(void *laddr)
 {
@@ -86,7 +87,7 @@ int arch_request_page(void *laddr)
 
 	/* 
 	We will request a page from underling OS by issuing a page fault.
-    Page fault flags will be set accordingly.
+    Page fault flags will be set accordingly (on the interrupt handler on arch independant section).
 	Yeap, we will be trusting our OS on top... not nice... but it 
 	provides dynamic memory until we figure out something better.
 	*/
@@ -97,7 +98,8 @@ int arch_request_page(void *laddr)
 	Page tables will be allocated on demand for the MK, and returned when no 
 	more entries are used (except for the mapping zone ones). This means
 	we will have to update *every* existing task page directory, with new tables.
-	To improve performance this update will only be performed on demand, when a process pagefaults.
+	To improve performance this update will only be performed on demand,
+    by sartoris when a process pagefaults on a kernel dynamic memory table.
 	*/
 
 	/* Check if page table for this address is present on current task. */
@@ -120,11 +122,11 @@ int arch_request_page(void *laddr)
 			/*
 			we will put the table only on the current task page directory. (On other tasks it'll be loaded on demand)
 			*/
-			pdir_map[PG_LINEAR_TO_DIR(laddr)] = PG_ADDRESS(rq_physical) | PG_USER | PG_PRESENT | PGATT_WRITE_ENA;
-			dyn_tables[DYN_TBL_INDEX(PG_LINEAR_TO_DIR(laddr))] = PG_ADDRESS(rq_physical) | PG_USER | PG_PRESENT | PGATT_WRITE_ENA;
+			dyn_tables[DYN_TBL_INDEX(PG_LINEAR_TO_DIR(laddr))] = pdir_map[PG_LINEAR_TO_DIR(laddr)] = PG_ADDRESS(rq_physical) | PG_USER | PG_PRESENT | PGATT_WRITE_ENA;
 		}
 		else
 		{
+            // page is not present, but it is on the kernel tables.. map it.
 			pdir_map[PG_LINEAR_TO_DIR(laddr)] = dyn_tables[DYN_TBL_INDEX(PG_LINEAR_TO_DIR(laddr))];
 		}
 	}
@@ -137,7 +139,8 @@ int arch_request_page(void *laddr)
 	if(rq_physical == NULL)
 			return FAILURE;
 
-	map_page((pt_entry *)PG_ADDRESS(ptab_map[PG_LINEAR_TO_TAB(laddr)]));
+    /* Map the page table so we can set the address on it */
+	map_page((void*)PG_ADDRESS(pdir_map[PG_LINEAR_TO_DIR(laddr)]));
 	
 	/* 
 	Since directories share the same page table for kernel addresses, we can
