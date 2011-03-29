@@ -211,7 +211,6 @@ _dummy_eip:
 	xor eax, eax                        ;; in case we were invoked from run_thread_int		
 	ret
 	
-	
 _first_time:
 	;; load initial mxcsr if SSE is present
 	;; only for the first time

@@ -6,7 +6,7 @@
 	- Software interrupts implementation
 		Allows running a thread specifying an eip and stack. Upon run
 		current thread registers (C convention) and flags will remain the same.
-	- MMX/FPU/SSE/SSE2/3DNOW! state preservation support
+	- MMX/FPU/SSE/SSE2/3DNOW! state preservation support on x86 arch.
 	- Capabilities API (CPUID)
 	- Optional (#define _METRICS_) Metrics API 
 		Currently only supports SMO/Messages/Ports metrics and a syscall to get the struct.
@@ -14,6 +14,8 @@
 	- Multiboot compliant loader.
 	- Pop/Push/Resume Interrupts implemented for interrupt stack manipulation from non nested ints.
 	- Now ports must be opened manually. Compatibility with version 5.3 is deprecated.
+	- Kernel now loads itself from the first megabyte and up, preserving the BIOS.
+	  (implemented entering Unreal Mode)
 
 [0.6.0] - Prerelease 8
 	- Fixed smos implementation with paging.

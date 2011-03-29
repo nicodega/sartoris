@@ -66,7 +66,7 @@ and we want them on different page tables.
 */
 
 #if (0x200000 + (MAX_THR * PG_SIZE)) % PG_SIZE == 0
-    #define KERN_LMEM_SIZE  (0x200000 + (MAX_THR * PG_SIZE))  /* Size of sartoris Low Memory block (does not include dynamic memory): 1 page per thread + 1MB */
+    #define KERN_LMEM_SIZE  (0x200000 + (MAX_THR * PG_SIZE))  /* Size of sartoris Low Memory block (does not include dynamic memory): 1 page per thread + 2MB */
 #else
     #define KERN_LMEM_SIZE  (0x200000 + (MAX_THR * PG_SIZE)) + (0x400000 - (0x200000 + (MAX_THR * PG_SIZE)) % 0x400000)
 #endif

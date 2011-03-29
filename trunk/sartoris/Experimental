@@ -5,5 +5,3 @@ The following features require more testing and might not work properly, because
 - run_thread_int
 - Dynamic memory page allocation procedure
 - Thread/Ports permissions.
-- MemMap
-- SSE (right now int7 checks for MMX, should we also check SSE?)
