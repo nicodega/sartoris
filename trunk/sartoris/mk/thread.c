@@ -239,12 +239,7 @@ int run_thread(int id)
 					curr_base = task->mem_adr;
 					curr_priv = task->priv_level;
 
-                    if(dyn_pg_thread == curr_thread)
-                    {
-                        bprintf("Running dynmem thread\n");
-                        __asm__ __volatile__ ("xchg %%bx,%%bx; "::);
-                    }
-					result = arch_run_thread(id);
+                    result = arch_run_thread(id);
 
 					if ( result !=  SUCCESS ) 
 					{                        
