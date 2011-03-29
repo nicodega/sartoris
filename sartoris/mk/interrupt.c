@@ -126,8 +126,7 @@ void handle_int(int number)
 		*/
         if(dyn_pg_thread == curr_thread)
         {
-		    bprintf(12, "\nmk/INTERRUPT.C: ALLOCATING\n");
-			dyn_pg_nest = DYN_NEST_ALLOCATING;
+		    dyn_pg_nest = DYN_NEST_ALLOCATING;
 
 			last_page_fault.task_id = -1;
 			last_page_fault.thread_id = curr_thread;
@@ -138,7 +137,7 @@ void handle_int(int number)
         }
         else if(dyn_pg_ret_thread == curr_thread) // dynamic memory page is being freed?
 		{
-            bprintf(12, "\nmk/INTERRUPT.C: RETURNING PAGE TO OS\n");for(;;);
+            bprintf("mk/INTERRUPT.C: RETURNING PAGE TO OS\n");for(;;);
 			last_page_fault.task_id = -1;
 			last_page_fault.thread_id = -1;
 			last_page_fault.linear = arch_get_freed_physical();
@@ -157,13 +156,12 @@ void handle_int(int number)
 			// did we pagefault on a kernel dynamic memory page?
 			if(last_page_fault.linear < (void*)MAX_ALLOC_LINEAR)
 			{
-                bprintf(12, "\nmk/INTERRUPT.C: PF ON KERNEL DYNAMIC\n");
+                bprintf("mk/INTERRUPT.C: PF ON KERNEL DYNAMIC\n");
 
 				// try to map an existing kernel table onto the task
-				if(last_page_fault.linear > (void*)KERN_LMEM_SIZE && arch_kernel_pf(last_page_fault.linear) != FAILURE)
+				if(last_page_fault.linear > (void*)KERN_LMEM_SIZE 
+                    && arch_kernel_pf(last_page_fault.linear) != FAILURE)
 				{
-					last_page_fault.linear = (void*)0xFF; 
-					last_page_fault.pg_size = 0;
 					return;
 				}
 			}			

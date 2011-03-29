@@ -26,7 +26,7 @@ kelf : $(objects)
 	$(LD) $(objects) -o kelf
 
 cpu-arch.o : $(cpu_objects) 
-	$(LD) -i $(cpu_objects)  -o cpu-arch.o
+	$(LD) -i $(cpu_objects) -o cpu-arch.o
 
 scr-print.o : $(prt_objects)
 	$(LD) -i $(prt_objects) -o scr-print.o

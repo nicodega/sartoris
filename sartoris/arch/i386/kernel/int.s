@@ -18,6 +18,7 @@ global idt_call_table
 global exceptions_call_table	
 global int_code_start
 global int_run
+global int_14
 
 global no_copro
 		
@@ -55,10 +56,10 @@ extern caps_exception
 	mov [exc_error_code], eax
 
 	mov eax, [esp]
-	mov [esp+8], eax	; set error code position with eax val 
+	mov [esp+8], eax	; set error code position with eax val
 	pop eax
 	pop ds
-	pop eax             ; now eax has its original value
+	pop eax             ; now eax has its original value which was stored on esp+8
 	
 	pushf
 	pusha

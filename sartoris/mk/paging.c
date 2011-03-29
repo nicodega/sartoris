@@ -29,12 +29,13 @@ int grant_page_mk(void *physical)
     if(physical == NULL)
     {
         set_error(SERR_INVALID_PTR);
+        mk_leave(x);
         return ret;
     }
 
-	if(dyn_pg_lvl == DYN_PGLVL_NONE && dyn_pg_nest == DYN_NEST_ALLOCATING)
+	if(dyn_pg_lvl != DYN_PGLVL_NONE && dyn_pg_nest == DYN_NEST_ALLOCATING)
 	{
-		ret = arch_grant_page_mk(physical, dyn_remaining);
+		ret = arch_grant_page_mk(physical);
 		/* 
 			We will return to the process which generated the need 
 			for dynamic memory in the first place. 

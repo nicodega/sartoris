@@ -73,10 +73,16 @@ void init_paging()
 	/* Init page directory will be first page after image */
 	pdir_ptr = tinf->pdb = (void*)(INIT_OFFSET+INIT_SIZE);
 
+    /*
     pdir_ptr[0] = ((unsigned int)kern_ptables[0]) | PG_WRITABLE | PG_PRESENT;
 	for(i = 1; i < KERN_TABLES; i++)
 	{
 		pdir_ptr[i] = 0;
+	}
+    */
+	for(i = 0; i < KERN_TABLES; i++)
+	{
+		pdir_ptr[i] = ((unsigned int)kern_ptables[i]) | PG_WRITABLE | PG_PRESENT;
 	}
 
 	/* clear the rest of the page directory */
@@ -222,9 +228,9 @@ int arch_page_in(int task, void *linear, void *physical, int level, int attrib)
 	if (pdir_ptr != NULL || level == 0) 
 	{ 
 		/* no page directory needed for level=0 */
+	    /* no access to microkernel memory! (but allow < 1MB) */
 		if ( (unsigned int) physical < KRN_OFFSET || (unsigned int) physical >= KRN_OFFSET+KRN_SIZE) 
 		{  
-			/* no access to microkernel memory! (but allow < 1MB) */
 			if ( (unsigned int) linear >= USER_OFFSET || level == 0  ) 
 			{
 				/* no remapping of microkernel memory! */
@@ -328,15 +334,12 @@ int arch_page_in(int task, void *linear, void *physical, int level, int attrib)
 						{ 							
 							result = SUCCESS; /* done with level 0 */
                             						
-							/* insert static kernel page tables 
-                            NOTE: mappings tables won't be loaded because when used 
-                            a mapping will be created again.
-                            */
+							/* insert static kernel page tables */
 							pdir_ptr = (pd_entry *)PG_ADDRESS(physical);
 													
 							map_page(pdir_ptr);
 													
-							for (i=0; i<(KERN_STA_TABLES); i++) 
+							for (i=0; i<(KERN_TABLES); i++) 
 							{	
 								pdir_map[i] = ((unsigned int)kern_ptables[i]) | PG_WRITABLE | PG_PRESENT;
 							}

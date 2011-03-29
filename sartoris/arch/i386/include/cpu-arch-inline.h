@@ -38,9 +38,22 @@ static inline void *arch_get_page_fault(void)
 
 #define HAVE_INL_ISSUE_PAGE_FAULT
 
+extern int_14;
 static inline void arch_issue_page_fault(void) 
 {
-	__asm__ ("int $14");
+    // int$14 won't push the error code!
+    // Simulate the interrupt call.
+	//__asm__ __volatile__ ("pushl $0; int $14");
+    __asm__ __volatile__ (
+        "pushf;"
+        "cli;"
+        "pushl %%cs;"
+        "pushl $1f;"
+        "pushl $0;"
+        "jmp int_14;"
+        "1: " : : );
+
+    //__asm__ __volatile__ ("xchg %%ax,%%ax;"::);
 }
 
 

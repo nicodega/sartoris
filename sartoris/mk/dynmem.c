@@ -118,9 +118,7 @@ void *dyn_alloc_page(int lvl)
 	
     dyn_pg_thread = curr_thread; // we need this in order to generate the interrupt
 	dyn_pg_lvl = lvl;	         // indicate we are on a dynamic memory PF
-    
-    bprintf(12, "mk/dynmem.c: ASKING FOR PAGE type: %i \n", lvl);
-	    
+    	    
     int ret = arch_request_page(laddr);
 	
 	dyn_pg_lvl = DYN_PGLVL_NONE;

@@ -273,7 +273,7 @@ void bochs_console_print(char *str)
     }
 }
 
-int bprintf(unsigned char att, char *format, ...) 
+int bprintf(char *format, ...) 
 {	/* call vsprintf to construct string */
     vsprintf(buf, format, (int*) (&format + 1));
 

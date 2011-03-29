@@ -111,15 +111,14 @@ int arch_request_page(void *laddr)
 	{
 		if(dyn_tables[DYN_TBL_INDEX(PG_LINEAR_TO_DIR(laddr))] == NULL)
 		{
-			rq_physical = NULL;
-			
-			/* Request a page for the table using a page fault */
+            rq_physical = NULL;
+            /* Request a page for the table using a page fault */
 			arch_issue_page_fault();
-
-			if(rq_physical == NULL)
+			
+            if(rq_physical == NULL)
 				return FAILURE;
 			
-			/*
+            /*
 			we will put the table only on the current task page directory. (On other tasks it'll be loaded on demand)
 			*/
 			dyn_tables[DYN_TBL_INDEX(PG_LINEAR_TO_DIR(laddr))] = pdir_map[PG_LINEAR_TO_DIR(laddr)] = PG_ADDRESS(rq_physical) | PG_USER | PG_PRESENT | PGATT_WRITE_ENA;
@@ -133,10 +132,10 @@ int arch_request_page(void *laddr)
 
 	rq_physical = NULL;
 	
-	/* Request the page */
+    /* Request the page */
 	arch_issue_page_fault();
 	
-	if(rq_physical == NULL)
+    if(rq_physical == NULL)
 			return FAILURE;
 
     /* Map the page table so we can set the address on it */
@@ -192,17 +191,21 @@ int arch_return_page(void *laddr)
 			
 			free_addr = (void*)PG_ADDRESS(pdir_map[PG_LINEAR_TO_DIR(laddr)]);
 
-			// remove page table from task directories
-			tinf_it = first_task;
-			while(tinf_it != NULL)
-			{
-				map_page(tinf->pdb);
-				pdir_map[PG_LINEAR_TO_DIR(laddr)] = 0;
-				tinf_it = tinf_it->next;
-			}
+            // laddr might be on the last kernel page table.
+            // If it's not, map it out from every task.
+            if(PG_LINEAR_TO_DIR(laddr) >= KERN_TABLES)
+            {
+			    // remove page table from task directories
+			    tinf_it = first_task;
+			    while(tinf_it != NULL)
+			    {
+				    map_page(tinf->pdb);
+				    pdir_map[PG_LINEAR_TO_DIR(laddr)] = 0;
+				    tinf_it = tinf_it->next;
+			    }
 
-			dyn_tables[DYN_TBL_INDEX(PG_LINEAR_TO_DIR(laddr))] = NULL;
-
+			    dyn_tables[DYN_TBL_INDEX(PG_LINEAR_TO_DIR(laddr))] = NULL;
+            }
 			// issue page fault to free the table
 			arch_issue_page_fault();
 		}
@@ -231,7 +234,8 @@ int arch_req_pages(void *laddr)
 	tinf = GET_TASK_ARCH(curr_task);
 	map_page(tinf->pdb);
 
-	if((pdir_map[PG_LINEAR_TO_DIR(laddr)] & PG_PRESENT) == 0 || dyn_tables[DYN_TBL_INDEX(PG_LINEAR_TO_DIR(laddr))] == NULL)
+	if((pdir_map[PG_LINEAR_TO_DIR(laddr)] & PG_PRESENT) == 0 
+        || dyn_tables[DYN_TBL_INDEX(PG_LINEAR_TO_DIR(laddr))] == NULL)
 	{
 		return 2;
 	}
