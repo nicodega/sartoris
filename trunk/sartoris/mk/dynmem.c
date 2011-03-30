@@ -118,10 +118,10 @@ void *dyn_alloc_page(int lvl)
 	
     dyn_pg_thread = curr_thread; // we need this in order to generate the interrupt
 	dyn_pg_lvl = lvl;	         // indicate we are on a dynamic memory PF
-    	    
+    
     int ret = arch_request_page(laddr);
 	
-	dyn_pg_lvl = DYN_PGLVL_NONE;
+    dyn_pg_lvl = DYN_PGLVL_NONE;
     dyn_pg_thread = -1;
 	
 	if(ret == FAILURE) return NULL;
@@ -142,7 +142,7 @@ Free a page used by sartoris.
 void dyn_free_page(void *linear, int lvl)
 {
 	struct dyn_free_page *pg = NULL;
-		
+	
 	/* Add page to non-returned pages list */
 	pg = (struct dyn_free_page *)linear;
 
@@ -166,9 +166,9 @@ void dyn_free_page(void *linear, int lvl)
 #endif
 
 	/* Check if some other thread is busy freeing. */
-	if(dyn_pg_ret_thread != NULL)
+	if(dyn_pg_ret_thread != -1)
 	{
-		return;
+        return;
 	}
 		
 	if(f_alloc > DYN_THRESHOLD)
@@ -176,7 +176,11 @@ void dyn_free_page(void *linear, int lvl)
 		if(f_count == 0)
         {
             dyn_pg_ret_thread = curr_thread;
+#if DYN_THRESHOLD == 0
+            dyn_free_queued(1);
+#else
 			dyn_free_queued(DYN_THRESHOLD >> 1); // atomicity might be broken in here!
+#endif
             dyn_pg_ret_thread = -1;
         }
 		else
@@ -204,7 +208,7 @@ void dyn_free_queued(int count)
 		*/
 		pg = dyn_free_first;
 		dyn_free_first = pg->next;
-        
+
 		ret = arch_return_page(pg);
 
 		/* Atomicity might have been broken here, be careful */

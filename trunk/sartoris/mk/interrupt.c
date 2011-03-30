@@ -126,7 +126,7 @@ void handle_int(int number)
 		*/
         if(dyn_pg_thread == curr_thread)
         {
-		    dyn_pg_nest = DYN_NEST_ALLOCATING;
+			dyn_pg_nest = DYN_NEST_ALLOCATING;
 
 			last_page_fault.task_id = -1;
 			last_page_fault.thread_id = curr_thread;
@@ -137,7 +137,6 @@ void handle_int(int number)
         }
         else if(dyn_pg_ret_thread == curr_thread) // dynamic memory page is being freed?
 		{
-            bprintf("mk/INTERRUPT.C: RETURNING PAGE TO OS\n");for(;;);
 			last_page_fault.task_id = -1;
 			last_page_fault.thread_id = -1;
 			last_page_fault.linear = arch_get_freed_physical();

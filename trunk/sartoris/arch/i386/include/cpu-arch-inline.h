@@ -43,7 +43,6 @@ static inline void arch_issue_page_fault(void)
 {
     // int$14 won't push the error code!
     // Simulate the interrupt call.
-	//__asm__ __volatile__ ("pushl $0; int $14");
     __asm__ __volatile__ (
         "pushf;"
         "cli;"
@@ -51,9 +50,7 @@ static inline void arch_issue_page_fault(void)
         "pushl $1f;"
         "pushl $0;"
         "jmp int_14;"
-        "1: " : : );
-
-    //__asm__ __volatile__ ("xchg %%ax,%%ax;"::);
+        "1: " : : : "memory" );
 }
 
 

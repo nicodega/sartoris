@@ -60,6 +60,16 @@ void init_paging()
 		kern_ptables[0][i] = 0;
 	}
 
+    /* 
+    Initialize the last kernel table, in case it overlaps with 
+    the dynamic memory area.
+    */ 
+
+    for (i = 0; i < 1024; i++) 
+	{
+		kern_ptables[KERN_TABLES-1][i] = 0;
+	}
+
 	/* 
 		We just built a kernel page table that self-maps megabytes 0-2 of memory.
 		it will be shared by everyone. 
@@ -73,13 +83,6 @@ void init_paging()
 	/* Init page directory will be first page after image */
 	pdir_ptr = tinf->pdb = (void*)(INIT_OFFSET+INIT_SIZE);
 
-    /*
-    pdir_ptr[0] = ((unsigned int)kern_ptables[0]) | PG_WRITABLE | PG_PRESENT;
-	for(i = 1; i < KERN_TABLES; i++)
-	{
-		pdir_ptr[i] = 0;
-	}
-    */
 	for(i = 0; i < KERN_TABLES; i++)
 	{
 		pdir_ptr[i] = ((unsigned int)kern_ptables[i]) | PG_WRITABLE | PG_PRESENT;
@@ -438,21 +441,6 @@ int arch_page_out(int task, void *linear, int level)
 
 	return result;
 }
-//
-//static inline int arch_flush_tlb() 
-//{
-//	/* touch cr3, processor invalidates all tlb entries */
-//	__asm__ __volatile__ ("movl %%cr3, %%eax\n\t" 
-//			 "movl %%eax, %%cr3" :  :  : "cc", "eax" );
-//}
-//
-//static inline void invalidate_tlb(void *linear) 
-//{
-//	__asm__ __volatile__ ("invlpg %0" : : "m" (linear));
-//
-//	arch_flush_tlb();   /* FIXME !!! */
-//}
-
 
 /* this adjusts our one-page window to other address spaces */
 int import_page(int task, void *linear) 
