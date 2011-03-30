@@ -186,6 +186,12 @@ int run_internal(int term, char* cmd_line)
 		free_params(term);
 		return TRUE;
 	}
+    else if(streq(cmd, "dyntst"))
+	{
+		dyntst(term, args[term], argc[term]);
+		free_params(term);
+		return TRUE;
+	}
 	free_params(term);
 	return FALSE;
 }

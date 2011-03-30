@@ -54,15 +54,11 @@ BOOL vmm_handle_page_fault(UINT16 *thr_id, BOOL internal)
         /* is sartoris requesting/returning memory? */
         if(pf.flags != PF_FLAG_NONE)
         {
-            pman_print_and_stop("PMAN: SARTORIS PF! STOP");
             if(pf.flags == PF_FLAG_FREE)
             {
                 // sartoris is returning a page
                 // last_page_fault.linear contains the physical address
                 vmm_pm_put_page((ADDR)PHYSICAL2LINEAR(pf.linear));
-                            
-                // don't put the thread on hold
-                return FALSE;
             }
             else
             {
@@ -70,23 +66,15 @@ BOOL vmm_handle_page_fault(UINT16 *thr_id, BOOL internal)
 
                 // sartoris is requesting pages
                 page_addr = vmm_pm_get_page(FALSE);
-                grant_page_mk(LINEAR2PHYSICAL(page_addr));
 
-                if(PF_FLAG_GET_PGS(pf.flags) > 1)
-                {
-                    // put the thread on block list for
-                    // it's requesting sartoris some memory
-                    sch_deactivate(thread);
-                    thread->state = THR_BLOCKED;
-                }
-                else if(thread->state == THR_BLOCKED)
-                {
-                    // memory has been served.. put the thread on the scheduler again
-                    sch_activate(thread);
-                    thread->state = THR_WAITING;
-                }
-                return TRUE;
+                if(page_addr == NULL)
+                    pman_print_dbg("PMAN: NO FREE PAGE FOR SARTORIS");
+
+                if(grant_page_mk(LINEAR2PHYSICAL(page_addr)) < 0)
+                    pman_print_and_stop("PMAN: grant_page_mk failed!");
             }
+            // don't put the thread on hold.
+            return FALSE;
         }
         else
         {
@@ -105,9 +93,6 @@ BOOL vmm_handle_page_fault(UINT16 *thr_id, BOOL internal)
 		    if(thread->state == THR_INTHNDL)
 			    pman_print_and_stop("INT HADLER PAGE FAULT!");
         		
-		    //if(!(task->flags & TSK_FLAG_SYS_SERVICE)) 
-		    //	pman_print("PMAN: PROC PF linear: %x, task: %i, thr: %i ", pf.linear, pf.task_id, pf.thread_id);
-
 		    thread->vmm_info.fault_entry.addr = 0;
 		    thread->vmm_info.fault_entry.present = 0;
 		    thread->vmm_info.fault_entry.swapped = 0;

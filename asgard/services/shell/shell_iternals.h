@@ -148,6 +148,8 @@ void umount_cmd(int term, char **args, int argc);
 void mklink_cmd(int term, char **args, int argc);
 void chattr_cmd(int term, char **args, int argc);
 void contest(int term, char **args, int argc);
+void atactst(int term, char **args, int argc);
+void dyntst(int term, char **args, int argc);
 void jobs(int term, char **args, int argc);
 void kill(int term, char **args, int argc);
 

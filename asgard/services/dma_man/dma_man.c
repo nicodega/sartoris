@@ -34,7 +34,7 @@ int dieretport;
 struct channel channels[8];
 
 unsigned char buffer[BUFF_SIZE];
-unsigned char pagesbuffer[PAGE_BUFF_SIZE];
+unsigned char pagesbuffer[PAGE_BUFF_SIZE] __attribute__((aligned(0x1000))); // buffers must be 64kb aligned
 unsigned int phys;
 
 list assigned;
