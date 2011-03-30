@@ -43,9 +43,7 @@ UINT32 loader_create_task(struct pm_task *task, char *path, UINT32 plength, UINT
 	/* if we got here, task id is valid, the task slot is free,
 	the path got through fine (smo is ok) and we have enough
 	memory at least for a new page directory */
-
-	/* everything is fine. spawn the task, don't fly upside down and be happy! */
-
+    
 	/* save info */
 	task->state = TSK_LOADING;
 	task->first_thread = NULL;

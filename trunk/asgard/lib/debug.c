@@ -19,14 +19,8 @@
 
 #include "lib/debug.h"
 
-int printRow=0;
-int printCol=0;
-int printLColor = 12;
 char	outtext[256];
 char	num[20];
-int rows = 24;
-int cols = 80;
-
 
 enum { EXPAND, VERBATIM }; 
 
@@ -138,27 +132,24 @@ int dsprintf_sprintf_strcp(char *str, char *buf) {
 }
 
 
+void bochs_console_print(char *str)
+{
+    int i = 0;
+    while(str[i] != '\0')
+    {
+        __asm__ __volatile__ ("outb %1, %0" : : "dN" (0xe9), "a" (str[i]));
+        i++;
+    }
+}
+
+
 int print(char *format, ...) 
 {
 	/* call dvsprintf to construct string */
 	dvsprintf(outtext, format, (int*) (&format + 1));
 
-    string_print(outtext, printRow * cols * 2, printLColor);
-    printRow++;
-	if(printRow > rows) printRow = 0;
-
-	return 0;	
-	
+    bochs_console_print(outtext);
+    
+	return 0;
 }
 
-
-void clrscr(void)
-{
-	int i;
-	for (i = 0; i<(24*80); i++) {
-		string_print (" ", 2*i, 7);
-	}
-
-	printRow=0;
-	printCol=0;
-}

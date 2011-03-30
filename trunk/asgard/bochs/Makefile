@@ -1,5 +1,5 @@
-all : 1.44a 10MB.hd.ofs
-#all : 1.44a
+#all : 1.44a 10MB.hd.ofs
+all : 1.44a
 
 1.44a : FORCE
 	#create sys image (modifying blocklist)

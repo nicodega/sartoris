@@ -211,7 +211,7 @@ INT32 vmm_init(struct multiboot_info *multiboot, UINT32 ignore_start, UINT32 ign
 Adds a memory range to the vmm page stacks.
 */
 INT32 vmm_add_mem(struct multiboot_info *multiboot, UINT32 start, UINT32 end)
-{
+{    
 	/* Add pages to the page stack */
 
 	/* Add Low mem stack pages */
@@ -334,11 +334,12 @@ ADDR vmm_pm_get_page(BOOL low_mem)
 void vmm_pm_put_page(ADDR page_laddr)
 {
 	struct taken_entry *tentry = NULL;
+
 	if(page_laddr == NULL) return;
 
 	/* Return the page to the Stack */
 	push_page(vmm_addr_stack(page_laddr), page_laddr);
-	
+
 	/* Set the taken structure */
 	tentry = vmm_taken_get(page_laddr);
 

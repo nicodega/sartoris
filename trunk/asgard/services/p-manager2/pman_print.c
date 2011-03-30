@@ -26,13 +26,12 @@
 INT32 line = 0;
 INT32 color = 7;
 char buff[256];
-int debug_cont = 0;
+
+void bochs_console_print(char *str);
 
 void pman_print(char *str, ...)
 {
-	INT32 *args = (INT32*)(&str + 1);
-
-	vsprintf(buff, str, args);
+    vsprintf(buff, str, (INT32*)(&str + 1));
 	string_print(buff, 80*2*line, color);
 	line++;
 	if(line >= 24) 
@@ -44,16 +43,18 @@ void pman_print(char *str, ...)
 
 void pman_print_dbg(char *str, ...)
 {
-	INT32 *args = (INT32*)(&str + 1);
-	debug_cont = 0;
-	vsprintf(buff, str, args);
-	string_print(buff, 80*2*line, color);
-	line++;
-	if(line >= 24) 
-	{
-		line = 0;
-		color++;
-	}	
+	vsprintf(buff, str, (INT32*)(&str + 1));
+	bochs_console_print(buff);	
+}
+
+void bochs_console_print(char *str)
+{
+    int i = 0;
+    while(str[i] != '\0')
+    {
+        __asm__ __volatile__ ("outb %1, %0" : : "dN" (0xe9), "a" (str[i]));
+        i++;
+    }
 }
 
 void pman_print_and_stop(char *str, ...)
