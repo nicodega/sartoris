@@ -129,14 +129,15 @@ int arch_request_page(void *laddr)
 			pdir_map[PG_LINEAR_TO_DIR(laddr)] = dyn_tables[DYN_TBL_INDEX(PG_LINEAR_TO_DIR(laddr))];
 		}
 	}
-
+    
 	rq_physical = NULL;
-	
     /* Request the page */
 	arch_issue_page_fault();
-	
+
     if(rq_physical == NULL)
-			return FAILURE;
+    {
+		return FAILURE;
+    }
 
     /* Map the page table so we can set the address on it */
 	map_page((void*)PG_ADDRESS(pdir_map[PG_LINEAR_TO_DIR(laddr)]));
@@ -161,51 +162,58 @@ If we could return the page to the OS, it must return 1, 0 otherwise.
 int arch_return_page(void *laddr)
 {
 	struct i386_task *tinf_it, *tinf;
-	pd_entry *pdir_map = AUX_PAGE_SLOT(curr_thread);
-	pt_entry *ptab_map = AUX_PAGE_SLOT(curr_thread);
+    pd_entry *slot = AUX_PAGE_SLOT(curr_thread);	
 	int count = 0, i = 0;
-
-	/* Remove page from table */
-	map_page(tinf->pdb);
-
-	if((pdir_map[PG_LINEAR_TO_DIR(laddr)] & PG_PRESENT))
-	{
+        
+    /*
+    Careful, it might be on a kernel page if they overlap.
+    */
+	if( PG_LINEAR_TO_DIR(laddr) < KERN_TABLES ||
+        (dyn_tables[DYN_TBL_INDEX(PG_LINEAR_TO_DIR(laddr))] & PG_PRESENT))
+	{        
 		/* Count present entries on table, and free it if necesary */
-		map_page((pt_entry *)PG_ADDRESS(pdir_map[PG_LINEAR_TO_DIR(laddr)]));
+        if(PG_LINEAR_TO_DIR(laddr) >= KERN_TABLES)
+        {
+		    map_page((pt_entry *)PG_ADDRESS(dyn_tables[DYN_TBL_INDEX(PG_LINEAR_TO_DIR(laddr))]));
+        }
+        else
+        {
+            // it's on sartoris static pages, it's present for sure, so map it
+            tinf = GET_TASK_ARCH(curr_task);
+            map_page(tinf->pdb);                                                // map the page directory
+            map_page((pt_entry *)PG_ADDRESS(slot[PG_LINEAR_TO_DIR(laddr)]));    // map the table
+        }
 
 		for(i = 0; i < 0x400; i++)
 		{
-			if(ptab_map[i] & PG_PRESENT)
+			if(slot[i] & PG_PRESENT)
 				count++;
 		}
 
-		free_addr = (void*)PG_ADDRESS(ptab_map[PG_LINEAR_TO_TAB(laddr)]);
-		ptab_map[PG_LINEAR_TO_TAB(laddr)] = 0;
+		free_addr = (void*)PG_ADDRESS(slot[PG_LINEAR_TO_TAB(laddr)]);
 
-		/* First page fault will free the page */
+		slot[PG_LINEAR_TO_TAB(laddr)] = 0;
+        
+        /* First page fault will free the page */
 		arch_issue_page_fault();
 
-		if(count == 1)
+		if(count == 1 
+            && PG_LINEAR_TO_DIR(laddr) >= KERN_TABLES)
 		{
-			map_page(tinf->pdb); // Map directory again to access it
-			
-			free_addr = (void*)PG_ADDRESS(pdir_map[PG_LINEAR_TO_DIR(laddr)]);
+			free_addr = (void*)PG_ADDRESS(dyn_tables[DYN_TBL_INDEX(PG_LINEAR_TO_DIR(laddr))]);
+            slot = AUX_PAGE_SLOT(curr_thread);
 
-            // laddr might be on the last kernel page table.
-            // If it's not, map it out from every task.
-            if(PG_LINEAR_TO_DIR(laddr) >= KERN_TABLES)
-            {
-			    // remove page table from task directories
-			    tinf_it = first_task;
-			    while(tinf_it != NULL)
-			    {
-				    map_page(tinf->pdb);
-				    pdir_map[PG_LINEAR_TO_DIR(laddr)] = 0;
-				    tinf_it = tinf_it->next;
-			    }
+            // remove page table from task directories
+			tinf_it = first_task;
+			while(tinf_it != NULL)
+			{
+				map_page(tinf_it->pdb);
+				slot[PG_LINEAR_TO_DIR(laddr)] = 0;
+				tinf_it = tinf_it->next;
+			}
 
-			    dyn_tables[DYN_TBL_INDEX(PG_LINEAR_TO_DIR(laddr))] = NULL;
-            }
+			dyn_tables[DYN_TBL_INDEX(PG_LINEAR_TO_DIR(laddr))] = NULL;
+            
 			// issue page fault to free the table
 			arch_issue_page_fault();
 		}

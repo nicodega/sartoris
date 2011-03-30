@@ -5,6 +5,3 @@ LD = /opt/crosstool/gcc-4.1.0-glibc-2.3.6/i686-unknown-linux-gnu/bin/i686-unknow
 CFLAGS = -O2 -D FPU_MMX -D _METRICS_ -D PAGING
 AS = nasm
 ASFLAGS = -f elf -d FPU_MMX -D _METRICS_ -D PAGING
-
-#CFLAGS = -O2  -D _METRICS_ -D PAGING
-#ASFLAGS = -f elf -D _METRICS_ -D PAGING

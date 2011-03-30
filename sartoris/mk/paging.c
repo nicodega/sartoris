@@ -166,7 +166,9 @@ int get_page_fault(struct page_fault *pf)
 
 #ifdef PAGING
 
-	if (last_page_fault.task_id != -1 || dyn_pg_lvl != DYN_PGLVL_NONE) 
+	if (last_page_fault.task_id != -1 
+        || dyn_pg_lvl != DYN_PGLVL_NONE 
+        || dyn_pg_ret_thread != -1) 
 	{		
 		x = mk_enter(); /* enter critical block */
 
