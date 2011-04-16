@@ -16,7 +16,7 @@
 #include "paging.h"
 #include "kernel-arch.h"
 
-#define STACK0_SIZE 0x400     /* 1 kb. Remember to change it on state_switch if changed here. */
+#define STACK0_SIZE 0x590     /* 1.3 kb. Remember to change it on state_switch if changed here. */
 
 #define __align(a) __attribute__ ((aligned (a)))
 

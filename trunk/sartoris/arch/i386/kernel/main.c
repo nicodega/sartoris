@@ -101,11 +101,10 @@ void create_syscall_gates()
 	hook_syscall(29, 3, &write_mem_c, 4);
 	hook_syscall(30, 3, &pass_mem_c, 2);
 	hook_syscall(31, 3, &mem_size_c, 1);
-	hook_syscall(32, 1, &run_thread_int_c, 4);
 
-	hook_syscall(33, 1, &pop_int_c, 0);
-	hook_syscall(34, 1, &push_int_c, 1);
-	hook_syscall(35, 1, &resume_int_c, 0);
+	hook_syscall(32, 1, &pop_int_c, 0);
+	hook_syscall(33, 1, &push_int_c, 1);
+	hook_syscall(34, 1, &resume_int_c, 0);
 
     hook_syscall(35, 3, &last_error_c, 0);
 

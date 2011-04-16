@@ -171,41 +171,6 @@ void restore_map(pt_entry map)
 	invalidate_tlb((void*)PG_LINEAR_TO_TAB(addr)); // invalidate this page
 }
 
-/* 
-This function will map the given task linear address to the 
-current thread mapping slot.
-Returns a linear address on kernel space where the page has been mapped.
-NOTE: The mapped page will not be writable. If the table is not present
-this might issue a page fault!
-*/
-void *map_address(int task, void *laddr)
-{
-    pd_entry *pdir_ptr;
-    pd_entry pdir_entry;
-	pd_entry *pdir_map = AUX_PAGE_SLOT(curr_thread);
-	pt_entry *ptab_map = AUX_PAGE_SLOT(curr_thread);
-    int i;
-
-    // get physical address from task
-    pdir_ptr = GET_TASK_ARCH(task)->pdb;
-    if (pdir_ptr != NULL)
-    {
-        pdir_entry = pdir_map[PG_LINEAR_TO_DIR(laddr)];
-        if(pdir_entry != NULL)
-        {
-            map_page((pt_entry *)PG_ADDRESS(pdir_entry));
-            i = PG_LINEAR_TO_TAB(laddr);
-		    if(ptab_map[i] != NULL)
-            {
-                // we got the physical address, map it
-                map_page((void*)ptab_map[i]);
-                return ptab_map;
-            }
-        }
-    }
-    return NULL;
-}
-
 /* IMPORTANT: notice that page directories/tables are mapped to
               a temporary linear address in order to be accessed.
 	          hence, arch_page_in/out do not work with paging 
@@ -246,8 +211,7 @@ int arch_page_in(int task, void *linear, void *physical, int level, int attrib)
 						ptab_entry = PG_ADDRESS(physical) | PG_USER | PG_PRESENT;
 
 						if (attrib & PGATT_CACHE_DIS) 
-						{ 
-							/* TODO: remove these 3 ifs */
+						{
 							ptab_entry |= PG_CACHE_DIS;   /*       (optimizing)       */
 						}
 						
@@ -472,9 +436,7 @@ void *arch_translate(int task, void *address)
 	pt_entry **pdir_map = AUX_PAGE_SLOT(curr_thread);
 	pt_entry *ptab_map = AUX_PAGE_SLOT(curr_thread);
 	pt_entry pent_map;
-	void *result;
-
-	result = NULL;
+	void *result = NULL;
 
 	if (((struct i386_task *)GET_TASK_ARCH(INIT_TASK_NUM))->pdb != NULL) 
 	{
@@ -496,7 +458,12 @@ void *arch_translate(int task, void *address)
   return result;
 }    
 
-/* verifies the page for address is present.*/
+/* verifies the page for address is present.
+This function will return:
+- SUCCESS if page is present
+- -1 if table is present but not the page
+- -2 if the table is not present
+*/
 int verify_present(void *address, int write) 
 {
 	pt_entry saved_map;

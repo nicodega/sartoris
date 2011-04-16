@@ -2,11 +2,11 @@ objects = ../../../mk/kimg.o cpu-arch.o scr-print.o
 
 fill = ../../../utils/fill
 
-cpu_objects = main.o task.o pgrequest.o descriptor.o thread.o tss.o interrupt.o paging.o memory.o cpu-asm.o syscall-gates.o int.o pic.o state_switch.o caps.o
+cpu_objects = main.o task.o pgrequest.o descriptor.o thread.o tss.o interrupt.o paging.o memory.o cpu-asm.o syscall-gates.o int.o pic.o state_switch.o caps.o permissions.o
 
 prt_objects = print.o vga.o
 
-dependencies = main.d task.d descriptor.d thread.d tss.d interrupt.d paging.d memory.d print.d caps.d
+dependencies = main.d task.d descriptor.d thread.d tss.d interrupt.d paging.d memory.d print.d caps.d permissions.d
 
 CPPFLAGS += -I"../../../include/" -I"../include"
 

@@ -104,9 +104,6 @@ extern get_metrics
 global get_metrics_c
 %endif	
 
-extern run_thread_int
-global run_thread_int_c
-
 extern pop_int
 global pop_int_c
 
@@ -120,10 +117,6 @@ extern grant_page_mk
 global grant_page_mk_c
 
 extern curr_state
-extern arch_thread_int_ret
-
-
-%define SFLAG_RUN_INT           0x4
 
 ;; tasking
 create_task_c:
@@ -231,15 +224,6 @@ ret_from_int_c:
 	mov eax, 0x10
 	mov ds, eax
 	mov es, eax
-	
-	;; if a software thread interrupt is rised,
-	;; we must redirect this to 
-	;; arch_thread_int_ret
-	mov ecx, [curr_state]
-	mov eax, [ecx]				;; sflags is at state start
-	and eax, SFLAG_RUN_INT
-	jnz arch_thread_int_ret
-	
 	mov ecx, ret_from_int
 	call ecx			; make call
 	
@@ -338,14 +322,7 @@ run_thread_c:
 	mov edx, 1
 	call do_syscall
 	retf 4
-		
-;; software thread ints
-run_thread_int_c:
-	mov ecx, run_thread_int
-	mov edx, 4
-	call do_syscall
-	retf 16
-
+	
 ;; int stack manipulation
 push_int_c:
 	mov ecx, push_int

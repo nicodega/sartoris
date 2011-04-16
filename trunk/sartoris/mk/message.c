@@ -14,12 +14,12 @@
 #include "sartoris/metrics.h"
 #include "lib/message.h"
 #include "lib/shared-mem.h"
-#include "lib/bitops.h"
 #include "sartoris/kernel-data.h"
 #include "lib/salloc.h"
 #include "lib/indexing.h"
 #include <sartoris/critical-section.h>
 #include "sartoris/error.h"
+#include "sartoris/permissions.h"
 
 /* message subsystem implementation */
 
@@ -46,11 +46,12 @@ int open_port(int port, int priv, enum usage_mode mode)
 	   			p = create_port(task); /* look up a free port */
 	  
 				if (p != NULL) 
-				{
-                    p->perms = NULL;
-					p->mode = mode;
+				{   
+                    p->mode = mode;
 					p->priv = priv;
-						    					
+				
+                    init_perms(&p->perms);
+
 					task->open_ports[port] = p;
 
 #ifdef _METRICS_
@@ -155,37 +156,31 @@ int set_port_mode(int port, int priv, enum usage_mode mode)
     return result;
 }
 
-int set_port_perm(int port, struct port_perms *perms) 
+int set_port_perm(int port, struct permissions *perms) 
 {
 	int x, result;
 	struct task *task;
-    unsigned int len;
     
+    perms = (struct permissions*)MAKE_KRN_PTR(perms);
 	result = FAILURE;
 
-    if(VALIDATE_PTR(perms) && VALIDATE_PTR((unsigned int)perms + 4))
-    {
-        // this could produce a page fault..
-        len = perms->length;
-    }
-    else
-    {
-        set_error(SERR_INVALID_PTR);
-        return FAILURE;
-    }
-
-    if (0 <= port && port < MAX_TSK_OPEN_PORTS) 
-	{ 
-        x = mk_enter(); /* enter critical block */
-        
-        if(len <= BITMAP_SIZE(MAX_THR) && VALIDATE_PTR((unsigned int)perms + sizeof(unsigned int) + len))
+    x = mk_enter(); /* enter critical block */
+    
+    
+        if (0 <= port && port < MAX_TSK_OPEN_PORTS) 
         {
             task = GET_PTR(curr_task,tsk);
     		    
 		    if (task->open_ports[port] != NULL) 
 		    {
-			    result = SUCCESS;
-			    task->open_ports[port]->perms = perms;
+                if(validate_perms_ptr(perms, &task->open_ports[port]->perms, MAX_TSK, -1))
+	            {
+                    result = SUCCESS;
+                }
+                else
+                {
+                    init_perms(&task->open_ports[port]->perms);
+                }
 		    }
             else
             {
@@ -194,15 +189,10 @@ int set_port_perm(int port, struct port_perms *perms)
         }
         else
         {
-            set_error(SERR_INVALID_SIZE);
+            set_error(SERR_INVALID_PORT);
         }
-    
-		mk_leave(x); /* exit critical block */
-	}
-    else
-    {
-        set_error(SERR_INVALID_PORT);
-    }
+	
+    mk_leave(x); /* exit critical block */
   
 	return result;
 }
@@ -212,7 +202,6 @@ int send_msg(int dest_task_id, int port, int *msg)
     struct port *p = NULL;
     int x, result;
 	struct task *task = NULL;
-    unsigned int *perms = NULL;
     
     result = FAILURE;
     
@@ -231,28 +220,13 @@ int send_msg(int dest_task_id, int port, int *msg)
             // check for permissions.
             // NOTE: this could produce a page fault because it's a user space pointer, but 
             // only on threads with privilege level greater than 0
-            if(curr_priv != 0 && p->mode == PERM_REQ && p->perms != NULL)
+            if(curr_priv != 0 
+                && p->mode == PERM_REQ 
+                && p->perms.bitmap != NULL
+                && !test_permission(dest_task_id, &p->perms, port))
             {
-                /*
-                    p->perms is on the desination task address space. We must ask
-                    the arch dependant part of the kernel to map it to our thread mapping zone!!!
-                */
-#ifdef PAGING
-                perms = (unsigned int*)map_address(dest_task_id, (unsigned int*)p->perms + 1);
-#else
-                perms = ((unsigned int*)p->perms + 1);
-#endif
-                // we could get a page fault on getbit
-                if(perms && p->perms->length >= BITMAP_SIZE(MAX_TSK) && getbit( (unsigned int*)perms+1, curr_task) )
-                {
-                    set_error(SERR_NO_PERMISSION);
-                    mk_leave(x);
-	                return FAILURE;
-                }
-                else if(!perms)
-                {
-                    set_error(SERR_MISSING_PERMS_BITMAP);
-                }
+                mk_leave(x);
+	            return FAILURE;
             }
 
             // check destination port is still open, and task is alive, because the page fault occurred.

@@ -69,10 +69,6 @@ int last_error();
 int get_metrics(struct sartoris_metrics *m);
 #endif
 
-int run_thread_int(int id, void *eip, void *stack);
-
-
-
 #ifdef CPLUSPLUS
 }
 #endif
