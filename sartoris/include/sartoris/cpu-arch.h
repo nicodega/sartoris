@@ -27,7 +27,6 @@ int arch_destroy_task(int num);
 int arch_create_thread(int id, int priv, struct thread *thr);
 int arch_destroy_thread(int id, struct thread* thr);
 int arch_run_thread(int id);
-int arch_run_thread_int(int id, void *eip, void *stack);
 
 int arch_create_int_handler(int number);
 int arch_destroy_int_handler(int number);
@@ -69,14 +68,8 @@ Returns 0 if page granting/return finished.
 */
 int arch_req_pages();
 
-/* 
-This function will map the given task linear address to the 
-current thread mapping slot.
-Returns a linear address on kernel space where the page has been mapped.
-NOTE: The mapped page will not be writable. If the table is not present
-this might issue a page fault!
-*/
-void *arch_map_address(int taskid, void *laddr);
+int arch_get_perms(int task, struct permissions *localperms, struct permissions *p);
+unsigned int *arch_map_perms(int task, struct permissions *perms, unsigned int pos);
 
 #endif
 

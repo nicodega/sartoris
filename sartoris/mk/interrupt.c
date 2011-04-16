@@ -253,6 +253,7 @@ int pop_int()
         result = SUCCESS;
 
         // we will leave the interrupt active
+        // so it won't trigger again
         int_stack_pointer--;
     }
     else
@@ -285,7 +286,7 @@ int push_int(int number)
 				if (int_stack_pointer == MAX_NESTED_INT) 
 				{
                     set_error(SERR_INTERRUPTS_MAXED);
-					mk_leave(x); /* exit critical block */
+					mk_leave(x); 
 					return result;
 				}
                 set_error(SERR_OK);

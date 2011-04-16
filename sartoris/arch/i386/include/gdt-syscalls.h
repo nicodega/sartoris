@@ -38,16 +38,14 @@
 %define PASS_MEM                 (0x23 << 3)
 %define MEM_SIZE                 (0x24 << 3)
 
-%define RUN_THREAD_INT           (0x25 << 3)
+%define POP_INT                  (0x25 << 3)
+%define PUSH_INT                 (0x26 << 3)
+%define RESUME_INT               (0x27 << 3)
 
-%define POP_INT                  (0x26 << 3)
-%define PUSH_INT                 (0x27 << 3)
-%define RESUME_INT               (0x28 << 3)
-
-%define LAST_ERROR               (0x29 << 3)
+%define LAST_ERROR               (0x28 << 3)
 
 %ifdef _METRICS_
-%define GET_METRICS              (0x2a << 3)
+%define GET_METRICS              (0x29 << 3)
 %endif
 
 

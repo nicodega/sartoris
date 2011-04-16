@@ -11,6 +11,7 @@
 #ifndef SYSCALL_GATES
 #define SYSCALL_GATES
 
+#include <sartoris/kernel.h>
 #include <sartoris/types.h>
 
 extern int create_task_c(int id, struct task*);
@@ -20,7 +21,7 @@ extern int get_current_task_c(void);
 
 extern int create_thread_c(int, struct thread*);
 extern int destroy_thread_c(int);
-extern int set_thread_run_perms_c(int thr_id, struct thread_perms *perm);
+extern int set_thread_run_perms_c(int thr_id, struct permissions *perm);
 extern int set_thread_run_mode_c(int thr_id, int priv, int mode);
 extern int run_thread_c(int);
 extern int get_current_thread_c(int);
@@ -38,7 +39,7 @@ extern int get_last_int_c(void);
 
 extern int open_port_c(int port, int priv, int mode);
 extern int close_port_c(int port);
-extern int set_port_perm_c(int port, struct port_perms *perms);
+extern int set_port_perm_c(int port, struct permissions *perms);
 extern int set_port_mode_c(int port, int priv, int mode);
 extern int send_msg_c(int, int, int*);
 extern int get_msg_c(int, int*, int*);
@@ -62,7 +63,5 @@ extern int last_error_c(void);
 #ifdef _METRICS_
 extern int get_metrics_c(void);
 #endif
-
-extern int run_thread_int_c(int, void*,void*);
 
 #endif

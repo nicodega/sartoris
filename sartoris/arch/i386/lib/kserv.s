@@ -302,15 +302,7 @@ mem_size:
 	call MEM_SIZE : 0x00000000
 	pop ebp
 	ret
-
-run_thread_int:
-	push ebp
-	mov ebp, esp
-	pass_arguments 4
-	call RUN_THREAD_INT : 0x00000000
-	pop ebp
-	ret
-
+	
 pop_int:
 	push ebp
 	mov ebp, esp

@@ -43,6 +43,8 @@ unsigned char indexes[(IDX_LEN(MAX_THR-STATIC_THR) + IDX_LEN(MAX_TSK-STATIC_TSK)
 
 unsigned char mapping_zone[MAX_THR * PG_SIZE];
 
+unsigned char uper_mem[(IDX_LEN(MAX_THR-STATIC_THR) + IDX_LEN(MAX_TSK-STATIC_TSK) + IDX_LEN(MAX_SMO-STATIC_SMO)) * PG_SIZE + CONT_DINAMIC_CONTAINERS * PG_SIZE + MAX_THR * PG_SIZE];
+
 int main()
 {
     return 0;    

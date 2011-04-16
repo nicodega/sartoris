@@ -19,6 +19,7 @@
 #include <sartoris/critical-section.h>
 #include "sartoris/kernel-data.h"
 #include "sartoris/error.h"
+#include "sartoris/permissions.h"
 
 /* We need need this for gcc to compile */
 void *memcpy( void *to, const void *from, int count )
@@ -71,9 +72,10 @@ int create_thread(int id, struct thread *thr)
 							thread->invoke_mode = cached_thr.invoke_mode;
 							thread->invoke_level = cached_thr.invoke_level;
 							thread->task_num = tsk_id;
-                            thread->run_perms = NULL;
                             thread->last_error = SERR_OK;
-							task->thread_count++;
+                            task->thread_count++;
+
+                            init_perms(&thread->run_perms);
 
 							if (arch_create_thread(id, task->priv_level, thread) < 0) 
 							{
@@ -195,39 +197,20 @@ int run_thread(int id)
 	{
         thread = GET_PTR(id,thr);
         
-        // if invoke move is PERM_REQ, and the user loaded a bitmap for permissions
-        // check for permissions.
-        // NOTE: this could produce a page fault because it's a user space pointer
-        if(curr_priv != 0 && thread->invoke_mode == PERM_REQ && thread->run_perms != NULL)
+        // NOTE: test_permission could produce a page fault
+        if(curr_priv != 0 
+            && thread->invoke_mode == PERM_REQ 
+            && test_permission(thread->task_num, &thread->run_perms, curr_thread) == FAILURE)
         {
-            /*
-                thread->run_perms is on the desination thread address space. We must ask
-                the arch dependant part of the kernel to map it to our thread mapping zone!!!
-            */
-#ifdef PAGING
-            perms = (unsigned int*)map_address(thread->task_num, (unsigned int*)thread->run_perms + 1);
-#else
-            perms = ((unsigned int*)thread->run_perms + 1);
-#endif
-            // we could get a page fault on getbit
-            if(perms && thread->run_perms->length >= BITMAP_SIZE(curr_thread) && getbit(((unsigned int*)thread->run_perms + 1), curr_thread) )
-            {
-                set_error(SERR_NO_PERMISSION);
-                mk_leave(x);
-		        return FAILURE;
-            }
-            else if(!perms)
-            {
-                set_error(SERR_MISSING_PERMS_BITMAP);
-                mk_leave(x);
-		        return FAILURE;
-            }
+            mk_leave(x);
+		    return FAILURE;
         }
         
         if (thread->invoke_mode != DISABLED) 
 		{            
-            if( curr_priv <= thread->invoke_level || thread->invoke_mode == UNRESTRICTED 
-                 || thread->invoke_mode == PERM_REQ)
+            if( curr_priv <= thread->invoke_level 
+                || thread->invoke_mode == UNRESTRICTED 
+                || thread->invoke_mode == PERM_REQ)
 			{                
     			if (id != curr_thread) 
 				{
@@ -286,148 +269,16 @@ int run_thread(int id)
 	return result;
 }
 
-/*
-Software interrupt. This allows runing a thread within a given stack starting at a specific eip.
-If stack is null current thread stack will be used.
-Called thread must issue ret_from_int to return.
-*/
-int run_thread_int(int id, void *eip, void *stack)
-{
-	int x, res;
-	int prev_curr_thread;
-	int result;
-	struct thread *thread;
-	struct task *task;
-    unsigned int *perms;
-
-	result = FAILURE;
-
-	x = mk_enter(); /* enter critical block */
-
-    if( dyn_pg_lvl != DYN_PGLVL_NONE && dyn_pg_nest == DYN_NEST_ALLOCATING && dyn_pg_thread == id )
-	{
-        kprintf(0x7, "run_thread: Cannot run thread while allocation is taking place.");
-        set_error(SERR_ALLOCATING);
-		mk_leave(x);
-		/* we cannot return to this thread... it's waiting for a page. */
-		return FAILURE;
-	}
-
-	if ((0 <= id) && (id < MAX_THR) && TST_PTR(id,thr)) 
-	{
-		thread = GET_PTR(id,thr);
-
-        // if invoke move is PERM_REQ, and the user loaded a bitmap for permissions
-        // check for permissions.
-        // NOTE: this could produce a page fault because it's a user space pointer
-        if(curr_priv != 0 && thread->invoke_mode == PERM_REQ && thread->run_perms != NULL)
-        {
-            /*
-                thread->run_perms is on the desination thread address space. We must ask
-                the arch dependant part of the kernel to map it to our thread mapping zone!!!
-            */
-#ifdef PAGING
-            perms = (unsigned int*)map_address(thread->task_num, (unsigned int*)thread->run_perms + 1);
-#else
-            perms = ((unsigned int*)thread->run_perms + 1);
-#endif
-            // we could get a page fault on getbit
-            if(perms && thread->run_perms->length >= BITMAP_SIZE(curr_thread) && getbit(((unsigned int*)thread->run_perms + 1), curr_thread) )
-            {
-                set_error(SERR_NO_PERMISSION);
-                mk_leave(x);
-		        return FAILURE;
-            }
-            else if(!perms)
-            {
-                set_error(SERR_MISSING_PERMS_BITMAP);
-                mk_leave(x);
-		        return FAILURE;
-            }
-        }
-        
-        // Test the thread pointer is valid again (because of the possible PG Fault.
-		if (TST_PTR(id,thr) && thread->invoke_mode != DISABLED) 
-		{
-			if(curr_priv <= thread->invoke_level || thread->invoke_mode == UNRESTRICTED || thread->invoke_mode == PERM_REQ) 
-			{
-				if (id != curr_thread) 
-				{
-					prev_curr_thread = curr_thread;
-					task = GET_PTR(thread->task_num,tsk);
-
-					curr_thread = id;
-					curr_task = thread->task_num;
-					curr_base = task->mem_adr;
-					curr_priv = task->priv_level;
-
-					result = arch_run_thread_int(id, eip, stack);
-
-					if ( result !=  SUCCESS ) 
-					{
-                        set_error(SERR_ERROR);
-						thread = GET_PTR(prev_curr_thread,thr);
-						task = GET_PTR(thread->task_num,tsk);
-
-						/* rollback: thread switching failed! */
-						curr_thread = prev_curr_thread;
-						curr_task = thread->task_num;
-						curr_base = task->mem_adr;
-						curr_priv = task->priv_level;
-					}
-                    else
-                    {
-                        set_error(SERR_OK);
-                    }
-				}
-                else
-                {
-                    set_error(SERR_SAME_THREAD);
-                }
-			}
-            else
-            {
-                set_error(SERR_NO_PERMISSION);
-            }
-		}
-        else
-        {
-            set_error(SERR_INVALID_THR);
-        }
-	}
-    else
-    {
-        if(0 > id || id >= MAX_THR)
-            set_error(SERR_INVALID_ID);
-        else
-            set_error(SERR_INVALID_THR);
-    }
-
-	mk_leave(x); /* exit critical block */
-
-	return result;
-}
-
-int set_thread_run_perms(int thr_id, struct thread_perms *perms)
+int set_thread_run_perms(int thr_id, struct permissions *perms)
 {
     struct thread *thread;
 	int x, result = FAILURE;
-    unsigned int len;
-	
-    if(VALIDATE_PTR(perms) && VALIDATE_PTR((unsigned int)perms + 4))
-    {
-        // this could produce a page fault..
-        len = perms->length;
-    }
-    else
-    {
-        set_error(SERR_INVALID_PTR);
-        return FAILURE;
-    }
-
+    
     x = mk_enter();
 
-    if (0 <= thr_id && thr_id < MAX_THR && TST_PTR(thr_id,thr)) 
+    if (0 <= thr_id 
+        && thr_id < MAX_THR 
+        && TST_PTR(thr_id,thr)) 
     {
         if(0 > thr_id || thr_id >= MAX_THR)
             set_error(SERR_INVALID_ID);
@@ -437,21 +288,30 @@ int set_thread_run_perms(int thr_id, struct thread_perms *perms)
         return FAILURE;
     }
 
-    if (thr_id == curr_thread && curr_priv > 0) 
+    if (thr_id == curr_thread
+        && curr_priv > 0) 
     {
         set_error(SERR_INVALID_THR);
         mk_leave(x);
         return FAILURE;
     }
 
-    if(len <= BITMAP_SIZE(MAX_THR) && VALIDATE_PTR((unsigned int)perms + sizeof(unsigned int) + len))
-    {
-        thread = GET_PTR(thr_id,thr);
+    thread = GET_PTR(thr_id,thr);
         
-        thread->run_perms = perms;
-
-	    result = SUCCESS;
-        set_error(SERR_OK);
+    if(validate_perms_ptr(perms, &thread->run_perms, MAX_THR, thread->task_num))
+    {   
+        // Validate the thread still exists
+        if(TST_PTR(thr_id,thr))
+        {
+	        result = SUCCESS;
+            set_error(SERR_OK);
+        }
+        else
+        {
+            init_perms(&thread->run_perms);
+            set_error(SERR_INVALID_THR);
+            result = FAILURE;
+        }
     }
     else
     {
