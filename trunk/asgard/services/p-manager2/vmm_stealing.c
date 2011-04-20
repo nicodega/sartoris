@@ -67,18 +67,17 @@ void vmm_page_stealer()
 		int_clear();
 		if(vmm.available_mem < vmm.max_mem && vmm.available_mem > vmm.mid_mem)
 		{
-			/* We just need a few pages. */
-			pages_required = 5;
+			pages_required = 0;
 		}
 		else if(vmm.available_mem < vmm.mid_mem && vmm.available_mem > vmm.min_mem)
 		{
 			/* We need quite a few. */
-			pages_required = 15;
+			pages_required = 10;
 		}
 		else if(vmm.available_mem < vmm.min_mem)
 		{
 			/* We are desperate for pages. */
-			pages_required = 50;
+			pages_required = 30;
 		}
 		int_set(0);
 
@@ -190,7 +189,7 @@ void vmm_page_stealer()
 				    }
 
 					/* Set swap info on process table */
-					pdir = task->vmm_inf.page_directory;
+					pdir = task->vmm_info.page_directory;
 					ptbl = (struct vmm_page_table*)PHYSICAL2LINEAR(PG_ADDRESS(pdir->tables[PM_LINEAR_TO_DIR(candidate_laddress)].b));
 					
 					write = (ptbl->pages[PM_LINEAR_TO_TAB(candidate_laddress)].entry.ia32entry.rw == 1);
@@ -203,8 +202,8 @@ void vmm_page_stealer()
 					ptbl->pages[PM_LINEAR_TO_TAB(candidate_laddress)].entry.record.write = write;
 					
 					/* set the page as free but don't insert it onto the pool */
-					task->vmm_inf.page_count--;
-					task->vmm_inf.swap_page_count++;
+					task->vmm_info.page_count--;
+					task->vmm_info.swap_page_count++;
 				}
 
 				/* FIXME: Here we should consider MAPPED FILES */
@@ -286,7 +285,7 @@ UINT32 calculate_points(struct taken_entry *entry, UINT32 pm_dir_index, UINT32 p
 
 		/* We can now read the entry on pman table, and get the table */
 		task = tsk_get(assigned->task_id);
-		pdir = task->vmm_inf.page_directory;
+		pdir = task->vmm_info.page_directory;
 
 		if(pdir->tables[assigned->dir_index].ia32entry.present != 1) return 0xFFFFFFFF;
 
@@ -305,7 +304,7 @@ UINT32 calculate_points(struct taken_entry *entry, UINT32 pm_dir_index, UINT32 p
 	{
 		/* It's a page table */
 		task = tsk_get(entry->data.b_ptbl.taskid);
-		pdir = task->vmm_inf.page_directory;
+		pdir = task->vmm_info.page_directory;
 		
 		d_bit = 0;
 		a_bit = pdir->tables[entry->data.b_ptbl.dir_index].ia32entry.accessed;
@@ -328,7 +327,7 @@ UINT32 calculate_points(struct taken_entry *entry, UINT32 pm_dir_index, UINT32 p
 		*task_id = entry->data.b_ptbl.taskid;
 	}
 
-	/* If dirty and no IO is availabel, return the highest score. */
+	/* If dirty and no IO is available, return the highest score. */
 	if(d_bit && !ioavailable) return 0xFFFFFFFF;
 
 	/* Now calculate points */
@@ -388,14 +387,14 @@ UINT32 vmm_page_swapped_callback(struct io_slot *ioslot, UINT32 ioret)
 				page_out(task_id, (ADDR)task_linear, 1);
 
 				/* Set table swapped info */
-				pdir = task->vmm_inf.page_directory;
+				pdir = task->vmm_info.page_directory;
 			
 				pdir->tables[tentry->data.b_ptbl.dir_index].record.present = 0;
 				pdir->tables[tentry->data.b_ptbl.dir_index].record.swapped = 1;
 				pdir->tables[tentry->data.b_ptbl.dir_index].record.addr = ioslot->dest.swap.swap_addr;
 				
-				task->vmm_inf.page_count--;
-				task->vmm_inf.swap_page_count++;
+				task->vmm_info.page_count--;
+				task->vmm_info.swap_page_count++;
 			}			
 		}
 

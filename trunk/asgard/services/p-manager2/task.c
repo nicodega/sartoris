@@ -78,15 +78,15 @@ struct pm_task *tsk_create(UINT16 id)
 	loader_info_init(&t->loader_inf);
 
 	// Init vmm info //
-	vmm_init_task_info(&t->vmm_inf);
+	vmm_init_task_info(&t->vmm_info);
 		
 	// Init IO info //
 	io_init_source(&t->io_event_src, FILE_IO_TASK, id);
 	io_init_event(&t->io_finished, &t->io_event_src);
 	t->swp_io_finished.callback = NULL;
     
-	t->vmm_inf.regions.first = NULL;
-	t->vmm_inf.regions.total = 0;
+	t->vmm_info.regions.first = NULL;
+	t->vmm_info.regions.total = 0;
 	t->killed_threads = 0;
 
     return t;

@@ -184,7 +184,7 @@ void sch_activate(struct pm_thread *thr)
 		return;
 	}
 
-	if(thr->sch.recursion != 0) thr->sch.recursion--;
+	if(thr->sch.recursion == 0) thr->sch.recursion--;
 
 	if(thr->sch.blocked != TRUE) return;
 

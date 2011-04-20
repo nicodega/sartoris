@@ -81,7 +81,7 @@ void vmm_page_aging()
                         int_set(0);
                         continue;
                     }
-					pdir = task->vmm_inf.page_directory;
+					pdir = task->vmm_info.page_directory;
 
 					if(pdir->tables[assigned->dir_index].ia32entry.present != 1)
 					{
@@ -127,7 +127,7 @@ void vmm_page_aging()
                         continue;
                     }
 					
-                    pdir = task->vmm_inf.page_directory;
+                    pdir = task->vmm_info.page_directory;
 
 					dir_index = entry->data.b_ptbl.dir_index;
 

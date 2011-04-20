@@ -176,7 +176,7 @@ ADDR create_service(UINT16 task, UINT16 thread, INT32 invoke_level, UINT32 size,
 	put_pages(ptask, !load_all, low_mem);
 
 	/* Get first page */
-	ptbl = (struct vmm_page_table*)PHYSICAL2LINEAR(PG_ADDRESS(ptask->vmm_inf.page_directory->tables[PM_LINEAR_TO_DIR(SARTORIS_PROCBASE_LINEAR)].b));
+	ptbl = (struct vmm_page_table*)PHYSICAL2LINEAR(PG_ADDRESS(ptask->vmm_info.page_directory->tables[PM_LINEAR_TO_DIR(SARTORIS_PROCBASE_LINEAR)].b));
 	first_page = PG_ADDRESS(ptbl->pages[PM_LINEAR_TO_TAB(SARTORIS_PROCBASE_LINEAR)].entry.phy_page_addr);
 	
 	/* Schedule and activate thread */
@@ -194,7 +194,7 @@ This function will return the ammount of bytes allocated for pages (not tables).
 will be a multiple of page size. */
 UINT32 put_pages(struct pm_task *task, BOOL use_fsize, BOOL low_mem)
 {
-	struct vmm_page_directory *pdir = task->vmm_inf.page_directory;
+	struct vmm_page_directory *pdir = task->vmm_info.page_directory;
 	UINT32 i = 0, j;
 	UINT32 allocated = 0;
 	struct Elf32_Phdr *prog_header = NULL;
@@ -235,7 +235,7 @@ UINT32 put_pages(struct pm_task *task, BOOL use_fsize, BOOL low_mem)
 					if(page_in(task->id, (ADDR)page_addr, (ADDR)LINEAR2PHYSICAL(pg_tbl), 1, PGATT_WRITE_ENA) != SUCCESS)
 						pman_print_and_stop("Failed to page_in for table laddress: %x, physical: %x ", page_addr, pg);
 
-					task->vmm_inf.page_count++;
+					task->vmm_info.page_count++;
 				}
                 
 				pg = (ADDR)LINEAR2PHYSICAL(vmm_get_page_ex(task->id, page_addr, low_mem));
@@ -255,9 +255,9 @@ UINT32 put_pages(struct pm_task *task, BOOL use_fsize, BOOL low_mem)
 					pman_print_and_stop("Failed to page_in for laddress: %x, physical: %x ", page_addr, pg);
 				
                 /* unmap the page from pmanager, so it's assigned record is used. */
-                vmm_unmap_page(task->id, (ADDR)page_addr);
+                vmm_unmap_page(task->id, page_addr);
 
-				task->vmm_inf.page_count++;
+				task->vmm_info.page_count++;
 			
 				allocated += PAGE_SIZE;
 				page_addr += PAGE_SIZE;

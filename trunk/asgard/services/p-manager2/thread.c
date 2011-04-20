@@ -62,13 +62,11 @@ struct pm_thread *thr_create(UINT16 id, struct pm_task *task)
     thr->state = THR_NOTHING;
     thr->flags = THR_FLAG_NONE;
     thr->next_thread = NULL;
-    thr->vmm_info.fault_next_thread = NULL;
     thr->interrupt = 0;
     thr->vmm_info.page_displacement = 0;
     thr->vmm_info.page_in_address = NULL;
 
     thr->stack_addr = NULL;
-    thr->vmm_info.swaptbl_next = NULL;
     thr->task_id = task->id;
 
     sch_init_node(&thr->sch);		
@@ -79,7 +77,7 @@ struct pm_thread *thr_create(UINT16 id, struct pm_task *task)
 
     init_thr_signals(thr);
 
-    vmm_init_thread_info(&thr->vmm_info);
+    vmm_init_thread_info(thr);
 
     /* Fix thread list */
 	if(task->first_thread != NULL)
@@ -169,7 +167,7 @@ int thr_destroy_thread(UINT16 thread_id)
 			{
                 /* Thread is waiting for a page fault (either swap or PF) */
 				thr->state = THR_KILLED;
-				ret++;
+				ret = 1;
 			}
 			else
 			{
@@ -177,17 +175,12 @@ int thr_destroy_thread(UINT16 thread_id)
                 kfree(thr);
                 thr = NULL;
 			}
-			
-			if(thr != NULL && thr->state == THR_KILLED) 
-				task->killed_threads--;
-
-			/* 
-			If thread had pages in, they will be freed by swap manager 
-			Should we implement files, or locked pages, a call to free them 
-			must be issued here 
-			*/
+						
 			if(thr != NULL)
 			{
+                if(thr->state == THR_KILLED) 
+				    task->killed_threads--;
+
 				if(thr->interrupt != 0)	
 					int_dettach(thr);
 

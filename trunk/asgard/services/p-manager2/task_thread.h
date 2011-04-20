@@ -63,7 +63,7 @@ struct pm_task
 	struct command_info command_inf;
 
 	/* VM Module */
-	struct task_vmm_info vmm_inf;  
+	struct task_vmm_info vmm_info;  
 
 	/* IO Module */
 	struct fsio_event_source io_event_src;	/* IO Event source Descriptor                        */

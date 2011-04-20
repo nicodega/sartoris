@@ -104,7 +104,7 @@ void cmd_process_msg()
                     {
 					    pres.pm_type = msg.pm_type;
 	                    pres.req_id  = msg.req_id;
-	                    pres.physical  = vmm_get_physical(task_id, (ADDR)((struct pm_msg_phymem*)&msg)->linear + SARTORIS_PROCBASE_LINEAR);
+	                    pres.physical  = (UINT32)vmm_get_physical(task_id, (ADDR)((UINT32)((struct pm_msg_phymem*)&msg)->linear + SARTORIS_PROCBASE_LINEAR));
 	
 	                    send_msg(task_id, msg.response_port, &pres);
                     }
@@ -699,7 +699,7 @@ void cmd_create_thread(struct pm_msg_create_thread *msg, UINT16 creator_task_id)
 	if((task->num_threads == 0 && !(task->flags & TSK_FLAG_SYS_SERVICE)) || msg->interrupt != 0)	
 	{
 		/* Lets see if the page table is present on the page directory and if not give it one */
-		if(task->vmm_inf.page_directory->tables[PM_LINEAR_TO_DIR(((UINT32)thread->stack_addr + SARTORIS_PROCBASE_LINEAR))].ia32entry.present == 0)
+		if(task->vmm_info.page_directory->tables[PM_LINEAR_TO_DIR(((UINT32)thread->stack_addr + SARTORIS_PROCBASE_LINEAR))].ia32entry.present == 0)
 		{
 			/* Get a Page and set taken */
 			pg = vmm_get_tblpage(task->id, PG_ADDRESS(((UINT32)thread->stack_addr + SARTORIS_PROCBASE_LINEAR)));
@@ -707,7 +707,7 @@ void cmd_create_thread(struct pm_msg_create_thread *msg, UINT16 creator_task_id)
 			/* Page in the table on task linear space. */
 			pm_page_in(task->id, (ADDR)PG_ADDRESS(((UINT32)thread->stack_addr + SARTORIS_PROCBASE_LINEAR)), (ADDR)LINEAR2PHYSICAL(pg), 1, PGATT_WRITE_ENA);
 
-			task->vmm_inf.page_count++;
+			task->vmm_info.page_count++;
 		}
 
 		pg = vmm_get_page(thread->task_id, (UINT32)thread->stack_addr + SARTORIS_PROCBASE_LINEAR);
@@ -733,14 +733,14 @@ void cmd_create_thread(struct pm_msg_create_thread *msg, UINT16 creator_task_id)
 			UINT32 *size = (UINT32*)((UINT32)pg + stackpad);
 
 			idat->bss_end = task->tsk_bss_end;
-			idat->curr_limit = task->vmm_inf.max_addr;
+			idat->curr_limit = task->vmm_info.max_addr;
 			*size = sizeof(struct init_data);			
 		}
 		
 		/* Page out from pman address space */
 		vmm_unmap_page(thread->task_id, (UINT32)thread->stack_addr + SARTORIS_PROCBASE_LINEAR);
 
-		task->vmm_inf.page_count++;
+		task->vmm_info.page_count++;
 	}
     	
 	/* 
@@ -786,7 +786,7 @@ INT32 cmd_task_destroyed_callback(struct fsio_event_source *iosrc, INT32 ioret)
 	task = tsk_get(iosrc->id);
 	
 	task->io_finished.callback = cmd_swap_freed_callback;
-	task->vmm_inf.swap_free_addr = (ADDR)SARTORIS_PROCBASE_LINEAR;
+	task->vmm_info.swap_free_addr = (ADDR)SARTORIS_PROCBASE_LINEAR;
 
 	vmm_close_task(task);
 	
@@ -798,10 +798,7 @@ INT32 cmd_swap_freed_callback(struct fsio_event_source *iosrc, INT32 ioret)
 {
 	struct pm_msg_finished pm_finished;
 	struct pm_task *task = tsk_get(iosrc->id);
-
-	if(!tsk_destroy(task))
-		pman_print("PMAN: Could not destroy task");
-
+    
 	// if there is a destroy sender, send an ok to the task
 	if( task->command_inf.command_sender_id != 0)
 	{
@@ -828,11 +825,14 @@ INT32 cmd_swap_freed_callback(struct fsio_event_source *iosrc, INT32 ioret)
 	}    
 
 	task->command_inf.creator_task_id = 0xFFFF;
-	task->vmm_inf.page_directory = NULL;
+	task->vmm_info.page_directory = NULL;
 
 	if(shuttingDown())
 		shutdown_tsk_unloaded(task->id);
 	
+    if(!tsk_destroy(task))
+		pman_print("PMAN: Could not destroy task");
+
 	return 1;
 }
 

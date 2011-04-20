@@ -31,7 +31,7 @@ void fatal_exception(UINT16 task_id, INT32 ret_value)
 {
 	struct pm_task *tsk = tsk_get(task_id);
 
-	if(tsk != NULL && tsk->state != TSK_NOTHING) 
+	if(tsk && tsk->state != TSK_NOTHING && tsk->state != TSK_KILLING) 
 	{
 		tsk->command_inf.ret_value = ret_value;
 		tsk->command_inf.command_sender_id = 0;
