@@ -26,6 +26,7 @@
 #include "io.h"
 #include "page_stack.h"
 #include "formats/ia32paging.h"
+#include "rb.h"
 
 #define VMM_INITIAL_AGE 4
 
@@ -218,29 +219,33 @@ struct vmm_descriptors_list
 	UINT16 total;
 } PACKED_ATT;
 
+struct thread_vmm_info;
+
 /* Task VMM structure. */
 struct task_vmm_info
 {
 	struct vmm_page_directory *page_directory;	// vmm directory table for the process.
 	ADDR swap_free_addr;			/* If NOT NULL it contains swap address assigned for an IO operation */
-	UINT32 page_count;				/* Pages granted so far to this task */
-	UINT32 swap_page_count;			/* Pages on swap for this task       */
+	UINT32 page_count;				/* Pages granted so far to this task                                 */
+	UINT32 swap_page_count;			/* Pages on swap for this task                                       */
 	UINT32 expected_working_set;	/* How much do we expect this task to grow in the future             */
-	UINT32 max_addr;				/* Task max address granted (brk)    */
-	INT32 swap_read_smo;			/* Used for reading a page from swap partition. */
-	UINT32 table_swap_addr;			/* Used when freing swap pages for the process. Holds swap address for the last page table read from Swap Partition. */
+	UINT32 max_addr;				/* Task max address granted (brk)                                    */
+	INT32 swap_read_smo;			/* Used for reading a page from swap partition.                      */
+	UINT32 table_swap_addr;			/* Used when freing swap pages for the process. Holds swap address 
+                                    for the last page table read from Swap Partition.                    */
 
-	struct vmm_memory_regions_list regions;		// Task memory regions
+	struct vmm_memory_regions_list regions;		/* Task memory regions                                   */
+    rbt wait_root;                 /* This is the root of a red black tree with threads (not 
+                                               necessarily threads from this task) waiting for pages.    */
+    rbt tbl_wait_root;             /* Red Black tree root of threads waiting for page tables.
+                                               NOTE: If two threads are waiting for the same page, only 
+                                               one of them will be on this tree.                         */
 } PACKED_ATT;
 
 struct thread_vmm_info
 {
 	ADDR fault_address;					    /* Linear address for last page fault						  */
 	ADDR page_in_address;				    /* Page granted for last page fault							  */
-	struct pm_thread *fault_next_thread;	/* Used for keeping a list of threads waiting for the same 
-											   page                                                       */
-	struct pm_thread *swaptbl_next;		    /* Used for keeping a list of threads waiting for the same 
-											   page table (but different page)                            */
 	struct vmm_not_present_record fault_entry;	/* ??                                                     */
 	UINT32 read_size;				        /* Size of data being read from disk for the last page fault  */
 	UINT32 page_displacement;				/* Write possition on the page of the last page fault         */
@@ -249,6 +254,12 @@ struct thread_vmm_info
 	struct vmm_memory_region *fault_region;	/* If page fault was issued on a memory region, this will 
 											   contain region structure.                                  */
 	struct fsio_event_source fmap_iosrc;	/* IO Event source Descriptor for FMAP                        */
+
+    int fault_task;                         /* The task for which the page fault was generated. It might 
+                                               not be the same task as the thread owner.                  */
+    /* Node information on the task red-black tree */
+    rbnode pg_node;                         /* Node on the pages red black tree                           */
+    rbnode tbl_node;                        /* Node on the swap table red black tree                      */
 } PACKED_ATT;
 
 /* Virtual Memory Manager (VMM) Main Structure */
@@ -302,7 +313,7 @@ struct vmm_main
 	struct vmm_descriptors_list region_descriptors;
 } vmm;
 
-void vmm_init_thread_info(struct thread_vmm_info *vmm_inf);
+void vmm_init_thread_info(struct pm_thread *thread);
 
 /* Initialize vmm */
 INT32 vmm_init(struct multiboot_info *multiboot, UINT32 ignore_start, UINT32 ignore_end);
@@ -367,6 +378,12 @@ ADDR vmm_get_physical(UINT16 task, ADDR laddress);
 struct vmm_pman_assigned_record *vmm_get_assigned(UINT16 task_id, UINT32 proc_laddress);
 // Set flags on the page taken entry
 void vmm_set_flags(UINT16 task, ADDR laddress, BOOL eflag, UINT32 flag, BOOL enabled);
+// finish a task with an exception, and wake al threads waiting 
+// for the same page/swapped table, when an ioerror occurrs while fetching 
+// a page through IO
+void vmm_page_ioerror(struct pm_thread *thread, BOOL removeTBLTree);
+// This function will remove all threads killed and destroy it's task if it was also killed.
+void vmm_check_threads_pg(struct pm_thread **thr, BOOL removeTBLTree);
 // e-enable Threads Waiting for the same page.
 void vmm_wake_pf_threads(struct pm_thread *thread);
 // Page fault handler

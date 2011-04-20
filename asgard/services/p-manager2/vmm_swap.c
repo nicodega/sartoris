@@ -32,6 +32,7 @@
 #include <services/pmanager/services.h>
 #include "pman_print.h"
 #include "helpers.h"
+#include "rb.h"
 
 /*
 This variables will be used for aging/stealing synchronization.
@@ -44,10 +45,8 @@ Check if the page table is swapped
 */
 BOOL vmm_check_swap_tbl(struct pm_task *task, struct pm_thread *thread, ADDR pg_laddr)
 {
-	struct pm_thread *curr_thr;
-
 	/* Check task table present bit. */
-	struct vmm_page_directory *pdir = task->vmm_inf.page_directory;
+	struct vmm_page_directory *pdir = task->vmm_info.page_directory;
 
 	if(pdir->tables[PM_LINEAR_TO_DIR(pg_laddr)].record.swapped == 1)
 	{
@@ -57,20 +56,14 @@ BOOL vmm_check_swap_tbl(struct pm_task *task, struct pm_thread *thread, ADDR pg_
 		a table while pfaults are still being served) 
 		*/
 
-		curr_thr = task->first_thread;
+        rbnode *n = searchRedBlackTree(&task->vmm_info.tbl_wait_root, TBL_ADDRESS(pg_laddr));
 
-		while(curr_thr != NULL)
-		{
-			if( curr_thr != thread && (curr_thr->flags & THR_FLAG_PAGEFAULT) && curr_thr->vmm_info.swaptbl_next == NULL && PM_LINEAR_TO_DIR(curr_thr->vmm_info.fault_address) == PM_LINEAR_TO_DIR(pg_laddr) )
-			{
-				/* found last thread waiting for this page table */
-				curr_thr->vmm_info.swaptbl_next = thread;		// set next thread as our current thread
-				break;
-			}
-
-			curr_thr = curr_thr->next_thread;
-		}	
-
+        if(n)
+        {
+            thread->vmm_info.tbl_node.value = TBL_ADDRESS(pg_laddr);
+		    insertRedBlackTree(&task->vmm_info.tbl_wait_root, &thread->vmm_info.tbl_node, FALSE);
+        }
+		
 		/* Put the thread on hold for both the table and the page. */
         sch_deactivate(thread);
 
@@ -80,14 +73,15 @@ BOOL vmm_check_swap_tbl(struct pm_task *task, struct pm_thread *thread, ADDR pg_
 		thread->vmm_info.read_size = 0;
 		thread->vmm_info.page_perms = 0;
 		thread->vmm_info.page_displacement = 0;
-		thread->vmm_info.fault_next_thread = NULL;
-		thread->vmm_info.swaptbl_next = NULL;
+        thread->vmm_info.fault_task = task->id;
 
-		if(curr_thr != NULL)
-		{
-			return TRUE;	
-		}
-		
+		if(n)
+            return TRUE;
+
+        // insert in the page waiting list
+        thread->vmm_info.pg_node.value = PG_ADDRESS(pg_laddr);
+        insertRedBlackTree(&task->vmm_info.wait_root, &thread->vmm_info.pg_node, FALSE);
+				
 		/* begin IO read operation, for the page table. */
 		thread->vmm_info.page_in_address = vmm_get_page(task->id, PG_ADDRESS(pg_laddr));
 
@@ -110,6 +104,8 @@ BOOL vmm_check_swap_tbl(struct pm_task *task, struct pm_thread *thread, ADDR pg_
 /* 
 Check if requested page is swapped, and begin swap fetch if so. 
 Returns: If TRUE, page is swapped and fetch has begun. FALSE otherwise. 
+NOTE: Caller must first check the page table or the page is not already being fetched 
+from the swap file.
 */
 BOOL vmm_check_swap(struct pm_task *task, struct pm_thread *thread, ADDR pg_laddr)
 {
@@ -117,12 +113,8 @@ BOOL vmm_check_swap(struct pm_task *task, struct pm_thread *thread, ADDR pg_ladd
 	struct vmm_page_table *tbl;
 	struct vmm_not_present_record *np_record;
 
-	struct vmm_page_directory *pdir = task->vmm_inf.page_directory;
+	struct vmm_page_directory *pdir = task->vmm_info.page_directory;
 
-	thread->vmm_info.fault_entry.addr = 0xFFFFF;
-	thread->vmm_info.fault_entry.present = 1;
-	thread->vmm_info.fault_entry.swapped = 1;
-	thread->vmm_info.fault_entry.unused = 1;
 	/* 
 		If table is not present, it might be on swap or not.
 		If it's not on swap we won't do anything. Else, we will fetch it.
@@ -136,66 +128,55 @@ BOOL vmm_check_swap(struct pm_task *task, struct pm_thread *thread, ADDR pg_ladd
 		If so, we will add this thread to the thread list (a thread list for page tables, not the same used for pages).
 	*/
 
-	if(pdir->tables[PM_LINEAR_TO_DIR(pg_laddr)].record.present != 1)
+	if(pdir->tables[PM_LINEAR_TO_DIR(pg_laddr)].record.present == 1)
 	{
-		/* table is not present, nor swapped => page its not on swap. */
+		/* table is not present, nor swapped (because we checked on the page fault handler) => page its not on swap. */
 		return FALSE;
 	}
+    
+	thread->vmm_info.fault_entry.addr = 0xFFFFF;
+	thread->vmm_info.fault_entry.present = 1;
+	thread->vmm_info.fault_entry.swapped = 1;
+	thread->vmm_info.fault_entry.unused = 1;
 
-	/* Page table is present and not swapped, check record on task page table. */
+	/* Check record on task page table. */
 	tbl = (struct vmm_page_table*)PHYSICAL2LINEAR(PG_ADDRESS(pdir->tables[PM_LINEAR_TO_DIR(pg_laddr)].b));	
 
-	/* Get the record from pman table. */
+	/* Get the record from the table. */
 	np_record = &tbl->pages[PM_LINEAR_TO_TAB(pg_laddr)].entry.record;
+    
+    if(np_record->swapped == 1)
+    {
+	    /* IO lock page table */
+	    vmm_set_flags(task->id, (ADDR)PHYSICAL2LINEAR(vmm_get_tbl_physical(task->id, pg_laddr)), TRUE, TAKEN_EFLAG_IOLOCK, TRUE);
 
-	/* Check whether page is on swap file. */
-	if(np_record->swapped != 1) return FALSE;
+	    /* if page was sent to swap, begin swap IO */
+        sch_deactivate(thread);
 
-	/* 
-	Check if page fault is on a table currently being used by 
-	other page fault IO. (this prevents removing IO lock from
-	a table while pfaults are still being served) 
-	*/
+	    thread->state = THR_BLOCKED;
+	    thread->flags |= THR_FLAG_PAGEFAULT;
+	    thread->vmm_info.fault_address = pg_laddr;
+	    thread->vmm_info.read_size = 0;
+	    thread->vmm_info.page_perms = 0;
+	    thread->vmm_info.page_displacement = 0;
+	    thread->vmm_info.fault_entry = tbl->pages[PM_LINEAR_TO_TAB(pg_laddr)].entry.record;
+        thread->vmm_info.fault_task = task->id;
 
-	curr_thr = task->first_thread;
+	    thread->vmm_info.page_in_address = vmm_get_page(task->id, (UINT32)pg_laddr);
+        thread->vmm_info.pg_node.value = PG_ADDRESS(pg_laddr);
 
-	while(curr_thr != NULL)
-	{
-		if( curr_thr != thread && (curr_thr->flags & THR_FLAG_PAGEFAULT) && curr_thr->vmm_info.swaptbl_next == NULL && PM_LINEAR_TO_DIR(curr_thr->vmm_info.fault_address) == PM_LINEAR_TO_DIR(pg_laddr) )
-		{
-			/* found last thread waiting for this page table */
-			curr_thr->vmm_info.swaptbl_next = thread;	// set next thread as our current thread
-			break;
-		}
+	    /* Set IO Lock on page */
+	    vmm_set_flags(task->id, (ADDR)PHYSICAL2LINEAR(vmm_get_physical(task->id, pg_laddr)), TRUE, TAKEN_EFLAG_IOLOCK, TRUE);
 
-		curr_thr = curr_thr->next_thread;
-	}	
+	    thread->swp_io_finished.callback = swap_page_read_callback;
+	    io_begin_pg_read( (pdir->tables[PM_LINEAR_TO_DIR(pg_laddr)].record.addr << 3), thread->vmm_info.page_in_address, thread);
 
-	/* IO lock page table */
-	vmm_set_flags(task->id, (ADDR)PHYSICAL2LINEAR(vmm_get_tbl_physical(task->id, pg_laddr)), TRUE, TAKEN_EFLAG_IOLOCK, TRUE);
-
-	/* if page was sent to swap, begin swap IO */
-    sch_deactivate(thread);
-
-	thread->state = THR_BLOCKED;
-	thread->flags |= THR_FLAG_PAGEFAULT;
-	thread->vmm_info.fault_address = pg_laddr;
-	thread->vmm_info.read_size = 0;
-	thread->vmm_info.page_perms = 0;
-	thread->vmm_info.page_displacement = 0;
-	thread->vmm_info.fault_next_thread = NULL;
-	thread->vmm_info.swaptbl_next = NULL;
-	thread->vmm_info.fault_entry = tbl->pages[PM_LINEAR_TO_TAB(pg_laddr)].entry.record;
-
-	thread->vmm_info.page_in_address = vmm_get_page(task->id, (UINT32)pg_laddr);
-
-	/* Set IO Lock on page */
-	vmm_set_flags(task->id, (ADDR)PHYSICAL2LINEAR(vmm_get_physical(task->id, pg_laddr)), TRUE, TAKEN_EFLAG_IOLOCK, TRUE);
-
-	thread->swp_io_finished.callback = swap_page_read_callback;
-	io_begin_pg_read( (pdir->tables[PM_LINEAR_TO_DIR(pg_laddr)].record.addr << 3), thread->vmm_info.page_in_address, thread);
-
-	return TRUE;
+        insertRedBlackTree(&task->vmm_info.wait_root, &thread->vmm_info.pg_node, FALSE);
+		
+	    return TRUE;
+    }
+    
+    return FALSE;
 }
 
 
@@ -210,17 +191,17 @@ void vmm_swap_empty(struct pm_task *task, BOOL iocall)
 	UINT16 req_id = -1;
 
 	/* Check directory entries looking for swapped tables */
-	struct vmm_page_directory *pdir = task->vmm_inf.page_directory;
+	struct vmm_page_directory *pdir = task->vmm_info.page_directory;
 
-	UINT32 i = ((UINT32)task->vmm_inf.swap_free_addr) / 0x400000;
+	UINT32 i = ((UINT32)task->vmm_info.swap_free_addr) / 0x400000;
 
-	while((UINT32)task->vmm_inf.swap_free_addr < PMAN_MAPPING_BASE && task->vmm_inf.swap_page_count > 0)
+	while((UINT32)task->vmm_info.swap_free_addr < PMAN_MAPPING_BASE && task->vmm_info.swap_page_count > 0)
 	{
 		if( pdir->tables[i].record.present == 0 && pdir->tables[i].record.swapped == 1 )
 		{
 			ADDR tbl_page = vmm_get_tblpage(task->id, i * 0x100000);
 
-			task->vmm_inf.table_swap_addr = pdir->tables[i].record.addr;
+			task->vmm_info.table_swap_addr = pdir->tables[i].record.addr;
 
 			/* 
 			Table is swapped, get a page for it and load from swap.
@@ -230,7 +211,7 @@ void vmm_swap_empty(struct pm_task *task, BOOL iocall)
 			task->swp_io_finished.callback = swap_free_table_callback;
 			io_begin_task_pg_read( (pdir->tables[i].record.addr << 3), tbl_page, task);
 
-			task->vmm_inf.swap_page_count--;
+			task->vmm_info.swap_page_count--;
 
 			return;	// this function will continue when atac read messages are read.
 		}
@@ -257,7 +238,7 @@ void vmm_swap_empty(struct pm_task *task, BOOL iocall)
 		}
 
 		i++;
-		task->vmm_inf.swap_free_addr = (ADDR)((UINT32)task->vmm_inf.swap_free_addr + 0x400000);
+		task->vmm_info.swap_free_addr = (ADDR)((UINT32)task->vmm_info.swap_free_addr + 0x400000);
 	}
 
 	/*
@@ -283,11 +264,11 @@ Invoked when finished bringing a page table from swap, when destroying a task.
 */
 UINT32 swap_free_table_callback(struct pm_task *task, UINT32 ioret)
 {
-	claim_mem(task->vmm_inf.swap_read_smo);
-	task->vmm_inf.swap_read_smo = -1;
+	claim_mem(task->vmm_info.swap_read_smo);
+	task->vmm_info.swap_read_smo = -1;
 
 	/* Free Page table swap address */
-	swap_free_addr( task->vmm_inf.table_swap_addr );
+	swap_free_addr( task->vmm_info.table_swap_addr );
 
 	/* Continue empy procedure */
 	vmm_swap_empty(task, TRUE);
@@ -304,18 +285,14 @@ UINT32 swap_page_read_callback(struct pm_thread *thread, UINT32 ioret)
 	struct pm_thread *curr_thr = NULL;
     struct pm_thread *othr = NULL;
 	struct pm_task *task = NULL;
+    int task_id;
 
     // task can be killed, but it cannot be NULL, because there where swap operations pending
-
 	if(ioret != IO_RET_ERR)
 	{
 		/* Got a successfull response for a read command */		
 		task = tsk_get(thread->task_id);
         
-		/* 
-			This read command might have raised because 
-			a table was being read
-		*/
 		if(thread->flags & THR_FLAG_PAGEFAULT)
 		{
 			if(task->state != TSK_KILLED)
@@ -327,55 +304,27 @@ UINT32 swap_page_read_callback(struct pm_thread *thread, UINT32 ioret)
 			/* Page has been fetched from swap */
 			claim_mem(thread->vmm_info.fault_smo);
 			thread->vmm_info.fault_smo = -1;
-
-            /* Return page to our POOL if the task was killed */
-            if(task->state == TSK_KILLED)
-                vmm_put_page(thread->vmm_info.page_in_address);
-
-			while(thread && thread->state == THR_KILLED)
-			{
-				/* Thread was killed! */
-                thread->flags &= ~THR_FLAG_PAGEFAULT;
-				
-				/* Our thread was killed, see if there's other thread waiting for the same page */
-				if(thread->vmm_info.fault_next_thread != NULL)
-				{
-					thread->vmm_info.fault_next_thread->vmm_info.page_in_address = thread->vmm_info.page_in_address;
-                    othr = thread;
-					thread = thread->vmm_info.fault_next_thread;
-                    thr_destroy_thread(othr->id);
-				}
-				else 
-				{
-					if(task != NULL && task->state != TSK_KILLED)
-                         vmm_put_page(thread->vmm_info.page_in_address);
-                    thr_destroy_thread(thread->id);
-                    return 1;
-				}
-			}
             
-            if(task->state == TSK_KILLED && task->killed_threads == 0)
-            {
-                tsk_destroy(task);
-                return 1;
-            }
+            task_id = thread->task_id;
+
+            /* Remove IO lock from page */
+			vmm_set_flags(task->id, (ADDR)PG_ADDRESS(thread->vmm_info.fault_address), TRUE, TAKEN_EFLAG_IOLOCK, FALSE);
+
+			vmm_check_threads_pg(&thread, FALSE);
 
             if(thread == NULL) // al threads waiting for this page where killed
                 return 1;
 
-			/* Page in */
+            /* Page in */
 			pm_page_in(task->id, thread->vmm_info.fault_address, (ADDR)LINEAR2PHYSICAL(thread->vmm_info.page_in_address), 2, perms);
-
-			/* Remove IO lock from page */
-			vmm_set_flags(task->id, (ADDR)PG_ADDRESS(thread->vmm_info.fault_address), TRUE, TAKEN_EFLAG_IOLOCK, FALSE);
-
+                			    
 			/* Unmap page from pman address space */
 			vmm_unmap_page(task->id, PG_ADDRESS(thread->vmm_info.fault_address));
 			
 			thread->flags &= ~THR_FLAG_PAGEFAULT;
 			
-			task->vmm_inf.page_count++;
-			task->vmm_inf.swap_page_count--;
+			task->vmm_info.page_count++;
+			task->vmm_info.swap_page_count--;
                         
 			/* Wake all pending threads */
 			vmm_wake_pf_threads(thread);
@@ -384,19 +333,7 @@ UINT32 swap_page_read_callback(struct pm_thread *thread, UINT32 ioret)
 	}
 	else
 	{
-		vmm_put_page(thread->vmm_info.page_in_address);
-                
-        // remove page fault flag from threads so they are freed
-        curr_thr = thread->vmm_info.fault_next_thread;
-
-        while(curr_thr != NULL)
-        {
-            curr_thr->flags &= ~THR_FLAG_PAGEFAULT;
-            curr_thr = curr_thr->vmm_info.fault_next_thread;
-        }
-
-        /* IO Error, raise an exception. (Terminate the task with error) */
-		fatal_exception(thread->task_id, PG_IO_ERROR);
+		vmm_page_ioerror(thread, TRUE);
 	}
 	return 0;
 }
@@ -406,9 +343,10 @@ A page table has been brought from swap file
 */
 UINT32 swap_table_read_callback(struct pm_thread *thread, UINT32 ioret)
 {
-	struct pm_thread *curr_thr, *bcurr, *othr;
+	struct pm_thread *curr_thr;
     struct vmm_page_directory* pdir;
 	struct pm_task *task = tsk_get(thread->task_id);
+    rbnode *currnode = NULL;
 
 	if(ioret != IO_RET_ERR)
 	{
@@ -421,40 +359,27 @@ UINT32 swap_table_read_callback(struct pm_thread *thread, UINT32 ioret)
 			/* Successfull Page lvl 1 (table) read */
 
 			/* Set swap address for the page as free (before page in) */
-            pdir = task->vmm_inf.page_directory;
+            pdir = task->vmm_info.page_directory;
 
 			swap_free_addr( pdir->tables[PM_LINEAR_TO_DIR(thread->vmm_info.fault_address)].record.addr );
             
             claim_mem(thread->vmm_info.fault_smo);
 			thread->vmm_info.fault_smo = -1;
 
-            while(thread && thread->state == THR_KILLED)
-			{
-				/* Thread was killed! */
-                thread->flags &= ~THR_FLAG_PAGEFAULT_TBL;
-				
-				/* Our thread was killed, see if there's other thread waiting for the same page */
-				if(thread->vmm_info.fault_next_thread != NULL)
-				{
-					thread->vmm_info.fault_next_thread->vmm_info.page_in_address = thread->vmm_info.page_in_address;
-                    othr = thread;
-					thread = thread->vmm_info.fault_next_thread;
-                    thr_destroy_thread(othr->id);
-				}
-				else 
-				{					
-				    if(task != NULL && task->state != TSK_KILLED)
-                         vmm_put_page(thread->vmm_info.page_in_address);
-                    thr_destroy_thread(thread->id);
-                    return 1;
-				}
-			}
-            
-            if(task->state == TSK_KILLED && task->killed_threads == 0)
-            {
-                tsk_destroy(task);
-                return 1;
-            }
+            currnode = &thread->vmm_info.tbl_node;
+		    curr_thr = thr_get(currnode->value2);
+
+		    while(curr_thr != NULL)
+		    {
+                // remove all threads killed from the trees and lists.
+                // NOTE: This is safe, for there is only one node on the tbltree 
+                // for a given task even if multiple threads are waiting fro the 
+                // same page. Hence, this will not destroy the tbl tree.
+			    vmm_check_threads_pg(&curr_thr, TRUE);
+
+			    currnode = currnode->next;
+                curr_thr = thr_get(currnode->value2);
+		    }
 
             if(thread == NULL) // al threads waiting for this page where killed
                 return 1;
@@ -467,12 +392,13 @@ UINT32 swap_table_read_callback(struct pm_thread *thread, UINT32 ioret)
 
 			thread->flags &= ~THR_FLAG_PAGEFAULT_TBL;
 
-			/* Process Page Faults for threads waiting for this page table */
-			curr_thr = thread->vmm_info.swaptbl_next;
+			task->vmm_info.page_count++;
+			task->vmm_info.swap_page_count--;
 
-			task->vmm_inf.page_count++;
-			task->vmm_inf.swap_page_count--;
-			
+			/* Process Page Faults for threads waiting for this page table */
+            currnode = thread->vmm_info.tbl_node.next;
+			curr_thr = thr_get(currnode->value2);
+
 			while(curr_thr != NULL)
 			{
 				curr_thr->vmm_info.fault_smo = -1;
@@ -484,26 +410,16 @@ UINT32 swap_table_read_callback(struct pm_thread *thread, UINT32 ioret)
 				*/
 				if(PG_ADDRESS(thread->vmm_info.fault_address) != PG_ADDRESS(curr_thr->vmm_info.fault_address))
 				{
-					bcurr = curr_thr->vmm_info.swaptbl_next;
-
-                    while(curr_thr && curr_thr->state == THR_KILLED)
-                    {
-                        curr_thr->flags &= ~THR_FLAG_PAGEFAULT_TBL;
-
-                        // remove the threads killed
-                        othr = curr_thr;
-                        curr_thr = thread->vmm_info.fault_next_thread;
-                        thr_destroy_thread(othr->id);
-                    }
-                    
 					if(curr_thr && !vmm_handle_page_fault(&curr_thr->id, TRUE))
 					{
 						/* Wake all pending threads (same table, same page) */
 						vmm_wake_pf_threads(curr_thr);
 					}
+                    removeChildRedBlackTree(&task->vmm_info.tbl_wait_root, &curr_thr->vmm_info.tbl_node);
 				}
                 
-				curr_thr = bcurr;
+				currnode = currnode->next;
+                curr_thr = thr_get(currnode->value2);
 			}
 
 			/* Process our page fault */
@@ -519,22 +435,21 @@ UINT32 swap_table_read_callback(struct pm_thread *thread, UINT32 ioret)
 	}
     else
     {
-        vmm_put_page(thread->vmm_info.page_in_address);
-                
-        // remove page fault flag from threads so they are freed
-        curr_thr = thread->vmm_info.fault_next_thread;
+        currnode = &thread->vmm_info.tbl_node;
+		curr_thr = thr_get(currnode->value2);
 
-        while(curr_thr != NULL)
-        {
-            curr_thr->flags &= ~THR_FLAG_PAGEFAULT;
-            curr_thr = curr_thr->vmm_info.fault_next_thread;
-        }
+		while(curr_thr != NULL)
+		{
+            // send an io error to all threads waiting for this page table
+            // not on the same task
+            // NOTE: This is safe, for there is only one node on the tbltree 
+            // for a given task even if multiple threads are waiting fro the 
+            // same page. Hence, this will not destroy the tbl tree.
+			vmm_page_ioerror(curr_thr, TRUE);
 
-        if(task != NULL)
-        {
-		    /* IO Error, raise an exception. (Terminate the task with error) */
-		    fatal_exception(thread->task_id, PG_IO_ERROR);
-        }
+			currnode = currnode->next;
+            curr_thr = thr_get(currnode->value2);
+		}
     }
 	return 0;
 }

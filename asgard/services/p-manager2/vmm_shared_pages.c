@@ -48,7 +48,7 @@ struct pm_task *vmm_shared_getowner(struct pm_task *task, ADDR proc_laddr, ADDR 
 	struct vmm_shared_descriptor *sdes = NULL;
 
 	/* Get memory region for this address */
-	mreg = task->vmm_inf.regions.first;
+	mreg = task->vmm_info.regions.first;
 
 	while(mreg != NULL)
 	{
@@ -75,7 +75,7 @@ BOOL vmm_is_shared(struct pm_task *task, ADDR proc_laddr)
 	struct vmm_memory_region *mreg = NULL;
 
 	/* Get memory region for this address */
-	mreg = task->vmm_inf.regions.first;
+	mreg = task->vmm_info.regions.first;
 
 	while(mreg != NULL)
 	{
@@ -116,7 +116,7 @@ void vmm_share_remove(struct pm_task *task, struct vmm_memory_region *mreg)
 			if(task->id != i && child != NULL && child->state != TSK_NOTHING && child->state != TSK_KILLING && child->state != TSK_KILLED)
 			{
 				/* Go through regions. */
-				cmreg = child->vmm_inf.regions.first;
+				cmreg = child->vmm_info.regions.first;
 
 				while(cmreg != NULL)
 				{
@@ -136,7 +136,7 @@ void vmm_share_remove(struct pm_task *task, struct vmm_memory_region *mreg)
 	lstart = (UINT32)mreg->tsk_lstart;
 	lend = (UINT32)mreg->tsk_lend;
 	
-	pdir = task->vmm_inf.page_directory;
+	pdir = task->vmm_info.page_directory;
 
 	while(lstart < lend)
 	{
@@ -191,7 +191,7 @@ BOOL vmm_share_create(struct pm_task *task, ADDR laddr, UINT32 length, UINT16 pe
 	struct pm_thread *thr = NULL;
 
 	/* Check address is not above max_addr */
-	if(task->vmm_inf.max_addr <= (UINT32)laddr + length)
+	if(task->vmm_info.max_addr <= (UINT32)laddr + length)
 	{
 		/* FIXME: Should send an exception signal... */
 		return FALSE;
@@ -215,7 +215,7 @@ BOOL vmm_share_create(struct pm_task *task, ADDR laddr, UINT32 length, UINT16 pe
 	laddr = TRANSLATE_ADDR(laddr, ADDR);
 
 	/* Check if a region already exists on the same task, overlapping. */
-	mregit = task->vmm_inf.regions.first;
+	mregit = task->vmm_info.regions.first;
 
 	while(mregit != NULL)
 	{
@@ -283,7 +283,7 @@ UINT32 vmm_share_create_step(struct pm_task *task, struct vmm_shared_params *par
 	lend = params->params[1];
 	last_swp = params->params[2];
 	
-	pdir = task->vmm_inf.page_directory;
+	pdir = task->vmm_info.page_directory;
 
 	/* Free last swap address if not 0xFFFFFFFF */
 	if(last_swp != 0xFFFFFFFF)
@@ -312,7 +312,7 @@ UINT32 vmm_share_create_step(struct pm_task *task, struct vmm_shared_params *par
 			/* Get a fresh page */
 			pg_addr = (UINT32)vmm_get_tblpage(task->id, lstart);
 
-			task->vmm_inf.page_count++;
+			task->vmm_info.page_count++;
 		
 			/* Page in onto task adress space */
 			pm_page_in(task->id, (ADDR)lstart, (ADDR)LINEAR2PHYSICAL(pg_addr), 1, PGATT_WRITE_ENA);
@@ -351,7 +351,7 @@ UINT32 vmm_share_create_step(struct pm_task *task, struct vmm_shared_params *par
 				/* Get a fresh page */
 				pg_addr = (UINT32)vmm_get_tblpage(task->id, lstart);
 
-				task->vmm_inf.page_count++;
+				task->vmm_info.page_count++;
 		
 				/* Page in onto task adress space */
 				pm_page_in(task->id, (ADDR)lstart, (ADDR)LINEAR2PHYSICAL(pg_addr), 2, swap_get_perms(task, (ADDR)lstart));
@@ -375,7 +375,7 @@ UINT32 vmm_share_create_step(struct pm_task *task, struct vmm_shared_params *par
 				/* Get a fresh page */
 				pg_addr = (UINT32)vmm_get_tblpage(task->id, lstart);
 
-				task->vmm_inf.page_count++;
+				task->vmm_info.page_count++;
 		
 				/* Page in onto task adress space */
 				pm_page_in(task->id, (ADDR)lstart, (ADDR)LINEAR2PHYSICAL(pg_addr), 2, perms);
@@ -398,7 +398,7 @@ UINT32 vmm_share_create_step(struct pm_task *task, struct vmm_shared_params *par
 				/* Give the tak a fresh page */
 				pg_addr = (UINT32)vmm_get_page(task->id, lstart);
 
-				task->vmm_inf.page_count++;
+				task->vmm_info.page_count++;
 
 				pm_page_in(task->id, (ADDR)lstart, (ADDR)LINEAR2PHYSICAL(pg_addr), 2, PGATT_WRITE_ENA);
 			}
@@ -511,7 +511,7 @@ BOOL vmm_share_map(UINT16 descriptor_id, struct pm_task *task, ADDR laddr, UINT3
 		return FALSE;
 
 	/* Check address is not above max_addr */
-	if(task->vmm_inf.max_addr <= (UINT32)laddr + length)
+	if(task->vmm_info.max_addr <= (UINT32)laddr + length)
 	{
 		/* FIXME: Should send an exception signal... */
 		return FALSE;
@@ -533,7 +533,7 @@ BOOL vmm_share_map(UINT16 descriptor_id, struct pm_task *task, ADDR laddr, UINT3
 	if(desc == NULL) return FALSE;
 
 	/* Check if a shared region already exists on the same task */
-	mregit = task->vmm_inf.regions.first;
+	mregit = task->vmm_info.regions.first;
 
 	while(mregit != NULL)
 	{
@@ -615,7 +615,7 @@ UINT32 vmm_share_map_callback(struct pm_task *task, UINT32 ioret)
 	}
 
 	/* Check destination area is not swapped (if it is, I will free them no matter what is there, except for page tables) */
-	pdir = task->vmm_inf.page_directory;
+	pdir = task->vmm_info.page_directory;
 
 	for(; lstart < lend; lstart += 0x1000)
 	{
@@ -625,7 +625,7 @@ UINT32 vmm_share_map_callback(struct pm_task *task, UINT32 ioret)
 			/* Get a fresh page */
 			pg_addr = (UINT32)vmm_get_tblpage(task->id, lstart);
 
-			task->vmm_inf.page_count++;
+			task->vmm_info.page_count++;
 		
 			/* Page in onto task adress space */
 			pm_page_in(task->id, (ADDR)lstart, (ADDR)LINEAR2PHYSICAL(pg_addr), 1, PGATT_WRITE_ENA);
@@ -671,7 +671,7 @@ UINT32 vmm_share_map_callback(struct pm_task *task, UINT32 ioret)
 			/* return page to PMAN */
 			vmm_put_page((ADDR)PHYSICAL2LINEAR(pg_addr));	
 
-			task->vmm_inf.page_count--;
+			task->vmm_info.page_count--;
 		}
 	}
 
@@ -688,7 +688,7 @@ UINT32 vmm_share_map_callback(struct pm_task *task, UINT32 ioret)
         kfree(mreg);
         return FALSE;
     }
-	opdir = otask->vmm_inf.page_directory;
+	opdir = otask->vmm_info.page_directory;
 
 	/* 
 	Map pages onto task 

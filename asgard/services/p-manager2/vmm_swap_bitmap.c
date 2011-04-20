@@ -127,7 +127,7 @@ UINT32 swap_get_perms(struct pm_task *task, ADDR proc_laddress)
 	struct vmm_page_directory *pdir = NULL;
 	struct vmm_page_table *ptbl = NULL;
 
-	pdir = task->vmm_inf.page_directory;
+	pdir = task->vmm_info.page_directory;
 	ptbl = (struct vmm_page_table*)PHYSICAL2LINEAR(PG_ADDRESS(pdir->tables[PM_LINEAR_TO_DIR(proc_laddress)].b));
 
 	if(ptbl->pages[PM_LINEAR_TO_TAB(proc_laddress)].entry.record.write == 1)

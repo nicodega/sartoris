@@ -47,7 +47,7 @@ BOOL vmm_phy_mmap(struct pm_task *task, ADDR py_start, ADDR py_end, ADDR lstart,
 	struct vmm_pman_assigned_record *assigned = NULL;
 
 	/* Check address is not above max_addr */
-	if(task->vmm_inf.max_addr <= (UINT32)lend)
+	if(task->vmm_info.max_addr <= (UINT32)lend)
 	{
 		thread->state = THR_EXEPTION;
 		sch_deactivate(thread);
@@ -63,7 +63,7 @@ BOOL vmm_phy_mmap(struct pm_task *task, ADDR py_start, ADDR py_end, ADDR lstart,
 		return FALSE;
 
 	/* Check it's not too low. */
-	if((UINT32)py_start < FIRST_PAGE(PMAN_POOL_PHYS))
+	if((UINT32)py_start < FIRST_PAGE(PMAN_POOL_PHYS) && (UINT32)py_start > 0x1000)
 		return FALSE;
 	
 	lstart = TRANSLATE_ADDR(lstart, ADDR);
@@ -129,7 +129,7 @@ BOOL vmm_phy_mmap(struct pm_task *task, ADDR py_start, ADDR py_end, ADDR lstart,
 
                 if(tsk_get(assigned->task_id) == NULL) return 0;
 
-				pdir = tsk_get(assigned->task_id)->vmm_inf.page_directory;
+				pdir = tsk_get(assigned->task_id)->vmm_info.page_directory;
 				ptbl = (struct vmm_page_table*)PG_ADDRESS(PHYSICAL2LINEAR(pdir->tables[assigned->dir_index].b));
 
 				/* Check page is not dirty. */
@@ -156,9 +156,9 @@ BOOL vmm_phy_mmap(struct pm_task *task, ADDR py_start, ADDR py_end, ADDR lstart,
 	while(laddr < (UINT32)lend)
 	{
 		/* If page table is not present check it's not swapped */
-		if(task->vmm_inf.page_directory->tables[PM_LINEAR_TO_DIR(laddr)].ia32entry.present == 1)
+		if(task->vmm_info.page_directory->tables[PM_LINEAR_TO_DIR(laddr)].ia32entry.present == 1)
 		{
-			tbl = (struct vmm_page_table*)PHYSICAL2LINEAR(PG_ADDRESS(task->vmm_inf.page_directory->tables[PM_LINEAR_TO_DIR(laddr)].b));
+			tbl = (struct vmm_page_table*)PHYSICAL2LINEAR(PG_ADDRESS(task->vmm_info.page_directory->tables[PM_LINEAR_TO_DIR(laddr)].b));
 
 			if(tbl->pages[PM_LINEAR_TO_TAB(laddr)].entry.ia32entry.present == 1)
 			{
@@ -178,7 +178,7 @@ BOOL vmm_phy_mmap(struct pm_task *task, ADDR py_start, ADDR py_end, ADDR lstart,
 				return FALSE;	// page is swapped
 			}
 		}
-		else if(task->vmm_inf.page_directory->tables[PM_LINEAR_TO_DIR(laddr)].record.swapped == 1)
+		else if(task->vmm_info.page_directory->tables[PM_LINEAR_TO_DIR(laddr)].record.swapped == 1)
 		{
 			return FALSE;	// page table is swapped
 		}
@@ -188,7 +188,7 @@ BOOL vmm_phy_mmap(struct pm_task *task, ADDR py_start, ADDR py_end, ADDR lstart,
 	/*
 	Check there is no other memory region overlapping.
 	*/
-	mregit = task->vmm_inf.regions.first;
+	mregit = task->vmm_info.regions.first;
 
 	while(mregit != NULL)
 	{
@@ -215,13 +215,13 @@ BOOL vmm_phy_mmap(struct pm_task *task, ADDR py_start, ADDR py_end, ADDR lstart,
 	while(pstart < pend)
 	{
 		/* Check page table is present, if not give it one. */
-		if(task->vmm_inf.page_directory->tables[PM_LINEAR_TO_DIR(lstart)].ia32entry.present == 0)
+		if(task->vmm_info.page_directory->tables[PM_LINEAR_TO_DIR(lstart)].ia32entry.present == 0)
 		{
 			pg_tbl = vmm_get_tblpage(task->id, (UINT32)lstart);
 
 			page_in(task->id, (ADDR)lstart, (ADDR)LINEAR2PHYSICAL(pg_tbl), 1, PGATT_WRITE_ENA);
 
-			task->vmm_inf.page_count++;
+			task->vmm_info.page_count++;
 		}
 
 		/* Now map the page. */

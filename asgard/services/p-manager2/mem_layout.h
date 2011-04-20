@@ -33,7 +33,7 @@ extern int edata[];
 
 #define PMAN_DEFAULT_MEM_SIZE       0x2000000                   // Default memory size = 32 MB 
 
-#define SARTORIS_PROCBASE_LINEAR    MIN_TASK_OFFSET             // base linear address used by sartoris (on sartoris 2.0 it's 0xC800000 (200MB))
+#define SARTORIS_PROCBASE_LINEAR    MIN_TASK_OFFSET             // base linear address used by sartoris (on sartoris 2.0 it's 0x7000000 (112MB))
 
 /* Task defines */
 #define PMAN_TASK_SIZE              (0xFFFFFFFF - SARTORIS_PROCBASE_LINEAR)

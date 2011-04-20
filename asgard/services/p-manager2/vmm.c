@@ -481,7 +481,7 @@ ADDR vmm_get_physical(UINT16 task, ADDR laddress)
     if(tsk == NULL) return NULL;
 
 	/* We have to get the physical address for this linear address */
-	struct vmm_page_directory *dir = tsk->vmm_inf.page_directory;
+	struct vmm_page_directory *dir = tsk->vmm_info.page_directory;
 	struct vmm_page_table *tbl = (struct vmm_page_table*)PHYSICAL2LINEAR(PG_ADDRESS(dir->tables[PM_LINEAR_TO_DIR(laddress)].b));
 
 	return (ADDR)PG_ADDRESS(tbl->pages[PM_LINEAR_TO_TAB(laddress)].entry.phy_page_addr);
@@ -496,7 +496,7 @@ struct vmm_page_table *vmm_get_tbl_physical(UINT16 task, ADDR laddress)
 
     if(tsk == NULL) return NULL;
 
-	struct vmm_page_directory *dir = tsk->vmm_inf.page_directory;
+	struct vmm_page_directory *dir = tsk->vmm_info.page_directory;
 	return (struct vmm_page_table*)PG_ADDRESS(dir->tables[PM_LINEAR_TO_DIR(laddress)].b);
 }
 
@@ -566,7 +566,7 @@ void vmm_claim(UINT16 task)
 	if(tsk == NULL) return;
 
 	/* This function will return a process tables to the stacks */
-	dir = tsk->vmm_inf.page_directory;
+	dir = tsk->vmm_info.page_directory;
 	table = NULL;
     
     /* NOTE: There are kernel pages mapped on the directory
@@ -592,7 +592,7 @@ void vmm_claim(UINT16 task)
             vmm_put_page((ADDR)PHYSICAL2LINEAR(PG_ADDRESS(tbladdr)));
         }
     }
-	vmm_put_page((ADDR)PHYSICAL2LINEAR(PG_ADDRESS(tsk->vmm_inf.page_directory)));
+	vmm_put_page((ADDR)PHYSICAL2LINEAR(PG_ADDRESS(tsk->vmm_info.page_directory)));
 }
 
 /*
@@ -621,12 +621,12 @@ return SUCCESS; // REMOVE THIS
 				break;
 			case 1:
 				/* page table */
-				dir = task->vmm_inf.page_directory;
+				dir = task->vmm_info.page_directory;
 				dir->tables[PM_LINEAR_TO_DIR(linear)].b = ((UINT32)VMM_INITIAL_AGE << 9) | dir->tables[PM_LINEAR_TO_DIR(linear)].b;
 				break;
 			case 2:
 				/* page */
-				dir = task->vmm_inf.page_directory;
+				dir = task->vmm_info.page_directory;
 				tbl = (struct vmm_page_table*)PHYSICAL2LINEAR(PG_ADDRESS(dir->tables[PM_LINEAR_TO_DIR(linear)].b));
 
 				tbl->pages[PM_LINEAR_TO_TAB(linear)].entry.phy_page_addr = (VMM_INITIAL_AGE << 9) | tbl->pages[PM_LINEAR_TO_TAB(linear)].entry.phy_page_addr;
@@ -652,7 +652,7 @@ BOOL vmm_can_load(struct pm_task *tsk)
 	/* Available pages will be calculated by using SWAP available pages + Available Pool Memory */
 	UINT32 available_pages = vmm.swap_available + vmm.available_mem;
 	
-	if(available_pages < tsk->vmm_inf.expected_working_set)
+	if(available_pages < tsk->vmm_info.expected_working_set)
 	{
 		/* Begin close */
 		if(tsk != NULL && tsk->state != TSK_NOTHING) 
@@ -675,7 +675,7 @@ BOOL vmm_can_load(struct pm_task *tsk)
 void vmm_close_task(struct pm_task *task)
 {
 	/* Remove Shared and Physically mapped regions */
-	struct vmm_memory_region *mreg = task->vmm_inf.regions.first;
+	struct vmm_memory_region *mreg = task->vmm_info.regions.first;
 	struct vmm_memory_region *next = NULL; 
 
 	while(mreg != NULL)
@@ -703,35 +703,45 @@ void vmm_close_task(struct pm_task *task)
 		}
 		mreg = next;
 	}
+        
+    // if there are threads from other task waiting for a page
+    // from this task, we will have to wake them when the task is destroyed
 
 	/* Begin swap empty procedure. */
 	vmm_swap_empty(task, FALSE);
 }
 
-void vmm_init_task_info(struct task_vmm_info *vmm_inf)
+void vmm_init_task_info(struct task_vmm_info *vmm_info)
 {
-	vmm_inf->page_directory = NULL;
-	vmm_inf->swap_free_addr = (ADDR)0xFFFFFFFF;
-	vmm_inf->table_swap_addr = 0;
-	vmm_inf->page_count = 0;
-	vmm_inf->swap_page_count = 0;
-	vmm_inf->expected_working_set = 0;
-	vmm_inf->max_addr = 0;
-	vmm_inf->swap_read_smo = -1;
-	vmm_inf->regions.first = NULL;
-	vmm_inf->regions.total = 0;
+	vmm_info->page_directory = NULL;
+	vmm_info->swap_free_addr = (ADDR)0xFFFFFFFF;
+	vmm_info->table_swap_addr = 0;
+	vmm_info->page_count = 0;
+	vmm_info->swap_page_count = 0;
+	vmm_info->expected_working_set = 0;
+	vmm_info->max_addr = 0;
+	vmm_info->swap_read_smo = -1;
+	vmm_info->regions.first = NULL;
+	vmm_info->regions.total = 0;
+    vmm_info->wait_root = NULL;
+    vmm_info->tbl_wait_root = NULL;
 }
 
-void vmm_init_thread_info(struct thread_vmm_info *vmm_inf)
+void vmm_init_thread_info(struct pm_thread *thread)
 {
-	vmm_inf->fault_address = NULL;
-	vmm_inf->page_in_address = NULL;
-	vmm_inf->fault_next_thread = NULL;
-	vmm_inf->swaptbl_next = NULL;
-	vmm_inf->page_displacement = 0;
-	vmm_inf->read_size = 0;
-	vmm_inf->page_perms = 0;
-	vmm_inf->fault_smo = -1;
-	vmm_inf->fault_region = NULL;
+    struct thread_vmm_info *vmm_info = &thread->vmm_info;
+	vmm_info->fault_address = NULL;
+	vmm_info->page_in_address = NULL;
+	vmm_info->page_displacement = 0;
+	vmm_info->read_size = 0;
+	vmm_info->page_perms = 0;
+	vmm_info->fault_smo = -1;
+	vmm_info->fault_region = NULL;
+    vmm_info->pg_node.value2 = thread->id;
+    vmm_info->tbl_node.value2 = thread->id;
+    vmm_info->pg_node.next = NULL;
+    vmm_info->tbl_node.next = NULL;
+    vmm_info->pg_node.prev = NULL;
+    vmm_info->tbl_node.prev = NULL;
 }
 

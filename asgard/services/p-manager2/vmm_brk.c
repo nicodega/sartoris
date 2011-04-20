@@ -45,7 +45,7 @@ UINT32 vmm_grow_task(struct pm_task *task, UINT32 size)
 	|	
 	|	0xXXXXXXXX <- End of Exec + data + bss (Maybe bounded by 1GB)
 	|
-	|		Brk Space (somewhere here will be task->vmm_inf.max_addr)
+	|		Brk Space (somewhere here will be task->vmm_info.max_addr)
 	|
 	|	0x80000000 (2GB)
 	|
@@ -70,10 +70,10 @@ UINT32 vmm_shrink_task(struct pm_task *task, UINT32 size)
 {
 	/* 
 		Shrink without compromising regions.
-		Check task->vmm_inf.max_addr - size is greater or equal to 0xXXXXXXXX
+		Check task->vmm_info.max_addr - size is greater or equal to 0xXXXXXXXX
 
-		NOTE: When shrinking, unmap (won't send to swap) pages on the region: task->vmm_inf.max_addr - size
-		Set task->vmm_inf.max_addr to task->vmm_inf.max_addr - size.
+		NOTE: When shrinking, unmap (won't send to swap) pages on the region: task->vmm_info.max_addr - size
+		Set task->vmm_info.max_addr to task->vmm_info.max_addr - size.
 		If swapped, release from swap.
 	*/
 	return 0;

@@ -131,7 +131,7 @@ Get a memory region from a descriptor.
 */
 struct vmm_memory_region *vmm_region_get_bydesc(struct pm_task *task, ADDR desc)
 {
-	struct vmm_memory_region *mreg = task->vmm_inf.regions.first;
+	struct vmm_memory_region *mreg = task->vmm_info.regions.first;
 
 	while(mreg != NULL)
 	{
@@ -149,7 +149,7 @@ Get a memory region for a given task.
 */
 struct vmm_memory_region *vmm_region_get(struct pm_task *task, UINT32 tsk_lstart)
 {
-	struct vmm_memory_region *mreg = task->vmm_inf.regions.first;
+	struct vmm_memory_region *mreg = task->vmm_info.regions.first;
 
 	while(mreg != NULL)
 	{
@@ -167,9 +167,9 @@ Add a Memory region on a task.
 */
 void vmm_region_add(struct pm_task *task, struct vmm_memory_region *mreg)
 {
-	mreg->next = task->vmm_inf.regions.first;
-	task->vmm_inf.regions.first = mreg;
-	task->vmm_inf.regions.total++;
+	mreg->next = task->vmm_info.regions.first;
+	task->vmm_info.regions.first = mreg;
+	task->vmm_info.regions.total++;
 }
 
 /*
@@ -179,7 +179,7 @@ void vmm_region_remove(struct pm_task *task, struct vmm_memory_region *mreg)
 {
 	struct vmm_memory_region *cmreg = NULL;
 
-	cmreg = task->vmm_inf.regions.first;
+	cmreg = task->vmm_info.regions.first;
 
 	while(cmreg != NULL && cmreg != mreg)
 	{
@@ -187,16 +187,16 @@ void vmm_region_remove(struct pm_task *task, struct vmm_memory_region *mreg)
 		cmreg = cmreg->next;
 	}
 
-	if(task->vmm_inf.regions.first == mreg)
+	if(task->vmm_info.regions.first == mreg)
 	{
-		task->vmm_inf.regions.first = cmreg->next;
+		task->vmm_info.regions.first = cmreg->next;
 	}
 	else
 	{
 		cmreg->next = mreg->next;
 	}
 
-	task->vmm_inf.regions.total--;
+	task->vmm_info.regions.total--;
 }
 
 

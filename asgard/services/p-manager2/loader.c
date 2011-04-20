@@ -35,9 +35,9 @@ UINT32 loader_create_task(struct pm_task *task, char *path, UINT32 plength, UINT
 	ADDR pg_address;
 
 	/* Get a Page for the Directory */
-	task->vmm_inf.page_directory = (struct vmm_page_directory*)vmm_get_dirpage(task->id);
+	task->vmm_info.page_directory = (struct vmm_page_directory*)vmm_get_dirpage(task->id);
 
-	if(task->vmm_inf.page_directory == NULL) 
+	if(task->vmm_info.page_directory == NULL) 
 		return PM_NOT_ENOUGH_MEM;
 	
 	/* if we got here, task id is valid, the task slot is free,
@@ -62,15 +62,15 @@ UINT32 loader_create_task(struct pm_task *task, char *path, UINT32 plength, UINT
 	task->loader_inf.elf_pheaders = NULL;
 
 	/* Reset VMM information on task */
-	task->vmm_inf.swap_free_addr = (ADDR)0xFFFFFFFF;
-	task->vmm_inf.table_swap_addr = 0;
-	task->vmm_inf.expected_working_set = 0;
-	task->vmm_inf.swap_read_smo = -1;
-	task->vmm_inf.regions.first = NULL;
-	task->vmm_inf.regions.total = 0;
-	task->vmm_inf.page_count = 2;
-	task->vmm_inf.max_addr = PMAN_TSK_MAX_ADDR;
-	task->vmm_inf.swap_page_count = 0;
+	task->vmm_info.swap_free_addr = (ADDR)0xFFFFFFFF;
+	task->vmm_info.table_swap_addr = 0;
+	task->vmm_info.expected_working_set = 0;
+	task->vmm_info.swap_read_smo = -1;
+	task->vmm_info.regions.first = NULL;
+	task->vmm_info.regions.total = 0;
+	task->vmm_info.page_count = 2;
+	task->vmm_info.max_addr = PMAN_TSK_MAX_ADDR;
+	task->vmm_info.swap_page_count = 0;
 
 	/* Create microkernel task */
 	mk_task.mem_adr = (ADDR)SARTORIS_PROCBASE_LINEAR;  /* paging mapped the memory here */
@@ -84,15 +84,15 @@ UINT32 loader_create_task(struct pm_task *task, char *path, UINT32 plength, UINT
     }
 
 	/* Pagein the Page directory on task address space */
-	pm_page_in(task->id, 0, (ADDR)LINEAR2PHYSICAL(task->vmm_inf.page_directory), 0, 0);
+	pm_page_in(task->id, 0, (ADDR)LINEAR2PHYSICAL(task->vmm_info.page_directory), 0, 0);
 
 	/* Get a Page Table for the task */
 	pg_address = vmm_get_tblpage(task->id, SARTORIS_PROCBASE_LINEAR);
 
 	if(pg_address == NULL) 
 	{
-		vmm_put_page(task->vmm_inf.page_directory);
-		task->vmm_inf.page_directory = NULL;
+		vmm_put_page(task->vmm_info.page_directory);
+		task->vmm_info.page_directory = NULL;
 		return PM_NOT_ENOUGH_MEM;
 	}
 
@@ -235,7 +235,7 @@ void loader_calculate_working_set(struct pm_task *task)
 	BYTE *headers = task->loader_inf.elf_pheaders;
 	struct Elf32_Phdr *prog_header = NULL;
 
-	task->vmm_inf.expected_working_set = 0;
+	task->vmm_info.expected_working_set = 0;
 	
 	while(i < task->loader_inf.elf_header.e_phnum)
 	{
@@ -250,7 +250,7 @@ void loader_calculate_working_set(struct pm_task *task)
 		}
 
 		/* Calculate pages needed for this segment */
-		task->vmm_inf.expected_working_set += (UINT32)(prog_header->p_memsz / 0x1000) + ((prog_header->p_memsz % 0x1000 == 0)? 0 : 1);
+		task->vmm_info.expected_working_set += (UINT32)(prog_header->p_memsz / 0x1000) + ((prog_header->p_memsz % 0x1000 == 0)? 0 : 1);
 		
 		/* This is the end of the loadable segment */
 		new_end = (UINT32)prog_header->p_vaddr + (UINT32)prog_header->p_memsz;

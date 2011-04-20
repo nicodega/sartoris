@@ -725,14 +725,14 @@ BOOL io_begin_task_pg_read(UINT32 lba, ADDR ptr, struct pm_task *task)
 	if(!vmm.swap_present) return FALSE;
 	
 	/* Share memory to the ATAC */
-	task->vmm_inf.swap_read_smo = share_mem(atac_service, ptr, 0x1000, WRITE_PERM);
+	task->vmm_info.swap_read_smo = share_mem(atac_service, ptr, 0x1000, WRITE_PERM);
 		
 	/* Send read multiple command to ATAC */
 	readcmd.command = BLOCK_STDDEV_READM;
 	readcmd.pos = lba;
 	readcmd.count = 8;
 	readcmd.dev = vmm.swap_ldevid;
-	readcmd.buffer_smo = task->vmm_inf.swap_read_smo;
+	readcmd.buffer_smo = task->vmm_info.swap_read_smo;
 	readcmd.msg_id = task->id;
 	readcmd.ret_port = SWAP_TASK_READ_PORT;
 

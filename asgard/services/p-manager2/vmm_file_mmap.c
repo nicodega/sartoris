@@ -28,10 +28,11 @@
 #include "kmalloc.h"
 #include "exception.h"
 #include <services/pmanager/services.h>
+#include "rb.h"
 
 /*
 THERE'S STILL AN OPEN ISSUE HERE (well a lot because this sucks)
-IF A TASK IS KILLED WHILE AN FMAP READ / WRITE OP IS BEING 
+IF A TASK IS KILLED WHILE AN FMAP WRITE OP IS BEING 
 PERFORMED RESPONSE MESSAGES MIGHT CAUSE A MESS. WE SHOULD DO
 SOMETHING ABOUT IT, LIKE PUTTING THE KILL ON HOLD.
 */
@@ -53,9 +54,9 @@ BOOL vmm_page_filemapped(struct pm_task *task, struct pm_thread *thread, ADDR pa
 	struct vmm_fmap_descriptor *fmd = NULL;
 
 	/* If a memory region with type VMM_MEMREGION_FMAP exists, return TRUE and begin IO */
-	if(task->vmm_inf.regions.total == 0) return FALSE;
+	if(task->vmm_info.regions.total == 0) return FALSE;
 
-	mreg = task->vmm_inf.regions.first;
+	mreg = task->vmm_info.regions.first;
 
 	while(mreg != NULL)
 	{
@@ -82,16 +83,20 @@ BOOL vmm_page_filemapped(struct pm_task *task, struct pm_thread *thread, ADDR pa
 	thread->vmm_info.fault_address = page_laddr;
 	thread->vmm_info.read_size = 0;
 	thread->vmm_info.page_displacement = 0;
-	thread->vmm_info.fault_next_thread = NULL;
-	thread->vmm_info.swaptbl_next = NULL;
-
+	
 	/* IO lock Page table */
 	vmm_set_flags(task->id, (ADDR)PHYSICAL2LINEAR(vmm_get_tbl_physical(task->id, page_laddr)), TRUE, TAKEN_EFLAG_IOLOCK, TRUE);
 
 	thread->vmm_info.fmap_iosrc = fmd->iosrc;
 	thread->vmm_info.fmap_iosrc.type = thread->io_event_src.type;
 	thread->vmm_info.fmap_iosrc.id = thread->io_event_src.id;
+    
+    thread->vmm_info.pg_node.value = PG_ADDRESS(page_laddr);
 
+    // we must insert the thread on the pg wait tree
+    // in case another thread asks for the same page.
+    insertRedBlackTree(&task->vmm_info.wait_root, &thread->vmm_info.pg_node, FALSE);
+		
 	/* Seek to the page possition */
 	thread->io_finished.callback = vmm_fmap_seek_callback;
 	io_begin_seek(&thread->vmm_info.fmap_iosrc, fmd->offset + (UINT32)mreg->tsk_lstart - (UINT32)page_laddr);
@@ -116,7 +121,7 @@ UINT32 vmm_fmap(UINT16 task_id, UINT32 fileid, UINT16 fs_task, ADDR start, UINT3
 		return PM_INVALID_PARAMS;
 
 	/* Check address is not above max_addr */
-	if(task->vmm_inf.max_addr <= (UINT32)start + size)
+	if(task->vmm_info.max_addr <= (UINT32)start + size)
 	{
 		/* FIXME: Should send an exception signal... */
 		return PM_ERROR;
@@ -166,7 +171,7 @@ UINT32 vmm_fmap(UINT16 task_id, UINT32 fileid, UINT16 fs_task, ADDR start, UINT3
 	new_mreg->type = VMM_MEMREGION_FMAP;
 
 	/* Check region does not intersect with other region on this task address space. */
-	mreg = task->vmm_inf.regions.first;
+	mreg = task->vmm_info.regions.first;
 
 	while(mreg != NULL)
 	{
@@ -184,7 +189,7 @@ UINT32 vmm_fmap(UINT16 task_id, UINT32 fileid, UINT16 fs_task, ADDR start, UINT3
 	Check pages are not swapped.
 	If pages are paged in, I'll page them out so an exception is raised if reading/writing.
 	*/
-	pdir = task->vmm_inf.page_directory;
+	pdir = task->vmm_info.page_directory;
 	ptbl = NULL;
 
 	dindex = PM_LINEAR_TO_DIR(new_mreg->tsk_lstart);
@@ -288,6 +293,8 @@ BOOL vmm_fmap_release(struct pm_task *task, ADDR tsk_lstart)
 
 	if(fmd->references > 0)
 	{
+        // this fmap still has references from other task
+
 		/* Unmap Pages from task address space */
 		addr = (UINT32)mreg->tsk_lstart;
 
@@ -350,6 +357,41 @@ BOOL vmm_fmap_flush(struct pm_task *task, ADDR tsk_lstart)
 	vmm_fmap_flush_callback(&fmd->iosrc, IO_RET_OK);
 
 	return TRUE;
+}
+
+
+/* Begin closing File Mappings on the task. */
+void vmm_fmap_close_all(struct pm_task *task)
+{
+	struct vmm_memory_region *mreg = task->vmm_info.regions.first;
+
+	while(mreg != NULL)
+	{
+		/* We will set command_inf callback to our function */
+		task->command_inf.callback = vmm_fmap_closed_callback;
+
+		/* Begin memory region releasing. */
+		if((mreg->type == VMM_MEMREGION_FMAP) && vmm_fmap_release(task, mreg->tsk_lstart)) return;
+		
+		mreg = mreg->next;
+	}
+
+	/* If we got here, it's because there are no more FMAPs to free. */
+
+	/* Here we must invoke the command callback */
+	if(task->io_finished.callback != NULL) 
+        task->io_finished.callback( &task->io_event_src, IO_RET_OK);
+}
+
+/*
+This callback will be invoked when finished releasing an FMAP upon task close.
+*/
+INT32 vmm_fmap_closed_callback(struct pm_task *task, INT32 ioret) 
+{
+	/* Do I really care if we finished ok? I don't think so... Invoke vmm_fmap_close_all again so it continues. */
+	vmm_fmap_close_all(task);
+
+	return 0;
 }
 
 /*
@@ -422,7 +464,7 @@ INT32 vmm_fmap_flush_callback(struct fsio_event_source *iosrc, INT32 ioret)
 {
 	struct vmm_fmap_descriptor *fm = (struct vmm_fmap_descriptor*)vmm_regiondesc_get(iosrc->id, VMM_MEMREGION_FMAP);
 	struct pm_task *task = tsk_get(fm->creating_task);
-	struct vmm_page_directory *pdir = task->vmm_inf.page_directory;
+	struct vmm_page_directory *pdir = task->vmm_info.page_directory;
 	struct vmm_page_table *tbl = NULL;
 	struct vmm_memory_region *mreg = vmm_region_get_bydesc(task, fm);
 	struct vmm_pman_assigned_record *assigned = NULL;
@@ -460,7 +502,7 @@ INT32 vmm_fmap_flush_callback(struct fsio_event_source *iosrc, INT32 ioret)
 		while((UINT32)mreg->tsk_lend != fm->release_addr)
 		{
 			/* Check page is present */
-			pdir = task->vmm_inf.page_directory;
+			pdir = task->vmm_info.page_directory;
 			while(pdir->tables[PM_LINEAR_TO_DIR(fm->release_addr)].ia32entry.present != 1 && (UINT32)mreg->tsk_lend != fm->release_addr)
 			{
 				fm->release_addr += 0x1000;
@@ -542,7 +584,7 @@ INT32 vmm_fmap_flush_seek_callback(struct fsio_event_source *iosrc, INT32 ioret)
 	struct vmm_fmap_descriptor *fm = (struct vmm_fmap_descriptor*)vmm_regiondesc_get(iosrc->id, VMM_MEMREGION_FMAP);
 	struct pm_task *task = tsk_get(fm->creating_task);
 	struct vmm_memory_region *mreg = vmm_region_get_bydesc(task, fm);
-	struct vmm_page_directory *pdir = task->vmm_inf.page_directory;
+	struct vmm_page_directory *pdir = task->vmm_info.page_directory;
 	struct vmm_page_table *tbl = NULL;
 	struct vmm_pman_assigned_record *assigned = NULL;
 
@@ -626,7 +668,6 @@ INT32 vmm_fmap_flushed_callback(struct fsio_event_source *iosrc, INT32 ioret)
 {
 	struct vmm_fmap_descriptor *fm = (struct vmm_fmap_descriptor*)vmm_regiondesc_get(iosrc->id, VMM_MEMREGION_FMAP);
 	struct pm_task *task = tsk_get(fm->creating_task);
-	struct vmm_memory_region *mreg = vmm_region_get_bydesc(task, fm);
 
     if(task == NULL) return 0;
 
@@ -659,7 +700,7 @@ INT32 vmm_fmap_seek_callback(struct fsio_event_source *iosrc, INT32 ioret)
 			return 0;
 		}
 
-		task->vmm_inf.page_count++;
+		task->vmm_info.page_count++;
 
 		/* Set FILE flag on page */
 		vmm_set_flags(task->id, thr->vmm_info.page_in_address, FALSE, TAKEN_PG_FLAG_FILE, TRUE);
@@ -670,7 +711,8 @@ INT32 vmm_fmap_seek_callback(struct fsio_event_source *iosrc, INT32 ioret)
 	else
 	{
 		/* Could not seek */
-		fatal_exception(task->id, FMAP_IO_ERROR);
+        thr->vmm_info.page_in_address = NULL;
+		vmm_page_ioerror(thr, FALSE);
 		return 0;
 	}
 
@@ -699,6 +741,12 @@ INT32 vmm_fmap_read_callback(struct fsio_event_source *iosrc, INT32 ioret)
 
 	if(ioret == IO_RET_OK)
 	{
+        // check if any threads where killed while waiting for this page
+        vmm_check_threads_pg(&thread, FALSE);
+
+        if(thread == NULL) 
+            return 0; // no threads left!
+
 		/* Page in on process address space */
 		pm_page_in(thread->task_id, thread->vmm_info.fault_address, (ADDR)LINEAR2PHYSICAL(thread->vmm_info.page_in_address), 2, thread->vmm_info.page_perms);
 
@@ -718,45 +766,10 @@ INT32 vmm_fmap_read_callback(struct fsio_event_source *iosrc, INT32 ioret)
 	}
 	else
 	{
-		vmm_put_page(thread->vmm_info.page_in_address);
-
-		/* Could not read */
-		fatal_exception(task->id, FMAP_IO_ERROR);
+        vmm_page_ioerror(thread, FALSE);
 		return 0;
 	}
 	return 1;
 }
 
-/* Begin closing File Mappings on the task. */
-void vmm_fmap_close_all(struct pm_task *task)
-{
-	struct vmm_memory_region *mreg = task->vmm_inf.regions.first;
-
-	while(mreg != NULL)
-	{
-		/* We will set command_inf callback to our function */
-		task->command_inf.callback = vmm_fmap_closed_callback;
-
-		/* Begin memory region releasing. */
-		if((mreg->type == VMM_MEMREGION_FMAP) && vmm_fmap_release(task, mreg->tsk_lstart)) return;
-		
-		mreg = mreg->next;
-	}
-
-	/* If we got here, it's because there are no more FMAPs to free. */
-
-	/* Here we must invoke the command callback */
-	if(task->io_finished.callback != NULL) task->io_finished.callback( &task->io_event_src, IO_RET_OK);
-}
-
-/*
-This callback will be invoked when finished releasing an FMAP upon task close.
-*/
-INT32 vmm_fmap_closed_callback(struct pm_task *task, INT32 ioret) 
-{
-	/* Do I really care if we finished ok? I don't think so... Invoke vmm_fmap_close_all again so it continues. */
-	vmm_fmap_close_all(task);
-
-	return 0;
-}
 
