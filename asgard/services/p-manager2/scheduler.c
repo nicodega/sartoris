@@ -53,33 +53,6 @@ int sch_schedule()
 {	
 	static BOOL intraised = FALSE;
 	struct pm_thread *thread = NULL;
-
-/*  REMOVE THIS */
-   /* // dump the scheduler content
-    struct pm_thread *t = NULL;
-    int i = 0;
-    pman_print("Active thr %i ", scheduler.active_threads);
-    for(i = 0; i < SCHED_MAXPRIORITY; i++)
-    {
-        if(scheduler.first[i] != NULL)
-        {
-            t = scheduler.first[i];
-            while(t != NULL)
-            {
-                pman_print("waiting %i ", t->id);
-                t = t->sch.next;
-            }
-        }
-    }
-    // now dump blocked threads
-    t = scheduler.first_blocked;
-    while(t != NULL)
-    {
-        pman_print("blocked %i ", t->id);
-        t = t->sch.next;
-    }
-    for(;;);
-	*/
 	
 	/* Deal with last_runned thread */
 	if(scheduler.last_runned != NULL)
@@ -91,7 +64,7 @@ int sch_schedule()
 			if(scheduler.last_runned->state == THR_RUNNING)
 				scheduler.last_runned->state = THR_WAITING;
 			else
-				pman_print_and_stop("SCHED: Thread has state changed status: %i ", scheduler.last_runned->state);
+				pman_print_and_stop("SCHED: Thread %i has state changed status: %i ", scheduler.last_runned->id, scheduler.last_runned->state);
 
 			if(scheduler.first[scheduler.last_runned->sch.priority] != scheduler.last[scheduler.last_runned->sch.priority])
 			{
@@ -122,7 +95,6 @@ int sch_schedule()
     	
 	scheduler.running->state = THR_RUNNING;
 	
-    //pman_print("Running %i ", scheduler.running->id);
 	/* Run next thread */
 	run_thread(scheduler.running->id);
 

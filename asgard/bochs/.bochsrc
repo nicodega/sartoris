@@ -72,7 +72,7 @@ ata0-master: type=disk, path=10MB.hdb.ofs, mode=flat, cylinders=306, heads=4, sp
 # BOOT:
 # This defines your boot drive.  You can either boot from 'a' or 'c'.
 # Examples:
-   boot: a
+boot: floppy
 #   boot: disk
 
 #=======================================================================

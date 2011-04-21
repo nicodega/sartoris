@@ -145,7 +145,7 @@ struct vmm_memory_regions_list
 	UINT32 total;						// Total regions.
 } PACKED_ATT;
 
-/* Region Descriptors definition defines. */
+/* Region Descriptors definition */
 struct vmm_region_descriptor
 {
 	UINT16 id;					
