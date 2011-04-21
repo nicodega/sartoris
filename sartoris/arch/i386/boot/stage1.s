@@ -74,7 +74,6 @@ go:
 	;; check if AH=0x42 is supported */
 	and	cx, 1
 	jz	chs_mode
-	
 lba_mode:
 
 	;; set si to the disk address packet 

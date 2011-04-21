@@ -40,7 +40,7 @@
 	sartoris base will be moved so we can map 
 	needed dynamic pages.
 	*/
-#	define USER_OFFSET  MAX_ALLOC_LINEAR   /* linear (200MB of virtual space available for dynamic memory needs)  */
+#	define USER_OFFSET  MAX_ALLOC_LINEAR   /* linear (112MB of virtual space available for dynamic memory needs)  */
 
 #	define INIT_SIZE    0x00400000   /* physical */ /* last 64kb will contain bootinfo struct and mmap */
 #	define INIT_OFFSET  0x00900000   /* physical */
