@@ -64,7 +64,7 @@ static inline int arch_flush_tlb()
 
 static inline void invalidate_tlb(void *linear) 
 {
-	__asm__ __volatile__ ("invlpg %0" : : "m" (linear));
+	__asm__ __volatile__("invlpg (%%eax)" : : "a" (linear) );
 
 	arch_flush_tlb();   /* FIXME !!! */
 }
