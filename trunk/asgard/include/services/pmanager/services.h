@@ -315,5 +315,26 @@ struct pm_msg_mmap_remove     // PM_MMAP_REMOVE
   char padding[7];
 } PACKED_ATT;
 
+/* Exception return values */
+/* (Return values sent to task creator) */
+#define DIV_ZERO_RVAL		-2
+#define OVERFLOW_RVAL		-3
+#define BOUND_RVAL			-4
+#define INV_OPC_RVAL		-5
+#define DEV_NOT_AV_RVAL		-6
+#define STACK_FAULT_RVAL	-7
+#define GEN_PROT_RVAL		-8
+#define PAGE_FAULT_RVAL		-9
+#define FP_ERROR_RVAL		-10
+#define ALIG_CHK_RVAL		-11
+#define SIMD_FAULT_RVAL		-12
+
+#define PG_IO_ERROR         -13     // Task Was terminated due to 
+                                    //an IO error while trying to fetch a page from storage device
+#define PG_RW_ERROR         -14     // Tried to write on a read only page
+#define MAXADDR_ERROR       -15     // tried to read/write on an address too high
+#define FMAP_IO_ERROR		-16
+#define NOT_ENOUGH_MEMORY	-17
+#define PMAN_RULEZ			-18
 
 #endif /* __PMAN_HEADER */

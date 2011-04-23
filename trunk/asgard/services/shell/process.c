@@ -31,6 +31,12 @@ char txt_stack_fault[] = "%s -> fatal error: program received stack segment faul
 char txt_fp_err[] = "%s -> fatal error: program received floating-point error exception";
 char txt_alig_chk[] = "%s -> warning: program received alignment check exception";
 char txt_simd_fault[] = "%s -> fatal error: program received SIMD extensions fault";
+char txt_pgio_fault[] = "%s -> fatal error: program received Page IO error fault";
+char txt_pgrw_fault[] = "%s -> fatal error: program tried to write to a read only page";
+char txt_maxaddr_fault[] = "%s -> fatal error: program tried to read/write on an address too high";
+char txt_fmapio_fault[] = "%s -> fatal error: program received FMAP IO error fault";
+char txt_mem_fault[] = "%s -> fatal error: program received Not Enough Memory fault";
+char txt_pman_fault[] = "%s -> fatal error: program tried to fight with PMAN and PMAN won.";
 char exmsg[512];
 
 struct console_proc_info *get_console_process_info(int console)
@@ -273,38 +279,56 @@ void show_exception(int term, int code, struct console_proc_info *pinf)
 	if(code >= -1 || code < -12) return;
 
 	switch(code) {
-		case -2:
+		case DIV_ZERO_RVAL:
 			msg = txt_div_zero;			
 			break;
-		case -3:
+		case OVERFLOW_RVAL:
 			msg = txt_ovflw;
 			break;
-		case -4:
+		case BOUND_RVAL:
 			msg = txt_bound;
 			break;
-		case -5:
+		case INV_OPC_RVAL:
 			msg = txt_inv_opcode;
 			break;
-		case -6:
+		case DEV_NOT_AV_RVAL:
 			msg = txt_dev_not_avl;
 			break;
-		case -7:
+		case STACK_FAULT_RVAL:
 			msg = txt_stack_fault;
 			break;
-		case -8:
+		case GEN_PROT_RVAL:
 			msg = txt_gpf;
 			break;
-		case -9:
+		case PAGE_FAULT_RVAL:
 			msg = txt_pgf;
 			break;
-		case -10:
+		case FP_ERROR_RVAL:
 			msg = txt_fp_err;
 			break;
-		case -11:
+		case ALIG_CHK_RVAL:
 			msg = txt_alig_chk;
 			break;
-		case -12:
+		case SIMD_FAULT_RVAL:
 			msg = txt_simd_fault;
+			break;
+        case PG_IO_ERROR:
+			msg = txt_pgio_fault;
+			break;
+        case PG_RW_ERROR:
+			msg = txt_pgrw_fault;
+			break;
+        case MAXADDR_ERROR:
+			msg = txt_maxaddr_fault;
+			break;
+        case FMAP_IO_ERROR:
+			msg = txt_fmapio_fault;
+			break;
+        case NOT_ENOUGH_MEMORY:
+			msg = txt_mem_fault;
+			break;
+        case PMAN_RULEZ:
+			msg = txt_pman_fault;
 			break;
 	}
 
