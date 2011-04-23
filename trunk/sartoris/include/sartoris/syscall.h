@@ -15,7 +15,7 @@
 
 #include <sartoris/kernel.h>
 
-#ifdef CPLUSPLUS
+#ifdef __cplusplus
 extern "C" {
 #endif
 
@@ -69,7 +69,7 @@ int last_error();
 int get_metrics(struct sartoris_metrics *m);
 #endif
 
-#ifdef CPLUSPLUS
+#ifdef __cplusplus
 }
 #endif
 
