@@ -179,7 +179,7 @@ void wait_signal(struct wait_for_signal_cmd *signal, BOOL blocking, UINT16 task)
 	if(nsignal == NULL || signal->thr_id >= MAX_THR || thread->task_id != task
 		  || thread->state == THR_NOTHING
 		  || thread->state == THR_KILLED
-		  || thread->state == THR_EXEPTION)
+		  || thread->state == THR_EXCEPTION)
 	{
 		// fail
 		send_msg(task, signal->signal_port, &signal_msg);
@@ -255,7 +255,7 @@ void discard_signal(struct wait_for_signal_cmd *dsignal, UINT16 task)
 	if(thread == NULL || dsignal->thr_id >= MAX_THR || thread->task_id != task
 		  || thread->state == THR_NOTHING
 		  || thread->state == THR_KILLED
-		  || thread->state == THR_EXEPTION)
+		  || thread->state == THR_EXCEPTION)
 	{
 		pman_print_and_stop("DISCARD FAILED");
 		// fail

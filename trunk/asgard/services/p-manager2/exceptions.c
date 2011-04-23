@@ -44,6 +44,7 @@ void fatal_exception(UINT16 task_id, INT32 ret_value)
 
         while(thr)
         {
+            thr->state = THR_EXCEPTION;
             sch_deactivate(thr);
             thr = thr->next_thread;
         }
@@ -54,12 +55,14 @@ void fatal_exception(UINT16 task_id, INT32 ret_value)
 		io_begin_close( &tsk->io_event_src );
 	}
 }
+
 /*
 Send an exception signal.
 */
 void exception_signal(UINT16 task_id, UINT16 thread_id, UINT16 exception)
 {
 	struct pm_task *tsk = tsk_get(task_id);
+    struct pm_thread *thr = thr_get(thread_id);
 	struct event_cmd evt;
 	struct thr_signal signal;
 	
@@ -69,8 +72,11 @@ void exception_signal(UINT16 task_id, UINT16 thread_id, UINT16 exception)
         return;
     }
 	
-	if(tsk != NULL && tsk->state != TSK_NOTHING) 
+	if(tsk->state != TSK_NOTHING) 
 	{
+        thr->state = THR_EXCEPTION;
+        sch_deactivate(thr);
+
 		signal.signal_port = tsk->exeptions.exceptions_port;
 		signal.thread = thr_get(thread_id);
 		signal.id = 0;

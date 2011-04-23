@@ -83,7 +83,7 @@ struct pm_task
 #define THR_BLOCKED  3    /* Thread is blocked							*/
 #define THR_INTHNDL  4    /* Thread is an interrupt handler				*/
 #define THR_KILLED   5    /* Thread is on death row						*/
-#define THR_EXEPTION 6	  /* Thread was stopped because of an exception */
+#define THR_EXCEPTION 6	  /* Thread was stopped because of an exception */
 #define THR_SBLOCKED 7    /* Thread is blocked (by a signal)			*/
 #define THR_INTERNAL 8	  /* This is an internal thread                 */
 
