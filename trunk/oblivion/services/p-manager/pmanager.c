@@ -284,10 +284,30 @@ void process_manager(void)
                 switch(state[i]) 
                 {
                     case INITIALIZING:
-                        
+
+                    /* restore the first blank, that was removed
+                     * when the filesystem was called
+                     */
+                    if (restore_cmd[i]) 
+                    {
+                        for (j=0; j<80; j++)
+                        {
+                            if (txt_input[i][j] == '\0') 
+                            {
+                                txt_input[i][j] = ' ';
+                                if(txt_input[i][j+1] == '\0')
+                                {
+                                    txt_input[i][j+1] = ' ';
+                                }
+                                break;
+                            }
+                        }
+                    }
+                    
+                    command_smo[i] = share_mem(BASE_PROC_TSK+i, txt_input[i], strlen(txt_input[i])+1, READ_PERM);
                     csl[0] = i;
                     csl[1] = command_smo[i]; 
-                    send_msg(i, 0, csl);
+                    send_msg(BASE_PROC_TSK+i, 0, csl);
 
                     state[i] = RUNNING;
                     break;
@@ -375,12 +395,15 @@ void get_size(int term, int fs_task, int ret_port)
 
     state[term] = LOADING;
     loadservice[term] = 0;
-    int i;
+    int i, j, l = strlen(txt_input[term]);
     for (i=0; i<INPUT_LENGTH; i++)
     {
         if (txt_input[term][i] == '&') 
         {
-            txt_input[term][i] = '\0';
+            for(j = i; j <= l; j++)
+            {
+                txt_input[term][j] = txt_input[term][j+1];
+            }
             loadservice[term] = 1;
             break;
         }
@@ -464,26 +487,7 @@ void do_load(int term)
     struct thread prc_thread;
     int csl[4];
     int i;
-
-    /* restore the first blank, that was removed
-    * when the filesystem was called
-    */
-    if (restore_cmd[term]) 
-    {
-        for (i=0; i<80; i++)
-        {
-            if (txt_input[term][i] == '\0') 
-            {
-                txt_input[term][i] = ' ';
-                if(txt_input[term][i+1] == '\0')
-                {
-                    txt_input[term][i+1] = ' ';
-                }
-                break;
-            }
-        }
-    }
-
+    
     prc_task.mem_adr = (void*)SARTORIS_PROC_BASE_LINEAR;
 
     prc_task.size = PRC_SLOT_SIZE;
@@ -517,8 +521,6 @@ void do_load(int term)
     {
         claim_mem(command_smo[term]);
     }
-
-    command_smo[term] = share_mem(BASE_PROC_TSK+term, txt_input[term], strlen(txt_input[term])+1, READ_PERM);
 
     prc_thread.task_num = BASE_PROC_TSK+term;
     prc_thread.invoke_mode = PRIV_LEVEL_ONLY;
