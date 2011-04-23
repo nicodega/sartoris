@@ -110,6 +110,24 @@ BOOL vmm_handle_page_fault(UINT16 *thr_id, BOOL internal)
 
 		    if(thr_id != NULL) *thr_id = thread_id;
 
+            /*
+            Check it's not a page fault raised because of rights
+            */
+            if(task->vmm_info.page_directory->tables[PM_LINEAR_TO_DIR(pf.linear)].ia32entry.present == 1)
+            {
+                struct vmm_page_table *tbl = (struct vmm_page_table*)PHYSICAL2LINEAR(PG_ADDRESS(task->vmm_info.page_directory->tables[PM_LINEAR_TO_DIR(pf.linear)].b));
+                if(tbl->pages[PM_LINEAR_TO_TAB(pf.linear)].entry.ia32entry.present == 1
+                    && task->vmm_info.page_directory->tables[PM_LINEAR_TO_DIR(pf.linear)].ia32entry.rw == 0
+                    && tbl->pages[PM_LINEAR_TO_TAB(pf.linear)].entry.ia32entry.rw == 0)
+                {
+                    // page is present!, but either on the table or the page the RW flag
+                    // is 0. This means we are dealing with a lack of privileges.
+                    fatal_exception(thread->task_id, PG_RW_ERROR);
+
+                    return TRUE;
+                }
+            }
+
 		    /* Check Page is not being fetched by other thread */
             thread->vmm_info.pg_node.value = PG_ADDRESS(pf.linear);
                         
@@ -148,7 +166,7 @@ BOOL vmm_handle_page_fault(UINT16 *thr_id, BOOL internal)
 			return TRUE;
 		}
 
-		task_id = thread->task_id; 
+		task_id = thread->vmm_info.fault_task; 
 		thread_id = *thr_id;
 
 		task = tsk_get(task_id);
@@ -173,11 +191,11 @@ BOOL vmm_handle_page_fault(UINT16 *thr_id, BOOL internal)
 		thread->state = THR_EXEPTION;
 		sch_deactivate(thread);
 
-        pman_print("MAX ADDR PF t: %i vadd: %x ", task->id, pf.linear);
-		// FIXME: Should send an exception signal... 
+        fatal_exception(thread->task_id, MAXADDR_ERROR);
+
 		return TRUE;
 	}
-
+    
 	/* Check if page table is on swap.
     NOTE: This can only happen when all pages had been sent to swap. The page table
     was also sent to swap because we cannot discard it, for it has swap addresses for it's pages.
@@ -395,13 +413,13 @@ INT32 vmm_elffile_readend_callback(struct fsio_event_source *iosrc, INT32 ioret)
         return 1;
     
     /* Page in on process address space */
-    pm_page_in(thread->task_id, (ADDR)PG_ADDRESS(thread->vmm_info.fault_address), (ADDR)LINEAR2PHYSICAL(thread->vmm_info.page_in_address), 2, thread->vmm_info.page_perms);
+    pm_page_in(thread->vmm_info.fault_task, (ADDR)PG_ADDRESS(thread->vmm_info.fault_address), (ADDR)LINEAR2PHYSICAL(thread->vmm_info.page_in_address), 2, thread->vmm_info.page_perms);
     
 	/* Un set IOLCK eflags on the page */
-	vmm_set_flags(thread->task_id, thread->vmm_info.page_in_address, TRUE, TAKEN_EFLAG_IOLOCK, FALSE);
+	vmm_set_flags(thread->vmm_info.fault_task, thread->vmm_info.page_in_address, TRUE, TAKEN_EFLAG_IOLOCK, FALSE);
 	
 	/* Remove page from pman address space and create assigned record. */
-	vmm_unmap_page(thread->task_id, PG_ADDRESS(thread->vmm_info.fault_address));
+	vmm_unmap_page(thread->vmm_info.fault_task, PG_ADDRESS(thread->vmm_info.fault_address));
     
     /* Wake threads waiting for this page */
 	vmm_wake_pf_threads(thread);
@@ -581,7 +599,6 @@ void vmm_wake_pf_threads(struct pm_thread *thread)
 
 	/* 
 	Go through waiting threads and enable all threads waiting for the same page.
-	(pm_page_in is not necesary for the task is the same) 
 	*/
     currnode = thread->vmm_info.pg_node.next;
     
