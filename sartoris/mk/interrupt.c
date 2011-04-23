@@ -19,6 +19,7 @@
 #include "sartoris/error.h"
 
 /* interrupt management implementation */
+extern unsigned int exc_error_code; // it's defined on arch interrupt.c
 
 int create_int_handler(int number, int thread_id, int nesting, int priority) 
 {
@@ -230,8 +231,10 @@ int ret_from_int(void)
     return result;
 }
 
-int get_last_int(void) 
+int get_last_int(unsigned int *error_code) 
 {
+    if(error_code != NULL && VALIDATE_PTR(error_code))
+         *((unsigned int*)MAKE_KRN_PTR(error_code)) = exc_error_code;
     set_error(SERR_OK);
     return last_int;
 }

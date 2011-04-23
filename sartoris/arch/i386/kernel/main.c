@@ -85,7 +85,7 @@ void create_syscall_gates()
 	hook_syscall(16, 1, &destroy_int_handler_c, 2);
 	
 	hook_syscall(17, 3, &ret_from_int_c, 0);    
-	hook_syscall(18, 2, &get_last_int_c, 0);
+	hook_syscall(18, 2, &get_last_int_c, 1);
 
 	hook_syscall(19, 3, &open_port_c, 3);
 	hook_syscall(20, 3, &close_port_c, 1);
