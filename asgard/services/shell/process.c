@@ -75,15 +75,39 @@ struct console_proc_info *process_ack(int task)
 
 	if(pinf == NULL) return NULL;
 
-	if(pinf->param_smo != -1) claim_mem(pinf->param_smo); 
+    if(pinf->flags & PINF_FLAG_INITIALIZED)
+    {
+	    if(pinf->param_smo != -1) claim_mem(pinf->param_smo); 
 
-	pinf->param_smo = -1;
+	    pinf->param_smo = -1;
 
-	if(pinf->map_smo != -1)
-	{
-		claim_mem(pinf->map_smo); 
-		pinf->map_smo = -1;
-	}
+	    if(pinf->map_smo != -1)
+	    {
+		    claim_mem(pinf->map_smo); 
+		    pinf->map_smo = -1;
+	    }
+    }
+    else
+    {
+        struct stdprocess_init initmsg;
+        
+        // send the init message
+        pinf->flags |= PINF_FLAG_INITIALIZED;
+        
+        // send process initialization message
+	    initmsg.command = STDPROCESS_INIT;
+	    initmsg.shell_task = get_current_task();
+	    initmsg.consoleid = pinf->console;
+	    initmsg.cl_smo = pinf->param_smo;
+	    initmsg.ret_port = SHELL_INITRET_PORT;
+
+	    if(pinf->maps.mapstdout || pinf->maps.mapstdin || pinf->maps.mapstderr)
+	        initmsg.map_smo = pinf->map_smo;
+	    else
+	        initmsg.map_smo = -1;
+	    
+        send_msg(pinf->task, STDPROCESS_PORT, &initmsg);
+    }
 
 	return pinf;
 }
@@ -119,7 +143,7 @@ void task_finished(int task, int code)
 		{
 			piped_finished = 1;
 
-			if(pinf->stdin_piped)
+			if(pinf->flags & PINF_FLAG_STDIN_PIPED)
 			{
 				if(pinf->stdin != NULL) fclose(pinf->stdin);
 			}
@@ -132,7 +156,7 @@ void task_finished(int task, int code)
 		{
 			piped_finished = 0;
 			
-			if(!pinf->stdin_piped)
+			if(!(pinf->flags & PINF_FLAG_STDIN_PIPED))
 			{
 				if(pinf->stdin != NULL) fclose(pinf->stdin);
 			}

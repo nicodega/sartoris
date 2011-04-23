@@ -30,6 +30,7 @@ Finish a task with an exception.
 void fatal_exception(UINT16 task_id, INT32 ret_value)
 {
 	struct pm_task *tsk = tsk_get(task_id);
+    struct pm_thread *thr = NULL;
 
 	if(tsk && tsk->state != TSK_NOTHING && tsk->state != TSK_KILLING) 
 	{
@@ -38,6 +39,16 @@ void fatal_exception(UINT16 task_id, INT32 ret_value)
 		tsk->state = TSK_KILLING;
 		tsk->command_inf.command_req_id = -1;
 		tsk->command_inf.command_ret_port = -1;
+
+        thr = tsk->first_thread;
+
+        while(thr)
+        {
+            sch_deactivate(thr);
+            thr = thr->next_thread;
+        }
+
+        cmd_queue_remove_bytask(tsk);
 
 		tsk->io_finished.callback = cmd_task_destroyed_callback;
 		io_begin_close( &tsk->io_event_src );

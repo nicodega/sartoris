@@ -146,21 +146,29 @@ void unlock_node(int wpid, int directory, int status)
 	int nodeid, i, exclusive;
 	CPOSITION it, oldit;
 	struct node_lock_waiting *waiting_node = NULL;
-
 	wait_mutex(&node_lock_mutex);
 	
-	if(directory)
+    if(directory)
 	{
-		nodeid = working_threads[wpid].locked_dirnode;
+        if(working_threads[wpid].locked_dirnode == -1)
+        {
+            leave_mutex(&node_lock_mutex);
+            return;
+        }
+	    nodeid = working_threads[wpid].locked_dirnode;
 		working_threads[wpid].locked_dirnode = -1;
 		working_threads[wpid].locked_dirnode_exclusive = 0;
 	}
 	else
 	{
+        if(working_threads[wpid].locked_node == -1)
+        {
+            leave_mutex(&node_lock_mutex);
+            return;
+        }
 		nodeid = working_threads[wpid].locked_node;
 		working_threads[wpid].locked_node = -1;
 		working_threads[wpid].locked_node_exclusive = 0;
-
 	}
 	
 	it = get_head_position(&lock_node_waiting);
@@ -192,7 +200,13 @@ void unlock_node(int wpid, int directory, int status)
 
 			while(i < OFS_MAXWORKINGTHREADS)
 			{
-				if(working_threads[i].deviceid == working_threads[waiting_node->wpid].deviceid && working_threads[i].logic_deviceid == working_threads[waiting_node->wpid].logic_deviceid && ((working_threads[i].locked_node == nodeid && (working_threads[i].locked_node_exclusive || (waiting_node->lock_mode & OFS_NODELOCK_EXCLUSIVE))) || (working_threads[waiting_node->wpid].locked_dirnode == nodeid  && (working_threads[i].locked_dirnode_exclusive || (waiting_node->lock_mode & OFS_NODELOCK_EXCLUSIVE)))))
+				if(working_threads[i].deviceid == working_threads[waiting_node->wpid].deviceid 
+                    && working_threads[i].logic_deviceid == working_threads[waiting_node->wpid].logic_deviceid 
+                    && ((working_threads[i].locked_node == nodeid 
+                    && (working_threads[i].locked_node_exclusive 
+                        || (waiting_node->lock_mode & OFS_NODELOCK_EXCLUSIVE))) 
+                        || (working_threads[waiting_node->wpid].locked_dirnode == nodeid  && (working_threads[i].locked_dirnode_exclusive 
+                        || (waiting_node->lock_mode & OFS_NODELOCK_EXCLUSIVE)))))
 				{
 					// ok everybody just keep on waiting
 					break;
@@ -223,7 +237,6 @@ void unlock_node(int wpid, int directory, int status)
 			if(exclusive) break;
 		}
 	}
-	
 	
 	leave_mutex(&node_lock_mutex);
 }

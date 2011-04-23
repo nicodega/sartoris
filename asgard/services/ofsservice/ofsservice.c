@@ -161,7 +161,7 @@ void _start()
 			&& get_msg_count(OFS_STDDEVRES_PORT) == 0 
 			&& (!check_idle() || (length(&processing_queue) == 0 && check_waiting_commands() == 0) )
 		){ 
-            string_print("OFS ALIVE",21*160,i++);
+            string_print("OFS ALIVE",4*160 - 18,i++);
 			reschedule(); 
 		}
 

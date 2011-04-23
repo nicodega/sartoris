@@ -153,6 +153,15 @@ void cmd_process_msg()
 							break;
 						}
 
+                        // deactivate task threads
+                        thr = tsk->first_thread;
+
+                        while(thr)
+                        {
+                            sch_deactivate(thr);
+                            thr = thr->next_thread;
+                        }
+
 						/* Remove all pending commands on the queue for this task */
 						cmd_queue_remove_bytask(tsk);
 
@@ -221,6 +230,17 @@ void cmd_process_msg()
 						tsk->command_inf.command_sender_id = 0;
 						tsk->command_inf.command_req_id = -1;
 						tsk->command_inf.command_ret_port = -1;
+
+                        // deactivate task threads
+                        thr = tsk->first_thread;
+
+                        while(thr)
+                        {
+                            sch_deactivate(thr);
+                            thr = thr->next_thread;
+                        }
+
+                        cmd_queue_remove_bytask(tsk);
 
 						tsk->state = TSK_KILLING;
 						
@@ -586,7 +606,7 @@ void cmd_create_task(struct pm_msg_create_task *msg, UINT16 creator_task_id)
 	tsk->flags = (flags & SERVER_TASK)? TSK_FLAG_SERVICE : 0;
 
 	if(path[psize-1] == '\0') psize--;
-
+    
 	tsk->command_inf.creator_task_id = creator_task_id;
 	tsk->command_inf.req_id = msg->req_id;
 	tsk->command_inf.response_port = msg->response_port;
@@ -594,7 +614,7 @@ void cmd_create_task(struct pm_msg_create_task *msg, UINT16 creator_task_id)
 	tsk->command_inf.command_ret_port = -1;
 	tsk->command_inf.command_req_id = -1;
 
-	ret = loader_create_task(tsk, path, psize, type, FALSE);
+	ret = loader_create_task(tsk, path, psize, msg->param, type, FALSE);
 
 	if(ret != PM_OK)
 	{
@@ -696,7 +716,7 @@ void cmd_create_thread(struct pm_msg_create_thread *msg, UINT16 creator_task_id)
 		  so we can put init info for the task in there.
 	    - Get a page for the stack if it's an interrupt handler
 	*/
-	if((task->num_threads == 0 && !(task->flags & TSK_FLAG_SYS_SERVICE)) || msg->interrupt != 0)	
+	if((task->num_threads == 1 && !(task->flags & TSK_FLAG_SYS_SERVICE)) || msg->interrupt != 0)	
 	{
 		/* Lets see if the page table is present on the page directory and if not give it one */
 		if(task->vmm_info.page_directory->tables[PM_LINEAR_TO_DIR(((UINT32)thread->stack_addr + SARTORIS_PROCBASE_LINEAR))].ia32entry.present == 0)
@@ -732,6 +752,8 @@ void cmd_create_thread(struct pm_msg_create_thread *msg, UINT16 creator_task_id)
 			struct init_data *idat = (struct init_data *)((UINT32)pg + stackpad - sizeof(struct init_data));
 			UINT32 *size = (UINT32*)((UINT32)pg + stackpad);
 
+            idat->creator_task = creator_task_id;
+            idat->param = task->loader_inf.param;
 			idat->bss_end = task->tsk_bss_end;
 			idat->curr_limit = task->vmm_info.max_addr;
 			*size = sizeof(struct init_data);			
@@ -825,8 +847,7 @@ INT32 cmd_swap_freed_callback(struct fsio_event_source *iosrc, INT32 ioret)
 	}    
 
 	task->command_inf.creator_task_id = 0xFFFF;
-	task->vmm_info.page_directory = NULL;
-
+	
 	if(shuttingDown())
 		shutdown_tsk_unloaded(task->id);
 	

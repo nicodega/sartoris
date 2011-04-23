@@ -95,7 +95,6 @@ void int_init()
 
 	for(i = IA32FIRST_INT; i < MAX_INTERRUPT; i++)
 	{
-		//if(i != 32) create_int_handler(i, INT_HANDLER_THR, TRUE, 10);
 		interrupt_signals[i].first = NULL;
 		interrupt_signals[i].total = 0;
 	}
@@ -105,8 +104,6 @@ void int_init()
 	pmthr->state = THR_INTHNDL;	
 }
 
-
-	
 /* Generic Exceptions Handler */
 void gen_ex_handler()
 {
@@ -170,13 +167,8 @@ void gen_ex_handler()
 		
 		if(!(tsk->flags & TSK_FLAG_SYS_SERVICE))
 		{
-			pman_print_and_stop("PROCESS EXCEPTION");
-			tsk->command_inf.ret_value = rval;
-			tsk->command_inf.command_sender_id = 0;
-			tsk->state = TSK_KILLING;
-			tsk->command_inf.command_req_id = -1;
-			tsk->command_inf.command_ret_port = -1;
-
+			pman_print_dbg("PROCESS EXCEPTION task %i, thread %i, exception %i \n", tsk->id, thr->id, exception);
+			
 			fatal_exception( tsk->id, rval );
 
 			run_thread(SCHED_THR);

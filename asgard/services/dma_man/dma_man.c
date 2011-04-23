@@ -108,7 +108,7 @@ void dma_srv()
     
     /* wait for a message to come */
     while(get_msg_count(DMA_COMMAND_PORT) == 0 && get_msg_count(STDSERVICE_PORT) == 0) {
-        string_print("DMA ALIVE",19*160,i++);
+        string_print("DMA ALIVE",2*160-18,i++);
       reschedule();
     }
 

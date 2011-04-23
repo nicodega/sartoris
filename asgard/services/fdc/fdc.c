@@ -302,7 +302,7 @@ void init_drive()
 	{		
 		while (get_msg_count(STDSERVICE_PORT) == 0 && get_msg_count(STDDEV_PORT) == 0 && get_msg_count(STDDEV_BLOCK_DEV_PORT) == 0) 
         {
-            string_print("FDC ALIVE",23*160,k++);
+            string_print("FDC ALIVE",3*160 - 18,k++);
             reschedule(); 
         }
 

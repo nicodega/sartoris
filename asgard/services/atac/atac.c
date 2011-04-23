@@ -106,7 +106,7 @@ void _start()
 			&& get_msg_count(STDDEV_BLOCK_DEV_PORT) == 0 
 			&& get_msg_count(ATAC_THREAD_ACK_PORT) == 0)
 		{ 			
-			string_print("ATAC ALIVE",19*160 + 40,k++);
+			string_print("ATAC ALIVE",160 - 20,k++);
 		    reschedule(); 
 		}
 

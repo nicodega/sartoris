@@ -112,9 +112,10 @@ BOOL vmm_handle_page_fault(UINT16 *thr_id, BOOL internal)
 
 		    /* Check Page is not being fetched by other thread */
             thread->vmm_info.pg_node.value = PG_ADDRESS(pf.linear);
-
+                        
             if(insertRedBlackTree(&task->vmm_info.wait_root, &thread->vmm_info.pg_node, TRUE) == 2)
             {
+                pman_print_dbg("PF: Other Thread was waiting \n");
                 sch_deactivate(thread);
 
 			    /* Page was being retrieved already for other thread! Block the thread.	*/
@@ -185,6 +186,7 @@ BOOL vmm_handle_page_fault(UINT16 *thr_id, BOOL internal)
 	if(!(task->flags & TSK_FLAG_SYS_SERVICE) 
         && vmm_check_swap_tbl(task, thread, (ADDR)PG_ADDRESS(pf.linear)))
 	{
+        pman_print_dbg("PF: Table is on SWAP \n");
         // we must insert the thread on the pg wait tree
         // in case another thread asks for the same page.
         return TRUE;
@@ -205,6 +207,7 @@ BOOL vmm_handle_page_fault(UINT16 *thr_id, BOOL internal)
 	/* See if page is file mapped */
 	if(vmm_page_filemapped(task, thread, (ADDR)PG_ADDRESS(pf.linear)))
 	{
+        pman_print_dbg("PF: Page is filemapped \n");
 		// Page is file mapped and a read operation has begun. //
         return TRUE;
 	}
@@ -214,6 +217,7 @@ BOOL vmm_handle_page_fault(UINT16 *thr_id, BOOL internal)
 	*/
 	if(vmm_is_shared(task, (ADDR)PG_ADDRESS(pf.linear)))
 	{
+        pman_print_dbg("PF: Page is shared \n");
 		ADDR owner_laddr = NULL;
 		UINT32 attrib = 0;
 
@@ -239,6 +243,7 @@ BOOL vmm_handle_page_fault(UINT16 *thr_id, BOOL internal)
 	if(!(task->flags & TSK_FLAG_SYS_SERVICE) 
         && vmm_check_swap(task, thread, (ADDR)PG_ADDRESS(pf.linear)) )
 	{
+        pman_print_dbg("PF: Page is swapped \n");
         // we must insert the thread on the pg wait tree
         // in case another thread asks for the same page.
         return TRUE;
@@ -256,7 +261,7 @@ BOOL vmm_handle_page_fault(UINT16 *thr_id, BOOL internal)
 	if(!(task->flags & TSK_FLAG_SYS_SERVICE) 
         && loader_filepos(task, pf.linear, &filepos, &readsize, &perms, &page_displacement))
 	{		
-		/* Thread must be blocked until data is read from the executable file */
+        /* Thread must be blocked until data is read from the executable file */
 		sch_deactivate(thread);
 
 		thread->state = THR_BLOCKED;
@@ -289,12 +294,11 @@ BOOL vmm_handle_page_fault(UINT16 *thr_id, BOOL internal)
         // we must insert the thread on the pg wait tree
         // in case another thread asks for the same page.
         insertRedBlackTree(&task->vmm_info.wait_root, &thread->vmm_info.pg_node, FALSE);
-
 		return TRUE;
 	} 
 	else 
 	{		
-       /*
+        /*
 		Get a page and set taken.
 		*/
 		page_addr = vmm_get_page(task->id, (UINT32)pf.linear);
@@ -351,6 +355,7 @@ INT32 vmm_elffile_seekend_callback(struct fsio_event_source *iosrc, INT32 ioret)
     
 	if(ioret != IO_RET_OK)
 	{
+        pman_print_dbg("PF: Seek End IOERR \n");
 		vmm_page_ioerror(thread, FALSE);
 		return 0;
 	}
@@ -359,7 +364,7 @@ INT32 vmm_elffile_seekend_callback(struct fsio_event_source *iosrc, INT32 ioret)
 
     if(!thread)
         return 0;
-    
+
 	/* Read from File */
 	thread->io_finished.callback = vmm_elffile_readend_callback;
 	io_begin_read(iosrc, thread->vmm_info.read_size, (ADDR)((UINT32)thread->vmm_info.page_in_address + thread->vmm_info.page_displacement));
@@ -368,7 +373,7 @@ INT32 vmm_elffile_seekend_callback(struct fsio_event_source *iosrc, INT32 ioret)
 }
 
 /*
-Function invoked upong completion of a read command from the executable file.
+Function invoked upon completion of a read command from the executable file.
 */
 INT32 vmm_elffile_readend_callback(struct fsio_event_source *iosrc, INT32 ioret)
 {
@@ -379,25 +384,26 @@ INT32 vmm_elffile_readend_callback(struct fsio_event_source *iosrc, INT32 ioret)
 
 	if(ioret != IO_RET_OK)
 	{
+        pman_print_dbg("PF: Read End IO Error \n");
 		vmm_page_ioerror(thread, FALSE);
 		return 0;
 	}
-
+    
     vmm_check_threads_pg(&thread, FALSE);
 
     if(!thread)
         return 1;
     
-	/* Page in on process address space */
-	pm_page_in(thread->task_id, (ADDR)PG_ADDRESS(thread->vmm_info.fault_address), (ADDR)LINEAR2PHYSICAL(thread->vmm_info.page_in_address), 2, thread->vmm_info.page_perms);
-
+    /* Page in on process address space */
+    pm_page_in(thread->task_id, (ADDR)PG_ADDRESS(thread->vmm_info.fault_address), (ADDR)LINEAR2PHYSICAL(thread->vmm_info.page_in_address), 2, thread->vmm_info.page_perms);
+    
 	/* Un set IOLCK eflags on the page */
 	vmm_set_flags(thread->task_id, thread->vmm_info.page_in_address, TRUE, TAKEN_EFLAG_IOLOCK, FALSE);
 	
 	/* Remove page from pman address space and create assigned record. */
 	vmm_unmap_page(thread->task_id, PG_ADDRESS(thread->vmm_info.fault_address));
-
-	/* Wake threads waiting for this page */
+    
+    /* Wake threads waiting for this page */
 	vmm_wake_pf_threads(thread);
 
 	return 1;
@@ -485,10 +491,11 @@ void vmm_check_threads_pg(struct pm_thread **thr, BOOL removeTBLTree)
     athread = thread;
     task = tsk_get(thread->vmm_info.fault_task);
     currnode = thread->vmm_info.pg_node.next;
-    curr_thr = thr_get(currnode->value2);
-        
+    
 	while(currnode)
 	{
+        curr_thr = thr_get(currnode->value2);
+    
         on = currnode->next;
         
         if(curr_thr->state == TSK_KILLED)
@@ -530,12 +537,8 @@ void vmm_check_threads_pg(struct pm_thread **thr, BOOL removeTBLTree)
         }
 
         currnode = on;
-        if(on)
-            curr_thr = thr_get(currnode->value2);
-        else
-            curr_thr = NULL;
 	}
-
+    
     // if the original task was killed, then destroy it
     if(task->state == TSK_KILLED && task->killed_threads == 0)
 	{
@@ -553,7 +556,9 @@ void vmm_check_threads_pg(struct pm_thread **thr, BOOL removeTBLTree)
 	}
 
     if(athread == NULL && pg_addr)
+    {
         vmm_put_page(pg_addr);
+    }
         
     *thr = athread;
 }
@@ -564,7 +569,7 @@ Re-enable Threads Waiting for the same page.
 */
 void vmm_wake_pf_threads(struct pm_thread *thread)
 {
-	struct pm_thread *curr_thr;
+	struct pm_thread *curr_thr = NULL;
     struct pm_task *task = NULL;
     rbnode *currnode = NULL, *on = NULL;
 
@@ -579,10 +584,10 @@ void vmm_wake_pf_threads(struct pm_thread *thread)
 	(pm_page_in is not necesary for the task is the same) 
 	*/
     currnode = thread->vmm_info.pg_node.next;
-	curr_thr = thr_get(currnode->value2);
-	
+    
 	while(currnode != NULL)
 	{
+        curr_thr = thr_get(currnode->value2);
         on = currnode->next;
 
         curr_thr->flags &= ~THR_FLAG_PAGEFAULT;
@@ -590,8 +595,6 @@ void vmm_wake_pf_threads(struct pm_thread *thread)
 	    sch_activate(curr_thr);
 
 		currnode = on;
-        if(on)
-            curr_thr = thr_get(currnode->value2);
 	}
 
     task = tsk_get(thread->vmm_info.fault_task);
@@ -602,13 +605,13 @@ void vmm_wake_pf_threads(struct pm_thread *thread)
 	*/
     rbnode *n = searchRedBlackTree(&task->vmm_info.tbl_wait_root, TBL_ADDRESS(thread->vmm_info.fault_address));
 	
-	if(thread->vmm_info.tbl_node.next == NULL)
+	if(n)
 	{
 		/* remove IOLCK from the table */
-		vmm_set_flags(thread->task_id, (ADDR)PHYSICAL2LINEAR(vmm_get_tbl_physical(thread->task_id, thread->vmm_info.fault_address)), TRUE, TAKEN_EFLAG_IOLOCK, FALSE);
+		if(thread->vmm_info.tbl_node.next == NULL)
+            vmm_set_flags(thread->task_id, (ADDR)PHYSICAL2LINEAR(vmm_get_tbl_physical(thread->task_id, thread->vmm_info.fault_address)), TRUE, TAKEN_EFLAG_IOLOCK, FALSE);
+        removeRedBlackTree(&task->vmm_info.tbl_wait_root, &thread->vmm_info.tbl_node); // remove al threads waiting for the page from the tree
+        thread->vmm_info.tbl_node.next = NULL;
 	}
-
-    removeRedBlackTree(&task->vmm_info.tbl_wait_root, &thread->vmm_info.tbl_node); // remove al threads waiting for the page from the tree
-    thread->vmm_info.tbl_node.next = NULL;
 }
 

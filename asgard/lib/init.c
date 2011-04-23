@@ -44,7 +44,7 @@ char *tty[8] = {	"/dev/tty0",
 			"/dev/tty6",
 			"/dev/tty7"};
 
-extern int main(int, char**)  __attribute__ ((noreturn));
+extern int main(int, char**);
 void _exit(int) __attribute__ ((noreturn));
 
 extern void __end_dtors();
@@ -71,15 +71,23 @@ void __procinit(struct init_data *initd)
 	res.command = STDPROCESS_INIT;
 	res.ret = STDPROCESSERR_OK;
 
+    open_port(STDPROCESS_DIRLIBPORT, 2, PRIV_LEVEL_ONLY);
+    open_port(STDPROCESS_IOPORT, 2, PRIV_LEVEL_ONLY);
+    open_port(STDPROCESS_PORT, 2, PRIV_LEVEL_ONLY);
+    
 	// init mem
 	init_mem((void*)initd->bss_end, initd->curr_limit);
 
 	dir_set_port(STDPROCESS_DIRLIBPORT);
 
 	// init iolib
-	initio();
-	set_ioports(STDPROCESSIOPORT);
-  
+	set_ioports(STDPROCESS_IOPORT);
+    initio();
+
+    // send a message to the shell, asking for the init msg
+    send_msg(initd->creator_task, initd->param, &res);
+        
+    // now wait for the init cmd
 	while(get_msg_count(STDPROCESS_PORT) == 0) { reschedule(); }
 
 	// get msg from shell
@@ -143,12 +151,11 @@ void __procinit(struct init_data *initd)
 
 	dtor--;
 
-	while((unsigned int)dtor != (unsigned int)__start_dtors)
+	while((unsigned int)dtor >= (unsigned int)__start_dtors)
 	{ 
-		dtor(); 
+        dtor(); 
 		dtor--;
 	}
-	dtor();
 
 	_exit(ret);
 }

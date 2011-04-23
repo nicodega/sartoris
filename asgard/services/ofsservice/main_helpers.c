@@ -242,7 +242,7 @@ void cleanup_working_threads()
 		i++;
 	}
 
-	if(idle_initialized_threads >= OFS_MAXINITILIZED_IDLE_WORKINGTHREADS)
+	if(idle_initialized_threads >= OFS_MAXINITIALIZED_IDLE_WORKINGTHREADS)
 	{
 		// cleanup
 		i =0;

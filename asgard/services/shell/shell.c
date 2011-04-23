@@ -154,7 +154,7 @@ void service_main (void)
 	/* Message loop */
 	for(;;)
 	{   
-        string_print("SHELL ALIVE",22*160,k++);
+        string_print("SHELL ALIVE",5*160 - 22,k++);
 
 		/* process console read responses */
 		while (get_msg_count(CSL_SCAN_ACK_PORT)>0) 

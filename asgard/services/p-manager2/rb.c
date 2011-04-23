@@ -23,6 +23,7 @@
 
 #include "vm.h"
 #include "rb.h"
+#include "pman_print.h"
 
 rbnode *getUncle(rbnode *n);
 rbnode *getGrandParent(rbnode *n);
@@ -62,7 +63,7 @@ int insertRedBlackTree(rbt *t, rbnode *n, BOOL insert_only_if_found)
     n->link[1] = NULL;
     n->next = NULL;
     n->prev = NULL;
-	
+
     // traverse the tree and find a place for this new node
 	while (current != NULL) 
 	{
@@ -76,6 +77,7 @@ int insertRedBlackTree(rbt *t, rbnode *n, BOOL insert_only_if_found)
 		{
 			if(n->value == current->value)
             {
+
                 n->prev = current->next;
                 current->next = n;
 				return 2;
@@ -85,7 +87,9 @@ int insertRedBlackTree(rbt *t, rbnode *n, BOOL insert_only_if_found)
 	}
 	
     if(insert_only_if_found)
+    {
         return 0;
+    }
 
     // color the node red and hang it from the parent
 	n->parent = parent;
@@ -105,7 +109,6 @@ int insertRedBlackTree(rbt *t, rbnode *n, BOOL insert_only_if_found)
 
     // fix the tree
 	insertRedBlackTreeFixup(t, n);
-
     return 1;
 }
 
@@ -304,7 +307,7 @@ void removeRedBlackTree(rbt *t, rbnode *n)
     int dir = 1;
  
     s = NULL;
-            
+
     if ( *t != NULL ) 
     {
         /* Set up helpers */

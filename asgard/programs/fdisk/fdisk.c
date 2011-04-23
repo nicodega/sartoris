@@ -77,8 +77,9 @@ int main(int argc, char **argv)
 	// let's test the ata controler service logic device management :D
 	int storage_size = 0, id;
 
+    open_port(7, 3, PRIV_LEVEL_ONLY);
+
 	aid = dir_resolveid("devices/atac");
-	
 	struct stddev_devtype_res devtype_res;
 	struct stdservice_query_interface query_cmd;
 	struct stdservice_query_res query_res;

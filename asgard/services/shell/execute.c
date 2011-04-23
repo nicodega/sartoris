@@ -58,13 +58,12 @@ int gen_process_id()
 struct console_proc_info *execute(int running_term, int console, char *command_path, char *cmd_name, char *params, int pipe, int pipeis_stdin)
 {
 	char *stdoutfn = NULL, *stdinfn = NULL, *stderrfn = NULL;
-	struct stdprocess_init initmsg;
 	struct pm_msg_create_task   msg_create_tsk;
 	struct pm_msg_response      msg_res;
 	int sender_id;
 	int path_smo_id;
 
-	// setup a new pinf
+	// setup a new process infor
 	struct console_proc_info *pinf = (struct console_proc_info *)malloc(sizeof(struct console_proc_info));
 
 	pinf->id = gen_process_id();
@@ -77,6 +76,7 @@ struct console_proc_info *execute(int running_term, int console, char *command_p
 	pinf->cmd_name = cmd_name;
 	pinf->running_term = running_term;
 	pinf->stderrout = 0;
+    pinf->flags = PINF_FLAG_NONE;
 
 	if((pipe && pipeis_stdin) || !pipe)
 	{
@@ -86,7 +86,8 @@ struct console_proc_info *execute(int running_term, int console, char *command_p
 	{
 		pinf->console = -1;
 	}
-	pinf->stdin_piped = pipeis_stdin;
+    if(pipeis_stdin)
+	    pinf->flags |= PINF_FLAG_STDIN_PIPED;
 	pinf->piped_to_task = -1;
 	
 	// see if stdout is being redirected
@@ -243,12 +244,14 @@ struct console_proc_info *execute(int running_term, int console, char *command_p
 	msg_create_tsk.flags = 0;
 	msg_create_tsk.new_task_id = -1;
 	msg_create_tsk.path_smo_id = path_smo_id;
+    msg_create_tsk.param = SHELL_INITRET_PORT;
 
 	send_msg(PMAN_TASK, PMAN_COMMAND_PORT, &msg_create_tsk);
 
+    int finished = 0;
 	// here we are going to wait for response on PM_TASK_ACK_PORT.
 	// as finished commands might be sent here too, if it's a FINISHED
-	// command, we will process it and continue waiting for ack.
+	// command, we will process it and continue waiting for ack from PMAN.
 	for(;;)
 	{
 		if(get_msg_count(PM_TASK_ACK_PORT) != 0)
@@ -263,7 +266,7 @@ struct console_proc_info *execute(int running_term, int console, char *command_p
 			if(msg_res.pm_type == PM_TASK_FINISHED)
 			{
 			    task_finished(msg_res.new_id, ((struct pm_msg_finished*)&msg_res)->ret_value);
-				
+				finished = 1;
 			   	reschedule();
 			}
 			else if(msg_res.pm_type == PM_CREATE_TASK)
@@ -277,6 +280,8 @@ struct console_proc_info *execute(int running_term, int console, char *command_p
 		}
 	}
 
+    claim_mem(path_smo_id); 
+
 	if (msg_res.status != PM_OK) {
 		term_print(running_term, "task creation failed\n");
 		if(stdinfn != NULL) free(stdinfn);
@@ -285,8 +290,10 @@ struct console_proc_info *execute(int running_term, int console, char *command_p
 		free(pinf);
 		return NULL;
 	}
-
-	claim_mem(path_smo_id); 
+    else if (finished)
+    {
+        return NULL;
+    }
 
 	pinf->task = msg_res.new_id;
 
@@ -365,26 +372,22 @@ struct console_proc_info *execute(int running_term, int console, char *command_p
 	}
 	pinf->param_smo = share_mem(pinf->task, params, len(params)+1, READ_PERM);
 	
-	// send process initialization message
-	initmsg.command = STDPROCESS_INIT;
-	initmsg.shell_task = get_current_task();
-	initmsg.consoleid = pinf->console;
-	initmsg.cl_smo = pinf->param_smo;
-	initmsg.ret_port = SHELL_INITRET_PORT;
-
-	if(pinf->maps.mapstdout || pinf->maps.mapstdin || pinf->maps.mapstderr)
-	{
-		pinf->map_smo = initmsg.map_smo = share_mem(pinf->task, &pinf->maps, sizeof(struct map_params), READ_PERM);
-	}
-	else
-	{
-		pinf->map_smo = initmsg.map_smo = -1;
-	}
-	send_msg(pinf->task, STDPROCESS_PORT, &initmsg);
+    // Since sartoris 2.0, ports on tasks are initially closed.
+    // Now a task will have to send the shell a message telling
+    // it the process was loaded and requesting the initmsg.
+    // This will be implemented on init.c, but in case a task
+    // is compiled as a standalone app, we will account for the case
+    // where the task finishes before sending the message.
 
 	// insert pinf onto running list
 	add_tail(&running, pinf);
 
+	// send process initialization message
+	if(pinf->maps.mapstdout || pinf->maps.mapstdin || pinf->maps.mapstderr)
+		pinf->map_smo = share_mem(pinf->task, &pinf->maps, sizeof(struct map_params), READ_PERM);
+	else
+		pinf->map_smo = -1;
+	
 	return pinf; // thread will be created on finish_execute
 }
 
