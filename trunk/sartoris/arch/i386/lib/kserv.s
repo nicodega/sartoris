@@ -195,6 +195,7 @@ ret_from_int:
 get_last_int:
 	push ebp
 	mov ebp, esp
+    pass_arguments 1
 	call GET_LAST_INT : 0x00000000
 	pop ebp
 	ret

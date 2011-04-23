@@ -292,7 +292,6 @@ int send_msg(int dest_task_id, int port, int *msg)
         else if(0 <= port && port < MAX_TSK_OPEN_PORTS)
             set_error(SERR_INVALID_PORT);
     }
-    //if(dest_task_id == 6) kprintf(12, "                           MSG From %i To %i, port %i\n", curr_task, dest_task_id, port);
     mk_leave(x); /* exit critical block */
     
     return result;

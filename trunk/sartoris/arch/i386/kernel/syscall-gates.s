@@ -233,7 +233,9 @@ ret_from_int_c:
 
 get_last_int_c:	
 	mov ecx, get_last_int
-	jmp do_syscall_no_args
+	mov edx, 1
+	call do_syscall
+	retf 4
 		
 	;; messaging
 	
