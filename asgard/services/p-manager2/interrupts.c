@@ -183,7 +183,8 @@ void gen_ex_handler()
 
 			pman_print_and_stop("System Service exception tsk=%i, thr=%i, ex=%i ", tsk->id, thr->id, exception);
 			
-			thr->state = THR_EXEPTION;
+            thr->state = THR_EXCEPTION;
+            sch_deactivate(thr);
 
 			run_thread(SCHED_THR);
 		}

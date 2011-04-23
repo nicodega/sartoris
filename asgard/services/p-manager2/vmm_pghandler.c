@@ -188,10 +188,7 @@ BOOL vmm_handle_page_fault(UINT16 *thr_id, BOOL internal)
 	/* Check PF is not above max_addr */
 	if(task->vmm_info.max_addr <= (UINT32)pf.linear)
 	{
-		thread->state = THR_EXEPTION;
-		sch_deactivate(thread);
-
-        fatal_exception(thread->task_id, MAXADDR_ERROR);
+		fatal_exception(thread->task_id, MAXADDR_ERROR);
 
 		return TRUE;
 	}

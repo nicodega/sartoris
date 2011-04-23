@@ -49,10 +49,6 @@ BOOL vmm_phy_mmap(struct pm_task *task, ADDR py_start, ADDR py_end, ADDR lstart,
 	/* Check address is not above max_addr */
 	if(task->vmm_info.max_addr <= (UINT32)lend)
 	{
-		thread->state = THR_EXEPTION;
-		sch_deactivate(thread);
-
-		/* FIXME: Should send an exception signal... */
 		return FALSE;
 	}
 
