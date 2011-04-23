@@ -116,8 +116,9 @@ struct pm_msg_create_task {
   short req_id;
   short response_port;
   short flags;
-  int new_task_id;
-  int path_smo_id;
+  short new_task_id;
+  short path_smo_id;
+  int param;
 } PACKED_ATT;
 
 struct pm_msg_create_thread {

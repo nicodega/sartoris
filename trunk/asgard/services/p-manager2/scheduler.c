@@ -117,7 +117,7 @@ void sch_deactivate(struct pm_thread *thr)
 {	
 	if(thr->sch.recursion > 0)
 	{
-		thr->sch.recursion++;
+        thr->sch.recursion++;
 		return;
 	}
 
@@ -130,6 +130,7 @@ void sch_deactivate(struct pm_thread *thr)
 	
 	thr->sch.blocked = TRUE;
 
+    // add to cheduler blocked list
 	if(scheduler.first_blocked == NULL)
 	{
 		scheduler.first_blocked = thr;
@@ -143,20 +144,19 @@ void sch_deactivate(struct pm_thread *thr)
 		thr->sch.prev = NULL;
 		scheduler.first_blocked = thr;
 	}
-
 	scheduler.active_threads--;
 }
 
 /* Remove a Thread from the blocked list */
 void sch_activate(struct pm_thread *thr)
-{
+{	
 	if(thr->sch.recursion > 1)
 	{
 		thr->sch.recursion--;
 		return;
 	}
 
-	if(thr->sch.recursion == 0) thr->sch.recursion--;
+	if(thr->sch.recursion != 0) thr->sch.recursion--;
 
 	if(thr->sch.blocked != TRUE) return;
 

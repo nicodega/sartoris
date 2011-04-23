@@ -29,7 +29,7 @@
 
 static INT32 tsk_priv[] = { /* Proc */ 2, /* Serv */ 0 };
 
-UINT32 loader_create_task(struct pm_task *task, char *path, UINT32 plength, UINT32 type, BOOL sysservice)
+UINT32 loader_create_task(struct pm_task *task, char *path, UINT32 plength, int param, UINT32 type, BOOL sysservice)
 {
 	struct task mk_task;
 	ADDR pg_address;
@@ -60,6 +60,7 @@ UINT32 loader_create_task(struct pm_task *task, char *path, UINT32 plength, UINT
 	task->loader_inf.path_len = plength;
 	task->loader_inf.stage = LOADER_STAGE_ELF_HDR;	// First Stage is ELF Header retrieval
 	task->loader_inf.elf_pheaders = NULL;
+    task->loader_inf.param = param;
 
 	/* Reset VMM information on task */
 	task->vmm_info.swap_free_addr = (ADDR)0xFFFFFFFF;

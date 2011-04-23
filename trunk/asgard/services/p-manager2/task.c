@@ -116,7 +116,7 @@ UINT16 tsk_get_id(UINT32 lower_bound, UINT32 upper_bound)
 BOOL tsk_destroy(struct pm_task *task)
 {
 	struct pm_thread *thread = NULL;
-	int ret = 0;
+	int ret = 0, thr_killed = 0, thr_ret = 0;
     
     if(!task) 
 		return FALSE;
@@ -130,7 +130,7 @@ BOOL tsk_destroy(struct pm_task *task)
 
 	if(task->state == TSK_KILLED)
 	{
-		task->first_thread = NULL;
+        task->first_thread = NULL;
 		task->num_threads = 0;
         		
 		/* We cannot claim memory if we are waiting for a swap read/write */
@@ -141,42 +141,46 @@ BOOL tsk_destroy(struct pm_task *task)
 		return TRUE;
 	}
     
-	thread = task->first_thread;
+    thread = task->first_thread;
 
 	while(thread != NULL)
 	{
 		task->first_thread = thread->next_thread;
 
-		ret = thr_destroy_thread(thread->id);
-		if(ret == -1) return FALSE;
-		thread = task->first_thread;
+		thr_ret = thr_destroy_thread(thread->id);
+        ret |= thr_ret;
+        if(thr_ret)
+            thr_killed++;
+        thread = task->first_thread;
 	}
     
-    if(destroy_task(task->id) != SUCCESS) 
+    if(ret == -1) 
+    {
+        task->state = TSK_KILLED;
+		task->killed_threads = ret;
+        return FALSE;
+    }
+	
+    /* We cannot claim memory if we are waiting for a swap read/write */
+	vmm_claim(task->id);
+
+    if(destroy_task(task->id) != SUCCESS)
+    {
+        pman_print_dbg("Destroy task failed %i ", task->id);
 	    return FALSE;
+    }
     
     if(task->loader_inf.full_path != NULL) kfree(task->loader_inf.full_path);
 	task->loader_inf.full_path = NULL;
 	if(task->loader_inf.elf_pheaders != NULL) kfree(task->loader_inf.elf_pheaders);
 	task->loader_inf.elf_pheaders = NULL;
 
-	if(ret == 0)
-	{
-		task->first_thread = NULL;
-		task->num_threads = 0;
-		io_init_source(&task->io_event_src, FILE_IO_TASK, task->id);
-
-		/* We cannot claim memory if we are waiting for a swap read/write */
-		vmm_claim(task->id);
-
-        task_info[task->id] = NULL;
-		kfree(task);
-	}
-	else
-	{
-		task->state = TSK_KILLED;
-		task->killed_threads = ret;
-	}
+	task->first_thread = NULL;
+	task->num_threads = 0;
+	io_init_source(&task->io_event_src, FILE_IO_TASK, task->id);
+    
+    task_info[task->id] = NULL;
+	kfree(task);
 
 	return TRUE;
 }

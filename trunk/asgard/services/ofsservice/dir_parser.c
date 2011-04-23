@@ -37,7 +37,7 @@ int parse_directory(int use_cache, struct gc_node **parsed_node, int lock_mode, 
 	int path_end, count, temp_count, tmp_start;
 	char *str = NULL;
 	unsigned int buffer_size;
-
+        
 	int dentry_first_dev_block;
 	int first_block_blockdev_count;
 	int second_block_blockdev_count;
@@ -52,15 +52,13 @@ int parse_directory(int use_cache, struct gc_node **parsed_node, int lock_mode, 
 	int entries = 0;
 
 	if(out_direntries != NULL)
-	{
 		*out_direntries = 0;
-	}
 	
 	second_block_blockdev_count = 0;
 
 	first_block_node = nref(minf->dinf, 0);
 
-	// if asked for '/' dir
+	// if looking for '/' dir
 	if(len(path) - path_start < 1)
 	{
 		if(thread->lastdir_parsed_node != NULL)
@@ -85,20 +83,16 @@ int parse_directory(int use_cache, struct gc_node **parsed_node, int lock_mode, 
 
 			// TODO: CHECK IF ROOT NODE SHOULD BE LOCKED
 			if(!lock_node(0, lock_mode, OFS_LOCKSTATUS_DENYALL, wpid, command, ret))
-			{
 				return FALSE;
-			}
-			locked_nodeid = 0;
-
+			
+            locked_nodeid = 0;
 			return TRUE;
 		}
 
 		if(first_block_node->n.blocks[0] == OFS_NULL_VALUE || first_block_node->n.file_size == 0)
 		{
-			// sought file is the root, direntries = 0
 			if(out_direntries != NULL) *out_direntries = 0;
 			if(parsed_node != NULL) *parsed_node = first_block_node;
-
 			return TRUE;
 		}
 
@@ -129,15 +123,12 @@ int parse_directory(int use_cache, struct gc_node **parsed_node, int lock_mode, 
 				}
 			}
 		}
-		else
+		else if(thread->lastdir_parsed_node != NULL) 
 		{
-			if(thread->lastdir_parsed_node != NULL) 
-			{
-				nfree(minf->dinf, thread->lastdir_parsed_node);
-				thread->lastdir_parsed_node = NULL;
-				thread->lastdir_parsed_start = -1;
-				thread->lastdir_parent_nodeid = -1;
-			}
+			nfree(minf->dinf, thread->lastdir_parsed_node);
+			thread->lastdir_parsed_node = NULL;
+			thread->lastdir_parsed_start = -1;
+			thread->lastdir_parent_nodeid = -1;
 		}
 
 		nfree(minf->dinf, first_block_node);
@@ -188,7 +179,6 @@ int parse_directory(int use_cache, struct gc_node **parsed_node, int lock_mode, 
 				thread->lastdir_parsed_start = c+1;
 			}
 
-			// if flags are not being modified and we are not calculating dir entries
 			// return cached info
 			if(out_direntries == NULL || !(cachedn->n.type & OFS_DIRECTORY_FILE))
 			{
@@ -210,7 +200,6 @@ int parse_directory(int use_cache, struct gc_node **parsed_node, int lock_mode, 
 				if(out_nodeid != NULL) *out_nodeid = cachedn->nodeid;
 				if(out_direxists != NULL) *out_direxists = TRUE;
 				if(parsed_node != NULL) *parsed_node = cachedn;
-
 				return TRUE;
 			}
 			else
@@ -307,7 +296,7 @@ int parse_directory(int use_cache, struct gc_node **parsed_node, int lock_mode, 
 	{
 		if(locked_nodeid != -1)
 		{
-			unlock_node(locked_nodeid, TRUE, OFS_LOCKSTATUS_OK);
+			unlock_node(wpid, TRUE, OFS_LOCKSTATUS_OK);
 		}
 		nfree(minf->dinf, first_block_node);
 		if(thread->lastdir_parsed_node != NULL)
@@ -390,7 +379,7 @@ int parse_directory(int use_cache, struct gc_node **parsed_node, int lock_mode, 
 								{
 									if(locked_nodeid != -1)
 									{
-										unlock_node(locked_nodeid, ((tmp_start == -1 || tmp_start == len(path))? ((lock_mode & OFS_NODELOCK_DIRECTORY)? TRUE : FALSE) : TRUE), OFS_LOCKSTATUS_OK);
+										unlock_node(wpid, ((tmp_start == -1 || tmp_start == len(path))? ((lock_mode & OFS_NODELOCK_DIRECTORY)? TRUE : FALSE) : TRUE), OFS_LOCKSTATUS_OK);
 									}
 									nfree(minf->dinf, first_block_node);
 									if(thread->lastdir_parsed_node != NULL)
@@ -449,7 +438,7 @@ int parse_directory(int use_cache, struct gc_node **parsed_node, int lock_mode, 
 											{
 												if(locked_nodeid != -1)
 												{
-													unlock_node(locked_nodeid, ((lock_mode & OFS_NODELOCK_DIRECTORY)? TRUE : FALSE), OFS_LOCKSTATUS_OK);
+													unlock_node(wpid, ((lock_mode & OFS_NODELOCK_DIRECTORY)? TRUE : FALSE), OFS_LOCKSTATUS_OK);
 												}
 												nfree(minf->dinf, first_block_node);
 												if(thread->lastdir_parsed_node != NULL)
@@ -485,7 +474,7 @@ int parse_directory(int use_cache, struct gc_node **parsed_node, int lock_mode, 
 											
 												if(locked_nodeid != -1)
 												{
-													unlock_node(locked_nodeid, ((lock_mode & OFS_NODELOCK_DIRECTORY)? TRUE : FALSE), OFS_LOCKSTATUS_OK);
+													unlock_node(wpid, ((lock_mode & OFS_NODELOCK_DIRECTORY)? TRUE : FALSE), OFS_LOCKSTATUS_OK);
 												}
 												nfree(minf->dinf, first_block_node);
 												if(thread->lastdir_parsed_node != NULL)
@@ -539,7 +528,7 @@ int parse_directory(int use_cache, struct gc_node **parsed_node, int lock_mode, 
 								{
 									if(locked_nodeid != -1)
 									{
-										unlock_node(locked_nodeid, TRUE, OFS_LOCKSTATUS_OK);
+										unlock_node(wpid, TRUE, OFS_LOCKSTATUS_OK);
 									}
 									if(first_block_node->n.blocks[0] == OFS_NULL_VALUE)
 									{
@@ -597,7 +586,7 @@ int parse_directory(int use_cache, struct gc_node **parsed_node, int lock_mode, 
 									{
 										if(locked_nodeid != -1)
 										{
-											unlock_node(locked_nodeid, TRUE, OFS_LOCKSTATUS_OK);
+											unlock_node(wpid, TRUE, OFS_LOCKSTATUS_OK);
 										}
 										nfree(minf->dinf, first_block_node);
 										if(thread->lastdir_parsed_node != NULL)
@@ -651,6 +640,7 @@ int parse_directory(int use_cache, struct gc_node **parsed_node, int lock_mode, 
 				if(second_block_node != NULL) free(second_block_node);
 				if(out_direntries != NULL) *out_direntries = entries;
 				if(out_direxists != NULL) *out_direxists = TRUE;
+
 				return TRUE;
 			}
 			else
@@ -661,7 +651,7 @@ int parse_directory(int use_cache, struct gc_node **parsed_node, int lock_mode, 
 				{
 					if(locked_nodeid != -1)
 					{
-						unlock_node(locked_nodeid, OFS_NODELOCK_DIRECTORY, OFS_LOCKSTATUS_OK);
+						unlock_node(wpid, OFS_NODELOCK_DIRECTORY, OFS_LOCKSTATUS_OK);
 					}
 					nfree(minf->dinf, first_block_node);
 											
@@ -672,7 +662,7 @@ int parse_directory(int use_cache, struct gc_node **parsed_node, int lock_mode, 
 				}
 				if(locked_nodeid != -1)
 				{
-					unlock_node(locked_nodeid, OFS_NODELOCK_DIRECTORY, OFS_LOCKSTATUS_OK);
+					unlock_node(wpid, OFS_NODELOCK_DIRECTORY, OFS_LOCKSTATUS_OK);
 				}
 				if(second_block_node != NULL) nfree(minf->dinf, second_block_node);
 				*ret = build_response_msg(command, STDFSSERR_FILE_DOESNOTEXIST);
@@ -755,7 +745,7 @@ int parse_directory(int use_cache, struct gc_node **parsed_node, int lock_mode, 
 			{
 				if(locked_nodeid != -1)
 				{
-					unlock_node(locked_nodeid, OFS_NODELOCK_DIRECTORY, OFS_LOCKSTATUS_OK);
+					unlock_node(wpid, OFS_NODELOCK_DIRECTORY, OFS_LOCKSTATUS_OK);
 				}
 				nfree(minf->dinf, first_block_node);
 				if(thread->lastdir_parsed_node != NULL)
@@ -831,7 +821,7 @@ int parse_directory(int use_cache, struct gc_node **parsed_node, int lock_mode, 
 			{
 				if(locked_nodeid != -1)
 				{
-					unlock_node(locked_nodeid, OFS_NODELOCK_DIRECTORY, OFS_LOCKSTATUS_OK);
+					unlock_node(wpid, OFS_NODELOCK_DIRECTORY, OFS_LOCKSTATUS_OK);
 				}
 				nfree(minf->dinf, first_block_node);
 				if(thread->lastdir_parsed_node != NULL)
@@ -894,7 +884,7 @@ int parse_directory(int use_cache, struct gc_node **parsed_node, int lock_mode, 
 			{
 				if(locked_nodeid != -1)
 				{
-					unlock_node(locked_nodeid, OFS_NODELOCK_DIRECTORY, OFS_LOCKSTATUS_OK);
+					unlock_node(wpid, OFS_NODELOCK_DIRECTORY, OFS_LOCKSTATUS_OK);
 				}
 				nfree(minf->dinf, first_block_node);
 				if(thread->lastdir_parsed_node != NULL)

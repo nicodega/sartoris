@@ -65,7 +65,7 @@ int fb_get(int wpid, int command, struct stask_file_info *finf, int fill, struct
 		// NOTE: fb_lock will release the mutex.
 		fb_lock_internal(finf->assigned_buffer, wpid);
 
-		// if fill failed..
+		// if fill failed try to read it
 		if((finf->assigned_buffer->fill_failed || finf->assigned_buffer->invalidated) && !fb_read(wpid, finf, ret))
 		{
 			finf->assigned_buffer->fill_failed = TRUE;
@@ -88,9 +88,11 @@ int fb_get(int wpid, int command, struct stask_file_info *finf, int fill, struct
 		if(finf->assigned_buffer != NULL)
 		{
 			// if it has a buffer, see if it must be 
-			// freed 
+			// freed by checking how many files references
+            // it has
 			if(length(&finf->assigned_buffer->opened_files) == 1)
 			{
+                // only one file.. we can return the buffer
 				avl_remove(&finf->dinf->buffers, finf->assigned_buffer->block_lba);
 				// reset the buffer (there won't be WP waiting for lock for
 				// it's the only owner)
@@ -103,26 +105,26 @@ int fb_get(int wpid, int command, struct stask_file_info *finf, int fill, struct
 				it = fb_getfpos(finf);
 				if(it != NULL) remove_at(&finf->assigned_buffer->opened_files, it);
 				// unlock the buffer
-				// NOTE: if there were threads waiting for lock
+				// NOTE: if there were threads waiting for a lock,
 				// this buffer won't be a candidate for removal, because
 				// lock is granted here.
-				// if there were not threads waiting for lock, buffer
+				// if there were no threads waiting for lock, buffer
 				// might be removed from them, but it'll be ok.
 				fb_unlock_internal(finf->assigned_buffer, TRUE, wpid);
 			}
 			finf->assigned_buffer = NULL;
 		}	
+        
+        finf->assigned_buffer = buff;
 
-		// assign buff
+        fb_lock_internal(finf->assigned_buffer, wpid);
+
+		// assign the new buffer
 		add_tail(&buff->opened_files, finf);
 		
-		finf->assigned_buffer = buff;
-
-		fb_lock_internal(finf->assigned_buffer, wpid);
-
 		// I won't fill the buffer for it has already been filled 
 		// or written to by other WP before
-		// if fill failed..
+		// NOTE: if fill failed, the buffer WILL be filled
 		if((finf->assigned_buffer->fill_failed || finf->assigned_buffer->invalidated) && !fb_read(wpid, finf, ret))
 		{
 			finf->assigned_buffer->fill_failed = TRUE;
@@ -136,15 +138,15 @@ int fb_get(int wpid, int command, struct stask_file_info *finf, int fill, struct
 	}
 	else if(finf->assigned_buffer != NULL && length(&finf->assigned_buffer->opened_files) == 1)
 	{
+        // The file has a buffer, but it's the only owner.
 #ifdef OFS_FILEBUFFER_REUSE
-		// with reuse, we have to check if block is cached and unused
+        // with reuse, we have to check if block is cached and unused
 		avl_remove(&finf->dinf->buffers, finf->assigned_buffer->block_lba);
 		// reset the buffer (there won't be WP waiting for lock for
 		// it's the only owner)
 		fb_reset(finf->assigned_buffer);
 
 		finf->assigned_buffer = NULL;
-
 #else
 		// if it has a buffer but lba is not the same then
 		// if its the only owner of the buffer, change buffer lba, update 
@@ -177,7 +179,6 @@ int fb_get(int wpid, int command, struct stask_file_info *finf, int fill, struct
 		fb_unlock_internal(finf->assigned_buffer, TRUE, wpid);
 		
 		finf->assigned_buffer = NULL;
-
 	}
 
 	i = 0;
@@ -187,6 +188,7 @@ int fb_get(int wpid, int command, struct stask_file_info *finf, int fill, struct
 	int candidate_buffer = -1;
 	int cached = 0;
 	unsigned int hits = (unsigned int)-1;
+
 #ifdef OFS_FILEBUFFER_REUSE
 	while(i < OFS_FILEBUFFERS)
 	{
@@ -197,14 +199,12 @@ int fb_get(int wpid, int command, struct stask_file_info *finf, int fill, struct
 			{
 				candidate_buffer = i;
 				cached = 1;
-
 				break;			
 			}
 			else if(file_buffers[i].block_lba == (unsigned int)-1)
 			{
 				if(file_buffers[i].hits < hits)
 				{
-
 					candidate_buffer = i;
 					hits = file_buffers[i].hits;
 				}
@@ -215,30 +215,30 @@ int fb_get(int wpid, int command, struct stask_file_info *finf, int fill, struct
 
 	if(candidate_buffer == -1)
 	{
-	i = 0;
-	hits = (unsigned int)-1;
+	    i = 0;
+	    hits = (unsigned int)-1;
 #endif
-	while(i < OFS_FILEBUFFERS)
-	{
-		// see if there is a free buffer
-		if(length(&file_buffers[i].opened_files) == 0 && file_buffers[i].block_lba == (unsigned int)-1)
-		{
-			candidate_buffer = i;
-			break;
-		}
-#ifdef OFS_FILEBUFFER_REUSE
-		else if(length(&file_buffers[i].opened_files) == 0 && file_buffers[i].block_lba != (unsigned int)-1)
-		{
-			if(file_buffers[i].hits < hits)
-			{
 
-				candidate_buffer = i;
-				hits = file_buffers[i].hits;
-			}
-		}
+	    // see if there is a free buffer
+		while(i < OFS_FILEBUFFERS)
+	    {
+            if(length(&file_buffers[i].opened_files) == 0)
+		    {
+                if(file_buffers[i].block_lba == (unsigned int)-1)
+		        {
+			        candidate_buffer = i;
+			        break;
+		        }
+#ifdef OFS_FILEBUFFER_REUSE
+		        else if(file_buffers[i].hits < hits)
+			    {
+				    candidate_buffer = i;
+				    hits = file_buffers[i].hits;
+			    }
 #endif
-		i++;
-	}
+            }
+		    i++;
+	    }
 #ifdef OFS_FILEBUFFER_REUSE
 	}
 #endif	
@@ -248,13 +248,14 @@ int fb_get(int wpid, int command, struct stask_file_info *finf, int fill, struct
 		fb_reset(&file_buffers[candidate_buffer]);
 
 		if(!cached)
-		{
+		{            
 			file_buffers[candidate_buffer].invalidated = FALSE;
 			fb_clear(&file_buffers[candidate_buffer]);
+            file_buffers[candidate_buffer].hits = 1;
 		}
 		add_tail(&file_buffers[candidate_buffer].opened_files, finf);
-		file_buffers[candidate_buffer].hits = 1;
-		file_buffers[candidate_buffer].deviceid = finf->deviceid;
+		
+        file_buffers[candidate_buffer].deviceid = finf->deviceid;
 		file_buffers[candidate_buffer].logic_deviceid = finf->logic_deviceid;
 		file_buffers[candidate_buffer].block_lba = lba;
 		file_buffers[candidate_buffer].lockingthreadid = wpid; // lock it			
@@ -267,7 +268,7 @@ int fb_get(int wpid, int command, struct stask_file_info *finf, int fill, struct
 
 		fb_lock_internal(finf->assigned_buffer, wpid);
 
-		if((finf->assigned_buffer->fill_failed || finf->assigned_buffer->invalidated || (fill & !cached)) && !fb_read(wpid, finf, ret))
+		if((finf->assigned_buffer->fill_failed || finf->assigned_buffer->invalidated || (fill && !cached)) && !fb_read(wpid, finf, ret))
 		{
 			finf->assigned_buffer->fill_failed = TRUE;
 			fb_unlock_internal(finf->assigned_buffer, TRUE, wpid);
@@ -322,9 +323,9 @@ int fb_get(int wpid, int command, struct stask_file_info *finf, int fill, struct
 
 	lstclear(&finf->assigned_buffer->opened_files);
 
-	if(!fb_write(wpid, finf, ret))
+	if(!fb_write(wpid, finf, ret))      // if the buffer is not dirty it won't be written
 	{
-		// an error ocurred while comunicating with device
+        // an error ocurred while comunicating with device
 		// leave the buffer as it was.. perhaps other thread
 		// might have some luck
 		// Let the buffer in a free state. As we released the mutex 
@@ -333,9 +334,6 @@ int fb_get(int wpid, int command, struct stask_file_info *finf, int fill, struct
 		leave_mutex(&file_buffers_mutex);
 		return FALSE;
 	}
-
-	// The buffer we got is locked... that means it won't be taken
-	// by other working thread, and thats why it's safe to exit the mutex
 
 	// update buffer lba, and insert on device buffers avl
 	// NOTE: I think it's important to do this before 
@@ -362,7 +360,9 @@ int fb_get(int wpid, int command, struct stask_file_info *finf, int fill, struct
 
 	add_tail(&finf->assigned_buffer->opened_files, finf);
 
-	leave_mutex(&file_buffers_mutex);
+	// The buffer we got is locked... that means it won't be taken
+	// by other working thread, and thats why it's safe to exit the mutex
+    leave_mutex(&file_buffers_mutex);
 
 	i = 0;
 	ptr = (int*)file_buffers[candidate].buffer;
@@ -543,12 +543,14 @@ void fb_reset(struct file_buffer *fbuffer)
 	fbuffer->lockingthreadid = -1;
 	fbuffer->dirty = FALSE;
 	fbuffer->grace_period = OFS_FILEBUFFER_GRACEPERIOD;
-	//fbuffer->hits = 0; // I'll keep hits for caching too
-	//fbuffer->block_lba = -1; // we keep the lba, for caching
-	//fbuffer->fill_failed = FALSE; // this is kept too
 	lstclear(&fbuffer->opened_files);
 	fbuffer->waiting_count = 0;
 	fbuffer->waiting_start = 0;
+#ifndef OFS_FILEBUFFER_REUSE
+	fbuffer->hits = 0; // I'll keep hits for caching too
+	fbuffer->block_lba = -1; // we keep the lba, for caching
+	fbuffer->fill_failed = FALSE; // this is kept too
+#endif
 }
 
 void fb_clear(struct file_buffer *fbuffer)
@@ -625,11 +627,10 @@ int fb_read(int wpid, struct stask_file_info *finf, struct stdfss_res **ret)
 	else
 	{
 		// it's a mounted device
-		if(!bc_read((char*)finf->assigned_buffer->buffer, OFS_FILE_BUFFERSIZE, finf->assigned_buffer->block_lba, working_threads[wpid].command.command, wpid, finf->dinf->mount_info, FALSE, ret ))
+        if(!bc_read((char*)finf->assigned_buffer->buffer, OFS_FILE_BUFFERSIZE, finf->assigned_buffer->block_lba, working_threads[wpid].command.command, wpid, finf->dinf->mount_info, FALSE, ret ))
 		{					
 			return FALSE;
 		}
-
 	}
 
 	// if buffer was invalidated, validate it
@@ -711,6 +712,7 @@ void fb_updatelba(struct sdevice_info *dinf, struct file_buffer *fbuffer, unsign
 	fbuffer->block_lba = newlba;
 	avl_insert(&dinf->buffers, fbuffer, newlba);
 }
+
 CPOSITION fb_getfpos(struct stask_file_info *finf)
 {
 	struct stask_file_info *lfinf;
@@ -730,6 +732,7 @@ CPOSITION fb_getfpos(struct stask_file_info *finf)
 	}
 	return NULL;
 }
+
 int fb_credits(struct file_buffer *buffer)
 {
 	if(buffer->hits > OFS_MAXFILEBUFFER_HITS)

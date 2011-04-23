@@ -24,13 +24,13 @@
 
 #define PACKED_ATT __attribute__ ((__packed__));
 
-#define STDPROCESS_PORT 	0
-#define STDPROCESSIOPORT 	1
+#define STDPROCESS_PORT 	    0
+#define STDPROCESS_IOPORT 	    1
 #define STDPROCESS_INITPORT 	2
 #define STDPROCESS_DIRLIBPORT 	3
 
 #define STDPROCESS_STARTPORT	4 	// indicates the first port a programmer can use without 
-					// overlapping with the stdlib
+					                // overlapping with the stdlib
 
 #define STDPROCESSERR_OK	0
 #define STDPROCESSERR_ERR	1

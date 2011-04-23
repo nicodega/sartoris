@@ -217,10 +217,7 @@ void init_ofs(struct stdfss_init *init_cmd, struct stdfss_res **ret)
 	get_msg(OFS_BLOCKDEV_PORT, &block_res, &id);
     
     if(block_res.ret == STDBLOCKDEV_ERR)
-	{
-        print("OFS ERROR 7");
-        __asm__ __volatile__ ("xchg %%bx, %%bx "::);
-		
+	{		
 		send_msg(init_cmd->deviceid, stddev_port, &freedevice_cmd);
 
 		while(get_msg_count(OFS_BLOCKDEV_PORT) == 0){reschedule();}
@@ -243,9 +240,7 @@ void init_ofs(struct stdfss_init *init_cmd, struct stdfss_res **ret)
 	// check 4K block size and pointers on node //
 	if(minf->ofst.block_size != 4096 || minf->ofst.ptrs_on_node != PTRS_ON_NODE || minf->ofst.Magic_number != OFS_MAGIC_NUMBER)
 	{
-        print("OFS ERROR 8");
-        __asm__ __volatile__ ("xchg %%bx, %%bx "::);
-		send_msg(init_cmd->deviceid, stddev_port, &freedevice_cmd);
+        send_msg(init_cmd->deviceid, stddev_port, &freedevice_cmd);
 
 		while(get_msg_count(OFS_BLOCKDEV_PORT) == 0){reschedule();}
 
@@ -282,9 +277,7 @@ void init_ofs(struct stdfss_init *init_cmd, struct stdfss_res **ret)
     
     if(block_res.ret == STDBLOCKDEV_ERR)
 	{
-        print("OFS ERROR 9");
-        __asm__ __volatile__ ("xchg %%bx, %%bx "::);
-		send_msg(init_cmd->deviceid, stddev_port, &freedevice_cmd);
+        send_msg(init_cmd->deviceid, stddev_port, &freedevice_cmd);
 
 		while(get_msg_count(OFS_BLOCKDEV_PORT) == 0){reschedule();}
 

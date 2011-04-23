@@ -416,11 +416,19 @@ ADDR vmm_get_page_ex(UINT16 task_id, UINT32 proc_laddress, BOOL low_mem)
 	/* Get a page */
 	ADDR page = pop_page(((low_mem)? &vmm.low_pstack : &vmm.pstack));
 
-	if(page == NULL) return NULL;
+	if(page == NULL)
+    {
+        pman_print_dbg("vmm_get_page_ex: NULL Page \n");
+        return NULL;
+    }
 
 	tsk = tsk_get(task_id);
 
-    if(tsk == NULL) return NULL;
+    if(tsk == NULL)
+    {
+        pman_print_dbg("vmm_get_page_ex: NULL Task \n");
+        return NULL;
+    }
 
 	/* Set the taken structure */
 	tentry = vmm_taken_get(page);
@@ -435,6 +443,15 @@ ADDR vmm_get_page_ex(UINT16 task_id, UINT32 proc_laddress, BOOL low_mem)
 	tentry->data.b_pg.eflags = ((tsk->flags & TSK_FLAG_SERVICE) || (tsk->flags & TSK_FLAG_SYS_SERVICE))? TAKEN_EFLAG_SERVICE : TAKEN_EFLAG_NONE;
 	
 	vmm.available_mem--;
+
+    unsigned char *pg = (unsigned char *)page;
+    int k =0;
+    // REMOVE
+    for(k = 0; k < 0x1000; k++)
+    {
+        *pg = 0;
+        pg++;
+    }
 
 	return page;
 }
@@ -568,11 +585,12 @@ void vmm_claim(UINT16 task)
 	/* This function will return a process tables to the stacks */
 	dir = tsk->vmm_info.page_directory;
 	table = NULL;
+    tsk->vmm_info.page_directory = NULL;
     
     /* NOTE: There are kernel pages mapped on the directory
        if page address is not within our limits, we will ignore it 
     */
-    for(table_idx = 0; table_idx < 1024; table_idx++) 
+    for(table_idx = PM_LINEAR_TO_DIR(SARTORIS_PROCBASE_LINEAR); table_idx < 1024; table_idx++) 
 	{
 		tbladdr = PG_ADDRESS(dir->tables[table_idx].b);
 	
@@ -582,8 +600,8 @@ void vmm_claim(UINT16 task)
 
             for(entry_idx = 0; entry_idx < 1024; entry_idx++) 
 			{
-				pgaddr = PG_ADDRESS(table->pages[entry_idx].entry.phy_page_addr);
-
+			    pgaddr = PG_ADDRESS(table->pages[entry_idx].entry.phy_page_addr);
+                
 				if(pgaddr >= FIRST_PAGE(PMAN_POOL_PHYS) && table->pages[entry_idx].entry.ia32entry.present == 1) 
 				{
 					vmm_put_page((ADDR)PHYSICAL2LINEAR(pgaddr));
@@ -592,7 +610,8 @@ void vmm_claim(UINT16 task)
             vmm_put_page((ADDR)PHYSICAL2LINEAR(PG_ADDRESS(tbladdr)));
         }
     }
-	vmm_put_page((ADDR)PHYSICAL2LINEAR(PG_ADDRESS(tsk->vmm_info.page_directory)));
+
+	vmm_put_page((ADDR)PG_ADDRESS(tsk->vmm_info.page_directory));
 }
 
 /*
@@ -604,7 +623,11 @@ INT32 pm_page_in(UINT16 task_id, ADDR linear, ADDR physical, UINT32 level, INT32
 	struct vmm_page_table *tbl = NULL;
 	struct pm_task *task = tsk_get(task_id);
 
-    if(task == NULL) return NULL;
+    if(task == NULL)
+    {
+        pman_print_dbg("pm_page_in: NULL TASK %i \n", task_id);
+        return NULL;
+    }
 	
 	if((UINT32)physical <= 0x100000)
 		pman_print_and_stop("Attempt to page in phy: %x, task: %i, linear: %x ", physical, task_id, linear);
@@ -638,7 +661,7 @@ return SUCCESS; // REMOVE THIS
 	}
 	else
 	{
-		pman_print("page_in failed %i ", sizeof(ADDR));
+		pman_print_dbg("page_in failed %x \n", linear);
 	}
 	return FAILURE;
 }

@@ -93,9 +93,13 @@ struct console_proc_info
 	FILE *stdin;
 	FILE *stderr;
 	int piped_to_task;	// if piped this will have the task id
-	int stdin_piped;	
+	int flags;	
 	char *cmd_name;
 };
+
+#define PINF_FLAG_NONE         0
+#define PINF_FLAG_STDIN_PIPED  1
+#define PINF_FLAG_INITIALIZED  2
 
 /* environment variables */
 

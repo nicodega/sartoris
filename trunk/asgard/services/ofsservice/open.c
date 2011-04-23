@@ -60,12 +60,6 @@ struct stdfss_res *open_file(int wpid, struct working_thread *thread, struct std
 
 	open_mode = open_cmd->open_mode;
 
-	// next line is required by this service but not for stdfss
-	// UPDATE: With shared file buffers and shared nodes this shouldn't be necesary.
-	/*if((open_mode & STDFSS_FILEMODE_WRITE) || (open_mode & STDFSS_FILEMODE_APPEND))
-		open_mode |= STDFSS_FILEMODE_EXCLUSIVE;
-		*/
-
 	// files oppened for append won't
 	if((open_mode & STDFSS_FILEMODE_WRITE) && (open_mode & STDFSS_FILEMODE_APPEND))
 	{
@@ -238,8 +232,8 @@ struct stdfss_res *open_file(int wpid, struct working_thread *thread, struct std
 
 			// check it's not open
 			if(check_opened_file(-1, -1, nodeid, &opened_file_mode))
-			{
-				// it's already opened, check it can be opened again
+			{   
+                // it's already opened, check it can be opened again
 				
 				// files already opened for writing will only be available for reading.
 				if((opened_file_mode & STDFSS_FILEMODE_WRITE) && (open_mode & STDFSS_FILEMODE_WRITE))
@@ -362,8 +356,6 @@ struct stdfss_res *open_file(int wpid, struct working_thread *thread, struct std
 						}
 					}
 				}
-
-
 			}
 			
 			// ok we can open the file

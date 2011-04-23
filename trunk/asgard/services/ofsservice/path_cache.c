@@ -231,7 +231,7 @@ void cleanup(struct path_cache *pc, struct cache_node *cn)
 		OFS_MAX_PATHCACHE_SIZE 
 	*/
 	if(pc->root->size <= OFS_MAX_PATHCACHE_SIZE) return;
-print("cleaning up path cache",0);
+
 	// we will ignore the cn branch, for it's a node
 	// being added to the cache
 	

@@ -37,7 +37,6 @@ bits 32
 
 _start:
 __start:
-
 	mov eax, esp
 	sub eax, [esp]		;; substract size bytes from esp possition
 	sub esp, [esp]		;; position at the begining of init structure [esp] = struct size

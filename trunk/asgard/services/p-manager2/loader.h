@@ -38,6 +38,7 @@ struct loader_info
 {
 	char *full_path;				   /* Executable File Path          */
 	UINT16 path_len;
+    int param;                 // this is a value sent by the creator task
 	UINT8 stage;
 	UINT32 file_size;                  /* Size of the Executable File   */
 
@@ -49,7 +50,7 @@ struct loader_info
 
 void loader_info_init(struct loader_info *loader_inf);
 void loader_init(ADDR initfs_address);
-UINT32 loader_create_task(struct pm_task *task, char *path, UINT32 plength, UINT32 type, BOOL sysservice);
+UINT32 loader_create_task(struct pm_task *task, char *path, UINT32 plength, int param, UINT32 type, BOOL sysservice);
 INT32 loader_fileopen_finished(struct fsio_event_source *iosrc, INT32 ioret);
 void loader_calculate_working_set(struct pm_task *task);
 BOOL loader_filepos(struct pm_task *task, ADDR linear, UINT32 *outpos, UINT32 *outsize, INT32 *perms, INT32 *page_displacement);

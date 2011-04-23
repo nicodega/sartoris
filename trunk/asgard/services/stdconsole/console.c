@@ -112,7 +112,7 @@ void console(void)
 	/* now enter the main loop. */
 	while(!die) 
 	{
-        string_print("CON ALIVE",20*160,i++);
+        string_print("CON ALIVE",6*160-18,i++);
 
 		die = process_stdservice();
 

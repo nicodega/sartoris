@@ -134,7 +134,7 @@ ADDR create_service(UINT16 task, UINT16 thread, INT32 invoke_level, UINT32 size,
     if(ptask == NULL)
         pman_print_and_stop("Error allocating task for %s", image_name);
 
-	if(loader_create_task(ptask, path, psize, 1, TRUE) != PM_OK)
+	if(loader_create_task(ptask, path, psize, 0, 1, TRUE) != PM_OK)
 		pman_print_and_stop("Error creating task for %s", image_name);
 	
 	/* 

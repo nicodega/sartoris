@@ -36,5 +36,7 @@ struct init_data
 {
 	unsigned int bss_end;		/* This will be the virtual address where defined segments end */
 	unsigned int curr_limit;	/* Current segment limit */
+    unsigned int creator_task;  /* This will contain the creator task */
+    unsigned int param;         /* An integer parameter sent by the creator task */
 };
 

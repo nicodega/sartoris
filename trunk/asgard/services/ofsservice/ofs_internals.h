@@ -61,9 +61,9 @@
 #define OFS_MAX_CACHED_DEVICES			20
 #define OFS_COMMAND_LIFETIME			5
 #define OFS_MAXWORKINGTHREADS			1 // thread mutexes are really difficult to test, hence I'll keep it on 1 until I've tested them
-#define OFS_MAXINITILIZED_IDLE_WORKINGTHREADS	5
-#define OFS_WOKINGTHREADS_CLEANUPAMMOUNT	2
-#define OFS_MAXTASK_OPENFILES			10
+#define OFS_MAXINITIALIZED_IDLE_WORKINGTHREADS	5
+#define OFS_WOKINGTHREADS_CLEANUPAMMOUNT	    2
+#define OFS_MAXTASK_OPENFILES			        10
 
 // FREE BITMAPS //
 
