@@ -21,6 +21,10 @@
 #ifndef SHA1H
 #define SHA1H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <lib/malloc.h>
 
 #define LITTLE_ENDIAN 
@@ -29,5 +33,8 @@
 unsigned int padding(unsigned char *str,unsigned int length, unsigned int **pstr);
 void compute_hash(unsigned int *padded_str, int length, unsigned int H[5]);
 
+#ifdef __cplusplus
+}
+#endif
 
 #endif

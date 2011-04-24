@@ -30,6 +30,10 @@
 #include <os/pman_task.h>
 #include <lib/scheduler.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifndef RAWIOLIBH
 #define RAWIOLIBH
 
@@ -161,6 +165,10 @@ int get_response(int task, int *res);
 #define IOLIBERR_FS_ERROR                       STDFSSERR_FS_ERROR  + STDFSS_MSG_MAP
 #define IOLIBERR_FILENAME_TOOLONG               STDFSSERR_FILENAME_TOOLONG  + STDFSS_MSG_MAP
 #define IOLIBERR_INVALID_PATH                   STDFSSERR_INVALID_PATH + STDFSS_MSG_MAP
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
 

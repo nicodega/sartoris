@@ -55,7 +55,7 @@ struct stdfss_res *chardev_read(int wpid, struct working_thread *thread, struct 
 			readcmd.ret_port = OFS_CHARDEV_PORT;
 			break;
 		case STDFSS_GETC:
-			readc.flags = CHAR_STDDEV_READFLAG_ECHO | CHAR_STDDEV_READFLAG_BLOCKING;
+			readc.flags = CHAR_STDDEV_READFLAG_BLOCKING;
 			comm = (int*)&readc;
 			readc.command = CHAR_STDDEV_READC;
 			readc.dev = finf->logic_deviceid;
@@ -79,7 +79,6 @@ struct stdfss_res *chardev_read(int wpid, struct working_thread *thread, struct 
 	}
 
 	// set blocking command on device
-	
 	finf->dinf->blocked_command.command = *((struct stdfss_cmd *)read_cmd);	
 	finf->dinf->blocked_command.task = thread->taskid;
 	finf->dinf->blocked = TRUE;

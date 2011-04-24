@@ -23,7 +23,7 @@
 #ifndef MALLOCH
 #define MALLOCH
 
-#ifdef CPLUSPLUS
+#ifdef __cplusplus
 extern "C" {
 #endif
 
@@ -34,10 +34,10 @@ void init_mem(void *buffer, unsigned int size);
 void close_malloc_mutex();
 unsigned int free_mem();
 
-#ifdef CPLUSPLUS
+extern void _exit(int) __attribute__ ((noreturn));
+
+#ifdef __cplusplus
 }
 #endif
-
-extern void _exit(int) __attribute__ ((noreturn));
 
 #endif

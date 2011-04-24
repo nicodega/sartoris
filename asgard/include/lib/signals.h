@@ -18,15 +18,19 @@
 */
 
 #include <services/pmanager/signals.h>
+#include <lib/structures/list.h>
 
 #ifndef SIGNALSH
 #define SIGNALSH
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #ifndef PACKED_ATT
 #define PACKED_ATT __attribute__ ((__packed__));
 #endif
 
-#include <lib/structures/list.h>
 
 typedef CPOSITION SIGNALHANDLER;
 
@@ -59,5 +63,9 @@ int check_signal(SIGNALHANDLER sigh, unsigned short *res0, unsigned short *res1)
 void discard_signal(SIGNALHANDLER sigh);
 
 void send_event(unsigned short task, unsigned short event_type, unsigned short param1, unsigned short param2, unsigned short res0, unsigned short res1);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

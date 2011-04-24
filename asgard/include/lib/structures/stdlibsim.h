@@ -20,13 +20,19 @@
 #ifndef STDLIBSIMH
 #define STDLIBSIMH
 
-#ifndef WIN32DEBUGGER
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef int size_t;
 typedef unsigned int uint_t;
 
 void *memcpy( void *to, const void *from, size_t count );
 void *memmove (unsigned char *dest, unsigned char *src, size_t n);
 void *memset(void *s, int c, size_t n);
+
+#ifdef __cplusplus
+}
 #endif
 
 #endif

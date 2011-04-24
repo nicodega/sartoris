@@ -18,17 +18,20 @@ SECTIONS
 	} :text :interp
   .text : { 
 	*(.text .stub .text.* .gnu.linkonce.t.*) 
-	PROVIDE (__start_ctors = .);
-		*(SORT(.ctor*))
-	PROVIDE (__end_ctors = .);
-	PROVIDE (__start_dtors = .);            
-		*(SORT(.dtor*)) 
-	PROVIDE (__end_dtors = .);
 	} :text
   .rodata : { *(.rodata .rodata.* .gnu.linkonce.r.* ) }      /* defaults to :text */
   .rodata1 : { *(.rodata1) }
   PROVIDE (etext = .);
-  .data ALIGN(0x1000) : { *(.data .data.* .gnu.linkonce.d.*) } :data
+  .data ALIGN(0x1000) : 
+  { 
+    *(.data .data.* .gnu.linkonce.d.*) 
+    PROVIDE (__start_ctors = .);
+		*(.ctor*)
+	PROVIDE (__end_ctors = .);
+	PROVIDE (__start_dtors = .);            
+		*(.dtor*)
+	PROVIDE (__end_dtors = .);  
+  } :data
   PROVIDE (edata = .);
   .bss :
   {

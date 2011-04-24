@@ -20,6 +20,14 @@
 #ifndef _SCHED_LIB_
 #define _SCHED_LIB_
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 void reschedule(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

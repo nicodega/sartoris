@@ -20,6 +20,10 @@
 #ifndef FORMATH
 #define FORMATH
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define FORMAT_SIMPLE_OFS_TYPE 1
 
 #define FORMAT_PORT 1
@@ -28,5 +32,9 @@ extern int format_port;
 
 void set_format_port(int port);
 int format(char *device_file_name, int type, void *params, int params_count, void (*print_func)(char*,int));
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

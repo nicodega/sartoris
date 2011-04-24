@@ -48,21 +48,14 @@ int atoi(const char *nptr)
 
 long atol(const char *nptr)
 {
-	long ret = 0, pow = 1;
-	int l = len(nptr) - 1;
-
-	if(*nptr == '-')
-	{
-		pow = -1;
-		l--;
-	}
-
-	while(l >= 0)
-	{
-		ret += (nptr[l] - 0x30) * pow;
-		pow *= 10; l--;
-	}
-
+    int ret = 0; 
+    while ((*nptr >= '0') && (*nptr <= '9')) 
+    { 
+        ret *= 10; 
+        ret += *nptr - '0'; 
+        nptr++;
+    } 
+    
 	return ret;
 }
 

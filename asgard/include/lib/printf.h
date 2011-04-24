@@ -26,6 +26,14 @@
 #include <lib/structures/string.h>
 #include <lib/iolib.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 int printf(char *format, ...);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

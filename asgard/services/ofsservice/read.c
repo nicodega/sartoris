@@ -210,7 +210,7 @@ struct stdfss_res *read_file(int wpid, struct working_thread *thread, struct std
 			// its a char device
 			
 			// ok... this has a big difference with block devices, because 
-			// read could block until there's some input. We will send the msg
+			// read could block until there's some input. We will send the msg and
 			// depending on the command (READ, GETS, GETC). only GETS will be blocking
 			return chardev_read(wpid, thread, read_cmd, delimited, finf);
 		}

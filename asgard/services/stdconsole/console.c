@@ -461,6 +461,7 @@ void finish_read(int i)
 
 	if(t[i].scanc == 1)
 	{
+        // reading only one char
 		((struct stdchardev_readc_res*)&rmsg)->c = t[i].input_buf[0];
 	}
 	else
@@ -539,15 +540,8 @@ void get_keystrokes(void)
 			}
 			vt_switch(i);
 		}
-		else // !(mask & CTL_KEY_MASK) 
+		else // !(mask & ALT_MASK) 
 		{  
-			if(cur_screen >= NUM_VIRTUAL)
-			{
-				string_print("CONS: ASSERT 3",0,12);
-                __asm__ __volatile__ ("xchg %%bx, %%bx" ::);
-				for(;;);
-			}
-
 			cterm = &t[cur_screen];
 			
 			if (cterm->scanning && !cterm->done) 
@@ -603,15 +597,15 @@ void get_keystrokes(void)
 	 					cterm->cursor_pos++;
 	  				}
 				} 
-				else if ((c==cterm->delimiter && cterm->usedelim)) 
+				else if (c==cterm->delimiter && cterm->usedelim) 
 				{
-					cterm->input_buf[cterm->input_len] = c;
+                    cterm->input_buf[cterm->input_len] = c;
 					cterm->input_len++;
-	  				cterm->done=1;					
+	  				cterm->done=1;
 				}
 				else if (c < 0x80) 
 				{
-					if (cterm->input_len < cterm->max_input_len) 
+                    if (cterm->input_len < cterm->max_input_len) 
 					{
 						for (i = cterm->input_len; i > cterm->cursor_pos; i--) 
 						{

@@ -24,6 +24,10 @@
 #ifndef LISTH
 #define LISTH
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef unsigned long CPOSITION;
 
 struct slist_node{
@@ -60,5 +64,9 @@ int length(list *lst);
 void concat(list *l1, list *l2);
 void bring_to_front(list *lst, CPOSITION it);
 void send_to_back(list *lst, CPOSITION it);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

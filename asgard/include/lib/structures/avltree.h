@@ -19,9 +19,12 @@
 
 #include <lib/const.h>
 
-
 #ifndef AVLTREE_H
 #define AVLTREE_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /*
 *  Which of a given node's subtrees is higher?
@@ -72,6 +75,10 @@ void *avl_getvalue(AvlTree n, int key);
 int avl_get_indexes(AvlTree *n, int **indexes);
 int avl_get_total(AvlTree *n);
 void avl_remove_all(AvlTree *n);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
 

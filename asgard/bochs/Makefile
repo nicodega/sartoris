@@ -26,8 +26,11 @@ all : 1.44a 10MB.hd.ofs
 	../tools/mkofs a 10MB.hdb.ofs /bin/idle ../programs/idle/idle.raw
 	../tools/mkofs a 10MB.hdb.ofs /bin/fdisk ../programs/fdisk/fdisk.raw
 	../tools/mkofs a 10MB.hdb.ofs /bin/atactest ../programs/atactest/atactest.raw
-	../tools/mkofs a 10MB.hdb.ofs /bin/jedi ../programs/jedi/jedi.raw
+	../tools/mkofs a 10MB.hdb.ofs /bin/cpptest ../programs/cpptest/cpptest.raw
 	../tools/mkofs a 10MB.hdb.ofs /bin/misbehav ../programs/misbehav/misbehav.raw
+	../tools/mkofs a 10MB.hdb.ofs /bin/cat ../programs/cat/cat.raw
+	../tools/mkofs a 10MB.hdb.ofs /bin/more ../programs/more/more.raw
+	../tools/mkofs a 10MB.hdb.ofs /testtxt ./testtxt
 
 	#create boot sector (modify stage 1.5 possition on it and set partition table)
 	dd if=../bin/asgard.img of=10MB.hdb.ofs.boot bs=35 count=1

@@ -27,6 +27,10 @@
 #include <lib/scheduler.h>
 #include <os/pman_task.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* Directory task is st on initfs2conf file under pmanager2 file tree. */
 #define DIRLIB_PORT 5
 
@@ -38,6 +42,10 @@ int dir_register(char *service_name);
 int dir_unregister();
 int dir_resolveid(char *service_name);
 char *resolve_name(int serviceid);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
 

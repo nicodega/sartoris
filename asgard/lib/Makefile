@@ -63,7 +63,8 @@ clean :
 
 include ../include/dep_attach.mk
 
-stdlib_libs = start.o proc_entry.o init.o ./../klib/kserv-user.o int.o scheduler.o sprintf.o printf.o piolib.o dirlib.o ./pmalloc.o ./structures/string.o ./structures/list.o ./structures/stdlibsim.o ./structures/int64.o debug.o ../drivers/screen/screen.o ./parameters.o
+stdlib_libs = start.o proc_entry.o init.o ./../klib/kserv-user.o int.o scheduler.o sprintf.o printf.o piolib.o dirlib.o ./pmalloc.o ./structures/string.o ./structures/int64.o \
+./structures/list.o ./structures/stdlibsim.o ./structures/int64.o debug.o ../drivers/screen/screen.o ./parameters.o
 
 stdlib.o : $(stdlib_libs)
 	$(LD) -i $(stdlib_libs) --Map stdlib.map  -o stdlib.o
