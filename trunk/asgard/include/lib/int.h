@@ -23,8 +23,16 @@
 #ifndef _INT_H_
 #define _INT_H_
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 void enter_block(void);
 void exit_block(void);
 void ack_int_master(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

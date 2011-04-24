@@ -20,8 +20,16 @@
 #ifndef PARAMETERSH
 #define PARAMETERSH
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 void get_parameters(char *params, int argc, char **args);
 int get_param_count(char *ln);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
 

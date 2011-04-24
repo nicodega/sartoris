@@ -156,6 +156,8 @@ int main(int argc, char **argv)
 
 	cmd = fgetc(&stdin);
 
+    printf("%c", cmd); //echo the key
+
 	while(cmd != 'Q')
 	{
 		switch(cmd)

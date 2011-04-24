@@ -1,4 +1,5 @@
-bits32
+
+bits 32
 
 ;; an implementation for 64bit (long long) arithmetic
 ;; on IA32 architecture (this was just done in order to be able to use)

@@ -25,6 +25,10 @@
 #define LOCKED      1
 #define WAITING     2
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct mutex
 {
     unsigned int available_turn;  // this holds last taken turn 
@@ -41,5 +45,9 @@ void leave_mutex(struct mutex *mon);
 void close_mutex(struct mutex *mon);
 int test_mutex(struct mutex *mon);
 int own_mutex(struct mutex *mon);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

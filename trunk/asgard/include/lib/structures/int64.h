@@ -20,6 +20,10 @@
 #ifndef INT64H
 #define INT64H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 long long __ashldi3 (long long a, int b); // return the result of shifting a left by b bits.
 long long __ashrdi3 (long long a, int b); // result of arithmetically shifting a right by b bits.
 long long __divdi3 (long long a, long long b); // return the quotient of the signed division of a and b.
@@ -31,5 +35,8 @@ unsigned long long __udivdi3 (unsigned long long a, unsigned long long b); // re
 //unsigned long long __udivmoddi3 (unsigned long long a, unsigned long long b, unsigned long long *c); // calculate both the quotient and remainder of the unsigned division of a and b. The return value is the quotient, and the remainder is placed in variable pointed to by c.
 unsigned long long __umoddi3 (unsigned long long a, unsigned long long b); // return the remainder of the unsigned division of a and b.
 
+#ifdef __cplusplus
+}
+#endif
 
 #endif

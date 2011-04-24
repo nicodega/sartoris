@@ -138,12 +138,12 @@ int run_internal(int term, char* cmd_line)
 		free_params(term);
 		return TRUE;
 	}
-	else if(streq(cmd, "cat")) 
+	/*else if(streq(cmd, "cat")) 
 	{
 		cat(term, args[term], argc[term]);
 		free_params(term);
 		return TRUE;
-	}
+	}*/
 	else if(streq(cmd, "write"))
 	{
 		write(term, args[term], argc[term]);

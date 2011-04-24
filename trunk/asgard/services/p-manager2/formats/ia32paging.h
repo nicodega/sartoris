@@ -72,5 +72,11 @@ struct vmm_dir_entry
 
 #define PAGE_SIZE                   0x1000
 
+#define PF_ERRORCODE_PROTECTION     0x1
+#define PF_ERRORCODE_WR             0x2
+#define PF_ERRORCODE_USER           0x4
+#define PF_ERRORCODE_RSVD           0x8
+#define PF_ERRORCODE_INSTRUCTION    0x10
+
 #endif
 

@@ -215,6 +215,8 @@ void service_main (void)
 							if(pinf != NULL)
 							{
 								// tell the process manager to destroy the task
+                                term_print(i, "Task killed: ");
+                                term_print(i, pinf->cmd_name);
 								destroy_tsk(pinf->task);
 							}
 						}

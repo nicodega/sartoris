@@ -22,10 +22,19 @@
 
 #include "drivers/screen/screen.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 extern int printRow;
 extern int printCol;
 extern int printLColor;
 
 int print(char *format, ...);
 void clrscr(void);
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif

@@ -194,7 +194,7 @@ int init_stdstream(FILE *stream)
 	return 0;
 }
 
-FILE *fopen(char *filename,char *mode)
+FILE *fopen(char *filename, char *mode)
 {
 	// get filesystem for the file 
 	struct stdfss_open open_msg;
@@ -826,7 +826,7 @@ int mount(char *device_file, char *mount_path, int mode)
 	return 0;
 }
 
-int  fseek (FILE * stream , long offset , int origin )
+int fseek (FILE * stream , long offset , int origin )
 {
 	struct stdfss_seek seek_cmd;
 	struct stdfss_res res;

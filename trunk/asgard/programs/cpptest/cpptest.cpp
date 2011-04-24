@@ -18,6 +18,10 @@
 */
 
 #include <lib/iolib.h>
+#include <lib/printf.h>
+#include <lib/cppabi.h>
+
+int test = 45;
 
 /* We have a class, and global variables */
 class MyAdd
@@ -52,9 +56,13 @@ public:
 	{
 		v *= t;
 	}
+    ~MyMult()
+    {
+        test = 0;
+    } 
 };
 
-MyAdd add(1);
+MyAdd add(0xFDAB);
 
 int main(int argc, char **argv) 
 {
@@ -63,10 +71,22 @@ int main(int argc, char **argv)
 	MyMult *mul = new MyMult();
 	MyMult *mul2 = new MyMult(6);
 
+    add2->Method(1);
+    add3->Method(2);
+    mul->Method(5);
+    mul2->Method(6);
+
+    printf("add2.Result() = %i (should be 1)\n",add2->Result());
+    printf("add3.Result() = %i (should be 7)\n",add3->Result());
+    printf("mul.Result() = %i (should be 0)\n",mul->Result());
+    printf("mul2.Result() = %i (should be 36)\n",mul2->Result());
+    
 	delete add2;
 	delete add3;
 	delete mul;
 	delete mul2;
+
+    printf("test = %i (should be 0 if dtors for mul where invoked)\n", test);
 
 	return 0;
 } 

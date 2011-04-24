@@ -33,9 +33,16 @@
 #include <lib/scheduler.h>
 #include <services/pipes/pipes.h>
 
+#ifdef IOLIB_MULTITHREADED
+#include <lib/structures/list.h>
+#endif
+
 #ifndef IOLIBH
 #define IOLIBH
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #define SEEK_SET STDFSS_SEEK_SET
 #define SEEK_CUR STDFSS_SEEK_CUR
@@ -44,8 +51,6 @@
 #define EOF -1
 
 #ifdef IOLIB_MULTITHREADED
-#include <lib/structures/list.h>
-
 struct response
 {
     int thr;    // waiting thread
@@ -207,6 +212,10 @@ int init_stdstream(FILE *stream);
 #define IOLIBERR_FS_ERROR                      STDFSSERR_FS_ERROR  + STDFSS_MSG_MAP
 #define IOLIBERR_FILENAME_TOOLONG              STDFSSERR_FILENAME_TOOLONG  + STDFSS_MSG_MAP
 #define IOLIBERR_INVALID_PATH                  STDFSSERR_INVALID_PATH + STDFSS_MSG_MAP
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
 

@@ -20,6 +20,10 @@
 #ifndef _IOH_
 #define _IOH_
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef unsigned int DWORD;
 typedef unsigned short WORD;
 typedef unsigned char BYTE;
@@ -42,6 +46,10 @@ void routw(WORD port, DWORD buffer, WORD count);
 
 void rinb(WORD port, DWORD buffer, WORD count);
 void routb(WORD port, DWORD buffer, WORD count);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
 

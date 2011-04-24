@@ -114,7 +114,7 @@ void gen_ex_handler()
 	for(;;) 
 	{
 		/* Get last exception raised */
-        exception = get_last_int();
+        exception = get_last_int(NULL);
 
 		/* Get running program */
 		prog_id = sch_running();
@@ -273,7 +273,7 @@ void int_common_handler()
 
 	for(;;)
 	{
-		interrupt = get_last_int();
+		interrupt = get_last_int(NULL);
 
 		/* Find tasks waiting for an interrupt signal, and send it. */
 		if(interrupt_signals[interrupt].total != 0)

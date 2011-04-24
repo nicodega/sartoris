@@ -32,25 +32,22 @@
 #include <lib/iolib.h>
 #include <proc/init_data.h>
 #include <services/pmanager/services.h>
+#include <lib/cppabi.h>
 
 extern int io_consoleid;
 
-char *tty[8] = {	"/dev/tty0",
-			"/dev/tty1",
-			"/dev/tty2",
-			"/dev/tty3",
-			"/dev/tty4",
-			"/dev/tty5",
-			"/dev/tty6",
-			"/dev/tty7"};
+extern int main(int, char**); // on cpp main uses C linkage
 
-extern int main(int, char**);
 void _exit(int) __attribute__ ((noreturn));
 
-extern void __end_dtors();
-extern void __start_dtors();
-extern void __start_ctors();
-extern void __end_ctors();
+extern unsigned int __end_dtors;
+extern unsigned int __start_dtors;
+extern unsigned int __start_ctors;
+extern unsigned int __end_ctors;
+
+struct atexit_func atexit_funcs[_ATEXIT_MAXFUNCS];
+unsigned int atexit_count = 0;
+void *__dso_handle = 0; 
 
 /*
 *
@@ -133,30 +130,25 @@ void __procinit(struct init_data *initd)
 
 	// send a response to the shell
 	send_msg(init_cmd.shell_task, init_cmd.ret_port, &res);
-
+    
 	// invoke static C++ constructors
-	void (*ctor)() = __start_ctors;
-	
-	while((unsigned int)ctor != (unsigned int)__end_ctors)
-	{ 
-		ctor(); 
-		ctor++;
-	}
+    unsigned int *ctor = &__start_ctors;
+	for(; ctor < &__end_ctors; ++ctor)
+    {
+        ((void (*) (void)) (*ctor)) ();
+    }
 
   	// call main function
 	int ret = main(argc, args);
 
 	// invoke static C++ destructors (on reverse order)
-	void (*dtor)() = __end_dtors;
-
-	dtor--;
-
-	while((unsigned int)dtor >= (unsigned int)__start_dtors)
-	{ 
-        dtor(); 
-		dtor--;
-	}
-
+    if(__end_ctors != __start_ctors)
+    {
+        unsigned int *dtor = &__end_ctors;
+        dtor--;
+	    for(;dtor >= &__start_ctors; dtor--)
+            ((void (*) (void)) (*dtor)) ();
+    }
 	_exit(ret);
 }
 
@@ -178,3 +170,42 @@ void _exit(int ret)
 
 	for(;;) { reschedule(); }
 }
+ 
+int __cxa_atexit(void (*f)(void *), void *ptr, void *dso)
+{
+    print("proc init: atexit\n");
+	if (atexit_count >= _ATEXIT_MAXFUNCS) {return -1;};
+	atexit_funcs[atexit_count].dtor = f;
+	atexit_funcs[atexit_count].ptr = ptr;
+	atexit_funcs[atexit_count].dso_handle = dso;
+	atexit_count++;
+    print("proc init: atexit ok\n");
+	return 0;
+}
+ 
+void __cxa_finalize(void *f)
+{
+	unsigned int i = atexit_count;
+	if (!f)
+	{
+		/*
+		* Destroy everything, since f is NULL (we will destroy them on the reverse order)
+		*/
+        while (--i)
+		{
+			if (atexit_funcs[i].dtor)
+				(*atexit_funcs[i].dtor)(atexit_funcs[i].ptr);
+		}
+		return;
+	};
+ 
+	for ( ; i >= 0; )
+	{
+		if (atexit_funcs[i].dtor == f)
+		{
+			(*atexit_funcs[i].dtor)(atexit_funcs[i].ptr);
+			atexit_funcs[i].dtor = 0;
+ 		}
+	}
+}
+

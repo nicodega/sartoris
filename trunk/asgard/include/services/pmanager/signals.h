@@ -111,10 +111,9 @@ struct signal_cmd
 struct event_cmd
 {
 	unsigned char command;		// set to EVENT
-	unsigned short padding0;	
-	unsigned short event_type;	// event type
 	unsigned short param1;	
-	unsigned short param2;
+	unsigned short event_type;	// event type
+	unsigned int   param2;
 	unsigned short event_res0;
 	unsigned short event_res1;
 	unsigned short task;		// if task is not -1, this event will only apply for a given task.

@@ -24,6 +24,10 @@
 #include <lib/malloc.h>
 #include <lib/const.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 int len(const char* str);
 int streq(char* str1, char* str2);
 int istreq(int start, int end, char* str1, char* str2);
@@ -57,6 +61,10 @@ char* substr(char* s, int init, unsigned int len, char* d);
 int strsplit(int start, char separator, int ignore_blocks, char* str, char* dest);
 char* strrmr(char* s, char tk, char rmtk);
 char* strrml(char* s, char tk, char rmtk);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
 
