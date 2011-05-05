@@ -16,7 +16,6 @@
 #include "descriptor.h"
 #include "paging.h"
 
-
 extern struct tss thr_tss[MAX_THR];  
 extern void arch_switch_thread(struct thr_state *thr, int thr_id, unsigned int cr3);
 extern int arch_switch_thread_int(struct thr_state *thr, int id, unsigned int cr3, void *eip, void *stack);
@@ -73,3 +72,30 @@ int arch_run_thread(int id)
 	return SUCCESS;
 }
 
+int arch_run_thread_int(int id, void *eip, void *stack)
+{
+	int tsk_num;
+	unsigned int tsk_sel[2];
+
+	tsk_num = GET_PTR(id,thr)->task_num;
+
+	/* 
+	We will now modify LDT descriptor on GDT. This won't affect us
+	because our segments are pointing directly to the GDT.
+	*/
+	switch_ldt_desc(GET_TASK_ARCH(tsk_num), GET_PTR(tsk_num,tsk)->priv_level);
+	
+#ifdef PAGING
+	pd_entry *page_dir_base;
+
+	page_dir_base = GET_TASK_ARCH(tsk_num)->pdb;
+
+	if (page_dir_base == NULL) 
+		return FAILURE;
+
+	arch_switch_thread_int(GET_THRSTATE_ARCH(id), id, (unsigned int)page_dir_base);
+#else
+	arch_switch_thread_int(GET_THRSTATE_ARCH(id), id, 0);
+#endif
+	return SUCCESS;
+}

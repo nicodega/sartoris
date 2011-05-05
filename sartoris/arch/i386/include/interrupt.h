@@ -26,5 +26,5 @@ void enable_int_master(int irq);
 void disable_int_master(int irq);
 void enable_int_slave(int irq);
 void disable_int_slave(int irq);
-int arch_switch_thread_int(struct thr_state *thr, unsigned int cr3, void *eip, void *stack);
+
 #endif

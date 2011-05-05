@@ -27,6 +27,8 @@ int arch_destroy_task(int num);
 int arch_create_thread(int id, int priv, struct thread *thr);
 int arch_destroy_thread(int id, struct thread* thr);
 int arch_run_thread(int id);
+int arch_run_thread_int(int id, void *eip, void *stack);
+void arch_thread_int_ret();
 
 int arch_create_int_handler(int number);
 int arch_destroy_int_handler(int number);

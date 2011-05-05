@@ -4,6 +4,7 @@ bits 32
 %define STACK0_SIZE 1424 ;; remember this comes from kernel.h
 
 global arch_switch_thread
+global arch_switch_thread_int
 global arch_detected_mmxfpu
 global mmx_state_owner
 
@@ -19,8 +20,10 @@ extern arch_caps
 ;;
 
 %define SFLAG_MMXFPU_STORED     0x1
-%define SFLAG_SSE               0x10       ;; SSE, SSE2 and SSE3
+%define SFLAG_SSE               0x2       ;; SSE, SSE2 and SSE3
+%define SFLAG_RUN_INT           0x4
 %define NOT_SFLAG_MMXFPU        0xFFFFFFFE
+%define NOT_SFLAG_RUN_INT       0xFFFFFFFB
 %define CR0_TS                  0x8
 %define MMX_NO_OWNER            0xFFFFFFFF
 
@@ -167,7 +170,16 @@ _mmx_cont:
 	mov fs, eax
 	mov eax, [ecx + thr_state.gs]
 	mov gs, eax
-		
+    
+    ;*****************************************************
+	; Support for soft interrupts on a given thread
+	;*****************************************************
+	;; this might not be the first time, but a run_thread_int
+	mov eax, [ecx + thr_state.sflags]
+	and eax, SFLAG_RUN_INT
+	jnz run_thread_int_cont
+
+run_thread_int_cont_switch:
     ;; Now, since we have implemented software thread switching
 	;; by using retf, we will inject on stack0 a virtual call to
 	;; callf, as if arch_switch_thread had been called with callf
@@ -175,7 +187,7 @@ _mmx_cont:
 	;; NOTE: This will only happen first time the thread is runned
 	cmp dword [ecx + thr_state.eip], _dummy_eip
 	jne _first_time
-
+    
 _dummy_eip:
 	;; restore general purpose registers 
 	mov ebx, [ecx + thr_state.ebx]
@@ -245,6 +257,85 @@ no_sse:
 	
 	retf   ;; God help us!!
 	
+
+;;***************************************************************************************
+;; This function will allow triggering something like an interrupt
+;; on a thread. 
+;;***************************************************************************************
+;; int switch_thread_int(struct thread_state*, int id, unsigned int cr3, unsigned int eip, unsigned int stack);
+arch_switch_thread_int:
+	mov ecx, [ebp+8]
+	mov eax, [ecx + thr_state.sflags]
+	and eax, SFLAG_RUN_INT					; check its not on a soft int already
+	jz run_thread_int_ok
+	mov eax, 1
+	ret
+run_thread_int_ok:
+	or eax, SFLAG_RUN_INT
+	mov [ecx + thr_state.sflags], eax		; we are now on soft int
+	jmp arch_switch_thread
+	
+	;; On next line, thread state has been 
+	;; preserved for running thread, but state of 
+	;; runned thread has been loaded except
+	;; for registers (on C convention), flags and stack0
+	;; so we can change everything if we want to
+	;; because upon return we will 
+	;; recover regs as usual
+run_thread_int_cont:
+	;; we still have stack0 from the call, we can
+	;; use ebp
+	;; get stack being used
+	cmp dword [ebp + 24], 0x0
+	je thread_stack	 
+	mov eax, [ebp + 24] 
+	jmp run_int_cont
+thread_stack:
+	mov eax, [ecx + thr_state.esp]
+run_int_cont:
+	;; load eflags register now 
+	mov eax, [ecx + thr_state.eflags]
+	push eax
+	popf
+	
+	;; simulate a far call (return will be performed 
+	;; by ret_from_int
+	push dword [ecx + thr_state.ss]
+	mov eax, esp
+	push eax							;; eax contains stack esp
+	push dword [ecx + thr_state.cs]		
+	push dword [ebp + 20]				;; new eip	
+	retf                                ;; Here we need all help we can get, lets pray 
+										;; this works :S
+			
+;; iret/ret would take the task 
+;; to it's original eip...
+;; this is not good because the original 
+;; thread was on sartoris code :(
+;; we cannot go back to priv 0 code
+;; so we will use ret_from_int syscall
+;; which will perform a priv level switch to 0
+;; and will lead us here if the soft flag 
+;; is set
+
+;; return from a fake interrupt
+;; void arch_thread_int_ret()
+;; ret from int should leave curr_state on ecx... 
+;; but lets load it anyway
+arch_thread_int_ret:
+	mov ecx, [curr_state]
+	;; when the target thread int handler 
+	;; made a far call to us, he left on our
+	;; stack0 his 4 dwords... remove them!!! muahahahah
+	;; when we remove them, we ensure everything is
+	;; ok to come back to state switch (because we left 
+	;; everything ok except for regs, flags and stack)
+	mov eax, esp
+	add esp, 16			;; remove far call :)
+	
+	;; Now the thread is as if he has just returned
+	;; to its original state switch
+	jmp run_thread_int_cont_switch
 
 ;;***************************************************************************************
 ;; This function will be called when an mmx/fpu instruction is issued

@@ -24,6 +24,7 @@ extern int destroy_thread_c(int);
 extern int set_thread_run_perms_c(int thr_id, struct permissions *perm);
 extern int set_thread_run_mode_c(int thr_id, int priv, int mode);
 extern int run_thread_c(int);
+extern int run_thread_int_c(int);
 extern int get_current_thread_c(int);
 
 extern int page_in_c(int task, void *linear, void *physical, int level, int attrib);

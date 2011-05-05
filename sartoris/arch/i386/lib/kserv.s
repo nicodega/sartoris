@@ -21,6 +21,7 @@ global destroy_thread
 global set_thread_run_perms
 global set_thread_run_mode
 global run_thread
+global run_thread_int
 global get_current_thread
 
 global grant_page_mk
@@ -127,6 +128,14 @@ run_thread:
 	mov ebp, esp
 	pass_arguments 1
 	call RUN_THREAD : 0x00000000
+	pop ebp
+	ret
+
+run_thread_int:	
+	push ebp
+	mov ebp, esp
+	pass_arguments 3
+	call RUN_THREAD_INT : 0x00000000
 	pop ebp
 	ret
 

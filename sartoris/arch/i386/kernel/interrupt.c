@@ -143,3 +143,5 @@ static void hook_irq(int irq, int thread_id, int dpl)
 	idt[irq].dword0 = (KRN_CODE << 16) | (ep & 0xffff);
 	idt[irq].dword1 = (ep & 0xffff0000) | DESC_DPL(dpl) | IRQ_GATE_32 | 0x800;
 }
+
+
