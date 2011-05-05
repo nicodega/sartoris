@@ -37,6 +37,7 @@ INT32 vmm_share_create_exe_seek_callback(struct fsio_event_source *iosrc, INT32 
 INT32 vmm_share_create_exe_callback(struct fsio_event_source *iosrc, INT32 ioret);
 UINT32 vmm_share_create_swp_callback(struct pm_task *task, UINT32 ioret);
 UINT32 vmm_share_map_callback(struct pm_task *task, UINT32 ioret);
+void vmm_shared_create_end(struct pm_task *task, struct vmm_shared_params *params);
 /*******************************************************************************************************/
 
 /*
@@ -48,21 +49,20 @@ struct pm_task *vmm_shared_getowner(struct pm_task *task, ADDR proc_laddr, ADDR 
 	struct vmm_shared_descriptor *sdes = NULL;
 
 	/* Get memory region for this address */
-	mreg = task->vmm_info.regions.first;
+    ma_node *n = ma_search_point(&task->regions, proc_laddr);
 
-	while(mreg != NULL)
-	{
-		if(mreg->tsk_lstart <= proc_laddr && mreg->tsk_lend > proc_laddr)
-			break;
-		mreg = mreg->next;
-	}
+    if(!n) return NULL;
+
+    mreg = VMM_MEMREG_MEMA2MEMR(n);
 
 	/* Get Sharing descriptor for this region */
-	sdes = (struct vmm_shared_descriptor*)mreg;
+	sdes = (struct vmm_shared_descriptor*)mreg->descriptor;
 
-	if(attrib != NULL) *attrib = vmm_region_pageperms(mreg);
+	if(attrib != NULL) 
+        *attrib = vmm_region_pageperms(mreg);
 
-	if(owner_laddr != NULL) *owner_laddr = (ADDR)((UINT32)sdes->shared_laddr_start + ((UINT32)proc_laddr - (UINT32)mreg->tsk_lstart));
+	if(owner_laddr != NULL) 
+        *owner_laddr = (ADDR)((UINT32)sdes->owner_region->tsk_node.low + ((UINT32)proc_laddr - (UINT32)mreg->tsk_node.low));
 
 	return tsk_get(sdes->owner_task);
 }
@@ -75,64 +75,95 @@ BOOL vmm_is_shared(struct pm_task *task, ADDR proc_laddr)
 	struct vmm_memory_region *mreg = NULL;
 
 	/* Get memory region for this address */
-	mreg = task->vmm_info.regions.first;
+	ma_node *n = ma_search_point(&task->regions, proc_laddr);
 
-	while(mreg != NULL)
-	{
-		if(mreg->tsk_lstart <= proc_laddr && mreg->tsk_lend > proc_laddr)
-			break;
-		mreg = mreg->next;
-	}
+    if(n == NULL) return FALSE;
 
-	return mreg != NULL;
+    mreg = VMM_MEMREG_MEMA2MEMR(n);
+
+	if(mreg->type & VMM_MEMREGION_SHARED)
+        return TRUE;
+    else
+        return FALSE;
 }
 
 /* Removes a reference to a shared memory area. */
-void vmm_share_remove(struct pm_task *task, struct vmm_memory_region *mreg)
+void vmm_share_remove(struct pm_task *task, UINT32 lstart)
 {
+    struct vmm_memory_region *mreg = NULL;
 	struct pm_task *child = NULL;
 	struct vmm_memory_region *cmreg = NULL, *next = NULL;
 	struct vmm_page_directory *pdir = NULL;
 	struct vmm_page_table *ptbl = NULL;
 	UINT32 lstart, lend, laddr;
-	struct vmm_shared_descriptor *sdes = (struct vmm_shared_descriptor*)mreg->descriptor;
+	struct vmm_shared_descriptor *sdes;
 	UINT32 i = 0;
 
-	if(sdes->owner_task == task->id)
+    ma_node *mn = rb_search_low(&task->regions, lstart);
+
+    if(!mn) return;
+
+    mreg = VMM_MEMREG_MEMA2MEMR(mn);
+
+    sdes = (struct vmm_shared_descriptor*)mreg->descriptor;
+
+	if(sdes->owner_task == task->id && sdes->regions != NULL)
 	{
 		/* 
 		If we are invoked with the owner task, it means it's closing! What will happen to
-		those poor childs? Shal I let them PF or find a new owner for the sharing?....
-		For now... I'll remove all sharings!
+		those poor childs? Let's promote a child to the owner of the shared area!
 		*/
+
+        // remove memory region from the original owner
+        ma_remove(&task->regions, &sdes->owner_region->tsk_node);
+        kfree(sdes->owner_region);
+
+        // promote the first child
+        sdes->owner_task = sdes->regions->owner_task;
+        sdes->owner_region = sdes->regions;
+        sdes->regions = sdes->regions->next;
+
+        mreg = sdes->owner_region;
+
+        if(sdes->regions->next == NULL)
+        {
+            task = tsk_get(sdes->owner_task); // get the new owner task
+
+            // hmm now this area is no longer shared.. let's remove the shared marks
+            // from the info field! (i.e. demote the pages to common pages, but let 
+            // them paged in)
+            lstart = (UINT32)mreg->tsk_lstart;
+	        lend = (UINT32)mreg->tsk_lend;
+	
+	        pdir = task->vmm_info.page_directory;
+
+	        while(lstart < lend)
+	        {
+		        /* Check if page table is present (it wont be swapped) */
+		        if(pdir->tables[PM_LINEAR_TO_DIR(lstart)].ia32entry.present == 1)
+		        {
+			        ptbl = (struct vmm_page_table*)PG_ADDRESS(PHYSICAL2LINEAR(pdir->tables[PM_LINEAR_TO_DIR(lstart)].b));
 		
-		/* Find all regions referencing this share. (This is expensive) */
-		for(i = 0; i < MAX_TSK; i++)
-		{
-			child = tsk_get(i);
+			        laddr = PHYSICAL2LINEAR(PG_ADDRESS(ptbl->pages[PM_LINEAR_TO_TAB(lstart)].entry.phy_page_addr));
 
-            if(child == NULL) continue;
+                    vmm_set_flags(task->id, (ADDR)laddr, FALSE, TAKEN_PG_FLAG_SHARED, FALSE); // page is no longer shared!
+		        }
 
-			if(task->id != i && child != NULL && child->state != TSK_NOTHING && child->state != TSK_KILLING && child->state != TSK_KILLED)
-			{
-				/* Go through regions. */
-				cmreg = child->vmm_info.regions.first;
+		        lstart += 0x1000;
+	        }
 
-				while(cmreg != NULL)
-				{
-					next = cmreg->next;
-					if(cmreg->type == VMM_MEMREGION_FMAP && (struct vmm_shared_descriptor*)cmreg->descriptor == sdes)
-						vmm_share_remove(task, cmreg);
-					
-					cmreg = next;
-				}
-			}
-		}
-
-		return;
+            // remove the memory region from this task (it's no longer shared!)
+            ma_remove(&task->regions, &mreg->tsk_node);
+            kfree(mreg);
+        }
+        return;
 	}
 	
-	/* Page-out pages */
+    // If we got here, we can be sure this shared area
+    // is not referenced at all, we remove the share 
+    // with confidence and set all pages shared flag to
+    // 0.
+
 	lstart = (UINT32)mreg->tsk_lstart;
 	lend = (UINT32)mreg->tsk_lend;
 	
@@ -147,36 +178,21 @@ void vmm_share_remove(struct pm_task *task, struct vmm_memory_region *mreg)
 		
 			laddr = PHYSICAL2LINEAR(PG_ADDRESS(ptbl->pages[PM_LINEAR_TO_TAB(lstart)].entry.phy_page_addr));
 
-			/* Page out */
-			page_out(task->id, (ADDR)PG_ADDRESS(lstart), 2);
-
-			/* 
-			NOTE: I will put page onto the page stack only if this is the owner task.
-			*/
-			if(sdes->owner_task == task->id)
-				vmm_put_page((ADDR)laddr);			
+			vmm_set_flags(task->id, (ADDR)laddr, FALSE, TAKEN_PG_FLAG_SHARED, FALSE); // page is no longer shared!
 		}
 
 		lstart += 0x1000;
 	}
 
 	/* Remove region from task */
-	vmm_region_remove(task, mreg);
+	ma_remove(&task->regions, &mreg->tsk_node);
+    kfree(mreg);
 
-	/* Free region structure */
-	kfree(mreg);
-
-	/* Decrement descriptor references. */
-	sdes->references--;
-
-	if(sdes->references == 0)	// References will only reach 0 when the shared area is dismissed, hence pages have been 
-	{							// unmapped and returned to PMAN
-
-		/* Free descriptor */
-		vmm_regiondesc_remove(sdes);
-
-		kfree(sdes);
-	}
+    // we can safely remove the shared descriptor
+    // for it's no longer referenced by any memory 
+    // region, and it's not contained on any global
+    // structures.
+    kfree(sdes);
 }
 
 /* 
@@ -193,7 +209,6 @@ BOOL vmm_share_create(struct pm_task *task, ADDR laddr, UINT32 length, UINT16 pe
 	/* Check address is not above max_addr */
 	if(task->vmm_info.max_addr <= (UINT32)laddr + length)
 	{
-		/* FIXME: Should send an exception signal... */
 		return FALSE;
 	}
 
@@ -214,34 +229,19 @@ BOOL vmm_share_create(struct pm_task *task, ADDR laddr, UINT32 length, UINT16 pe
 	
 	laddr = TRANSLATE_ADDR(laddr, ADDR);
 
-	/* Check if a region already exists on the same task, overlapping. */
-	mregit = task->vmm_info.regions.first;
+    /* Check if a region already exists on the same task, overlapping. */
+    ma_node *n = ma_collition(&task->regions, laddr, laddr + length);
 
-	while(mregit != NULL)
-	{
-		if( ((UINT32)laddr <= (UINT32)mregit->tsk_lstart && ((UINT32)laddr + length) >= (UINT32)mregit->tsk_lstart) 
-			|| ((UINT32)laddr <= (UINT32)mregit->tsk_lend && ((UINT32)laddr + length) >= (UINT32)mregit->tsk_lstart) )
-		{
-			return FALSE;
-		}
-
-		mregit = mregit->next;
-	}
-
+    if(n)
+    {
+        return FALSE;
+    }
+    
 	/* Task state will be set to TSK_MMAPPING */
 	task->state = TSK_MMAPPING;
 
-	/* Unschedule all threads */
-	thr = task->first_thread;
-
-	while(thr != NULL)
-	{
-		sch_deactivate(thr);
-		thr = thr->next_thread;
-	}
-
 	/*
-    If a page is not present, we should bring it from swap/executable 
+    If a page is not present, we should bring it from swap/executable, or assign a new page.
 	*/
 	
 	/* Begin callback */
@@ -250,17 +250,30 @@ BOOL vmm_share_create(struct pm_task *task, ADDR laddr, UINT32 length, UINT16 pe
 	if(params == NULL)
 		return FALSE;
 
-	params->params[0] = (UINT32)laddr;	                // param 0 will hold start address
-	params->params[1] = (UINT32)laddr + length;           // param 0 will hold ending address
-	params->params[2] = 0xFFFFFFFF;                       // last swap address brought
-	params->params[3] = (UINT32)laddr;	                    // param 3 will hold start address
-	params->params[4] = ((UINT32)perms & 0xFFFFFFFF);		// param 4 will contain permissions
-	params->params[5] = 0xFFFFFFFF;                       // last address paged in
+	params->params[0] = (UINT32)laddr;                  // param 0 will hold start address (will be modified, use param[3] ath the end)
+	params->params[1] = (UINT32)laddr + length;         // param 1 will hold ending address
+	params->params[2] = 0xFFFFFFFF;                     // last swap address brought
+	params->params[3] = (UINT32)laddr;                  // param 3 will hold start address
+	params->params[4] = ((UINT32)perms & 0xFFFFFFFF);   // param 4 will contain permissions
+	params->params[5] = 0xFFFFFFFF;                     // last address paged in
 
 	task->io_finished.params[0] = (UINT32)params;
 
-	if(vmm_share_create_step(task, params, IO_RET_OK) == -1) return FALSE;
+	if(vmm_share_create_step(task, params, IO_RET_OK) == -1)
+    {
+        // no errors no swap
+        return TRUE;
+    }
 	
+    /* Unschedule all threads */
+	thr = task->first_thread;
+
+	while(thr != NULL)
+	{
+		sch_deactivate(thr);
+		thr = thr->next_thread;
+	}
+
 	return TRUE;
 }
 
@@ -278,161 +291,229 @@ UINT32 vmm_share_create_step(struct pm_task *task, struct vmm_shared_params *par
 	UINT32 filepos, readsize;
 	INT32 perms, page_displacement;
 	
-	/* Set variables based on parameters */
-	lstart = params->params[0];
-	lend = params->params[1];
-	last_swp = params->params[2];
+    if(ioret == IO_RET_ERR)
+    {
+        vmm_shared_create_end(task, params);
+        return 0;
+    }
+    else
+    {
+	    /* Set variables based on parameters */
+	    lstart = params->params[0];
+	    lend = params->params[1];
+	    last_swp = params->params[2];
 	
-	pdir = task->vmm_info.page_directory;
+	    pdir = task->vmm_info.page_directory;
 
-	/* Free last swap address if not 0xFFFFFFFF */
-	if(last_swp != 0xFFFFFFFF)
-	{
-		/* Unset IOLOCK */
-		vmm_set_flags(task->id, (ADDR)params->params[5], TRUE, TAKEN_EFLAG_IOLOCK, FALSE);
+	    /* Free last swap address if not 0xFFFFFFFF */
+	    if(last_swp != 0xFFFFFFFF)
+	    {
+		    /* Unset IOLOCK */
+		    vmm_set_flags(task->id, (ADDR)params->params[5], TRUE, TAKEN_EFLAG_IOLOCK, FALSE);
 
-		if(last_swp != 0xFFFFFFFE)
-			swap_free_addr(last_swp);			
+		    if(last_swp != 0xFFFFFFFE)
+			    swap_free_addr(last_swp);			
 		
-		/* If we have just brought a lvl 2 page, unmap from pman */
-		if(PG_ADDRESS(pdir->tables[PM_LINEAR_TO_DIR(lstart)].b) != LINEAR2PHYSICAL(params->params[5]))
-			vmm_unmap_page(task->id, lstart);
+		    /* If we have just brought a lvl 2 page, unmap from pman */
+		    if(PG_ADDRESS(pdir->tables[PM_LINEAR_TO_DIR(lstart)].b) != LINEAR2PHYSICAL(params->params[5]))
+			    vmm_unmap_page(task->id, lstart);
 				
-		params->params[2] = 0xFFFFFFFF;
-	}
+		    params->params[2] = 0xFFFFFFFF;
+	    }
 
-	/* 
-	Fetch Swapped or non loaded pages.
-	*/
-	for(; lstart < lend; lstart += 0x1000)
-	{
-		/* If page table is not present get us one */
-		if(pdir->tables[PM_LINEAR_TO_DIR(lstart)].ia32entry.present == 0)
-		{
-			/* Get a fresh page */
-			pg_addr = (UINT32)vmm_get_tblpage(task->id, lstart);
+        // set the page shared flag
+        ptbl = (struct vmm_page_table*)PG_ADDRESS(PHYSICAL2LINEAR(pdir->tables[PM_LINEAR_TO_DIR(lstart)].b));
 
-			task->vmm_info.page_count++;
+		vmm_set_flags(task->id, (ADDR)PHYSICAL2LINEAR(PG_ADDRESS(ptbl->pages[PM_LINEAR_TO_TAB(lstart)].entry.phy_page_addr)), FALSE, TAKEN_PG_FLAG_SHARED, TRUE);
+
+	    /* 
+	    Fetch Swapped or non loaded pages.
+	    */
+	    for(; lstart < lend; lstart += 0x1000)
+	    {
+		    /* If page table is not present get us one */
+		    if(pdir->tables[PM_LINEAR_TO_DIR(lstart)].ia32entry.present == 0)
+		    {
+			    pg_addr = (UINT32)vmm_get_tblpage(task->id, lstart);
+
+			    task->vmm_info.page_count++;
 		
-			/* Page in onto task adress space */
-			pm_page_in(task->id, (ADDR)lstart, (ADDR)LINEAR2PHYSICAL(pg_addr), 1, PGATT_WRITE_ENA);
+			    /* Page in onto task adress space */
+			    pm_page_in(task->id, (ADDR)lstart, (ADDR)LINEAR2PHYSICAL(pg_addr), 1, PGATT_WRITE_ENA);
 
-			/* If page table is swapped... bring it from swap. */
-			if(pdir->tables[PM_LINEAR_TO_DIR(lstart)].record.swapped == 1)
-			{
-				/* Set IOLOCK and PF just in case */
-				vmm_set_flags(task->id, (ADDR)lstart, TRUE, TAKEN_EFLAG_IOLOCK | TAKEN_EFLAG_PF, TRUE);
+			    /* If page table is swapped... bring it from swap. */
+			    if(pdir->tables[PM_LINEAR_TO_DIR(lstart)].record.swapped == 1)
+			    {
+				    /* Set IOLOCK and PF just in case */
+				    vmm_set_flags(task->id, (ADDR)lstart, TRUE, TAKEN_EFLAG_IOLOCK | TAKEN_EFLAG_PF, TRUE);
 
-				task->swp_io_finished.params[0] = (UINT32)params;
+				    task->swp_io_finished.params[0] = (UINT32)params;
 
-				params->params[0] = lstart;	
-				params->params[2] = pdir->tables[PM_LINEAR_TO_DIR(lstart)].record.addr;
-				params->params[5] = pg_addr;
+				    params->params[0] = lstart;	
+				    params->params[2] = pdir->tables[PM_LINEAR_TO_DIR(lstart)].record.addr;
+				    params->params[5] = pg_addr;
 
-				/* Use swp callback */
-				task->swp_io_finished.callback = vmm_share_create_swp_callback;
-				io_begin_task_pg_read( (pdir->tables[PM_LINEAR_TO_DIR(lstart)].record.addr << 3), (ADDR)pg_addr, task);
+				    /* Use swp callback */
+				    task->swp_io_finished.callback = vmm_share_create_swp_callback;
+				    io_begin_task_pg_read( (pdir->tables[PM_LINEAR_TO_DIR(lstart)].record.addr << 3), (ADDR)pg_addr, task);
 
-				return 0;	// swap OP begun
-			}
-		}
+				    return 0;	// swap OP begun
+			    }
+		    }
 		
-		ptbl = (struct vmm_page_table*)PHYSICAL2LINEAR(PG_ADDRESS(pdir->tables[PM_LINEAR_TO_DIR(lstart)].b));
+		    ptbl = (struct vmm_page_table*)PHYSICAL2LINEAR(PG_ADDRESS(pdir->tables[PM_LINEAR_TO_DIR(lstart)].b));
 
-		if(ptbl->pages[PM_LINEAR_TO_TAB(lstart)].entry.ia32entry.present == 0)
-		{
-			/* 
-			Page is not present.
-			If it's swapped, get it.
-			If it has to be loaded, get it.
-			*/
-			if(ptbl->pages[PM_LINEAR_TO_TAB(lstart)].entry.record.swapped == 1)
-			{
-				/* Get a fresh page */
-				pg_addr = (UINT32)vmm_get_tblpage(task->id, lstart);
+		    if(ptbl->pages[PM_LINEAR_TO_TAB(lstart)].entry.ia32entry.present == 0)
+		    {
+			    /* 
+			    Page is not present.
+			    If it's swapped, get it.
+			    If it has to be loaded, get it.
+			    */
+			    if(ptbl->pages[PM_LINEAR_TO_TAB(lstart)].entry.record.swapped == 1)
+			    {
+				    /* Get a fresh page */
+				    pg_addr = (UINT32)vmm_get_tblpage(task->id, lstart);
 
-				task->vmm_info.page_count++;
+                    if(!pg_addr)
+                    {
+                        vmm_shared_create_end(task, params);
+                        return 0;
+                    }
+
+				    task->vmm_info.page_count++;
 		
-				/* Page in onto task adress space */
-				pm_page_in(task->id, (ADDR)lstart, (ADDR)LINEAR2PHYSICAL(pg_addr), 2, swap_get_perms(task, (ADDR)lstart));
+				    /* Page in onto task adress space */
+				    pm_page_in(task->id, (ADDR)lstart, (ADDR)LINEAR2PHYSICAL(pg_addr), 2, swap_get_perms(task, (ADDR)lstart));
 
-				/* IO Lock Page */
-				vmm_set_flags(task->id, (ADDR)pg_addr, TRUE, TAKEN_EFLAG_IOLOCK | TAKEN_EFLAG_PF, TRUE);
+				    /* IO Lock Page */
+				    vmm_set_flags(task->id, (ADDR)pg_addr, TRUE, TAKEN_EFLAG_IOLOCK | TAKEN_EFLAG_PF, TRUE);
 
-				/* Begin read operation */
-				task->swp_io_finished.params[0] = (UINT32)params;
+				    /* Begin read operation */
+				    task->swp_io_finished.params[0] = (UINT32)params;
 
-				params->params[0] = lstart;	
-				params->params[2] = ptbl->pages[PM_LINEAR_TO_TAB(lstart)].entry.record.addr;
-				params->params[5] = pg_addr;
+				    params->params[0] = lstart;	
+				    params->params[2] = ptbl->pages[PM_LINEAR_TO_TAB(lstart)].entry.record.addr;
+				    params->params[5] = pg_addr;
 
-				/* Use swp callback */
-				task->swp_io_finished.callback = vmm_share_create_swp_callback;
-				io_begin_task_pg_read( (ptbl->pages[PM_LINEAR_TO_TAB(lstart)].entry.record.addr << 3), (ADDR)pg_addr, task);
-			}
-			else if(loader_filepos(task, (ADDR)lstart, &filepos, &readsize, &perms, &page_displacement))
-			{
-				/* Get a fresh page */
-				pg_addr = (UINT32)vmm_get_tblpage(task->id, lstart);
+				    /* Use swp callback */
+				    task->swp_io_finished.callback = vmm_share_create_swp_callback;
+				    io_begin_task_pg_read( (ptbl->pages[PM_LINEAR_TO_TAB(lstart)].entry.record.addr << 3), (ADDR)pg_addr, task);
+			    }
+			    else if(loader_filepos(task, (ADDR)lstart, &filepos, &readsize, &perms, &page_displacement))
+			    {
+				    /* Get a fresh page */
+				    pg_addr = (UINT32)vmm_get_tblpage(task->id, lstart);
 
-				task->vmm_info.page_count++;
+                    if(!pg_addr)
+                    {
+                        vmm_shared_create_end(task, params);
+                        return 0;
+                    }
+
+				    task->vmm_info.page_count++;
 		
-				/* Page in onto task adress space */
-				pm_page_in(task->id, (ADDR)lstart, (ADDR)LINEAR2PHYSICAL(pg_addr), 2, perms);
+				    /* Page in onto task adress space */
+				    pm_page_in(task->id, (ADDR)lstart, (ADDR)LINEAR2PHYSICAL(pg_addr), 2, perms);
 
-				/* IO Lock Page */
-				vmm_set_flags(task->id, (ADDR)pg_addr, TRUE, TAKEN_EFLAG_IOLOCK | TAKEN_EFLAG_PF, TRUE);
+				    /* IO Lock Page */
+				    vmm_set_flags(task->id, (ADDR)pg_addr, TRUE, TAKEN_EFLAG_IOLOCK | TAKEN_EFLAG_PF, TRUE);
 
-				task->swp_io_finished.params[0] = (UINT32)params;
+				    task->swp_io_finished.params[0] = (UINT32)params;
 
-				params->params[0] = lstart;	
-				params->params[2] = 0xFFFFFFFE;
-				params->params[5] = pg_addr;
-				params->params[6] = ((((UINT16)page_displacement << 16) & 0xFFFF0000) | (readsize & 0x0000FFFF));
+				    params->params[0] = lstart;	
+				    params->params[2] = 0xFFFFFFFE;
+				    params->params[5] = pg_addr;
+				    params->params[6] = ((((UINT16)page_displacement << 16) & 0xFFFF0000) | (readsize & 0x0000FFFF));
 				
-				task->io_finished.callback = vmm_share_create_exe_seek_callback;
-				io_begin_seek(&task->io_event_src, filepos);
-			}
-			else
-			{
-				/* Give the tak a fresh page */
-				pg_addr = (UINT32)vmm_get_page(task->id, lstart);
+				    task->io_finished.callback = vmm_share_create_exe_seek_callback;
+				    io_begin_seek(&task->io_event_src, filepos);
+			    }
+			    else
+			    {
+				    /* Give the tak a fresh page */
+				    pg_addr = (UINT32)vmm_get_page(task->id, lstart);
 
-				task->vmm_info.page_count++;
+                    if(!pg_addr)
+                    {
+                        vmm_shared_create_end(task, params);
+                        return 0;
+                    }
 
-				pm_page_in(task->id, (ADDR)lstart, (ADDR)LINEAR2PHYSICAL(pg_addr), 2, PGATT_WRITE_ENA);
-			}
-		}
-	}
+				    task->vmm_info.page_count++;
 
-	/* Allocate descriptor */
-	desc = (struct vmm_shared_descriptor*)kmalloc(sizeof(struct vmm_shared_descriptor));
+				    pm_page_in(task->id, (ADDR)lstart, (ADDR)LINEAR2PHYSICAL(pg_addr), 2, PGATT_WRITE_ENA);
+			    }
+		    }
+	    }
 
-	desc->owner_task = task->id;
-	desc->references = 1;
-	desc->shared_laddr_end = (ADDR)params->params[1];
-	desc->shared_laddr_start = (ADDR)lend;
-	desc->type = VMM_MEMREGION_SHARED;
+	    vmm_shared_create_end(task, params);
+    }
 
-	vmm_regiondesc_add(desc);
+	return 1; // No errors, no Swap
+}
 
-	/* Allocate memory region */
-	mreg = (struct vmm_memory_region*)kmalloc(sizeof(struct vmm_memory_region));
+void vmm_shared_create_end(struct pm_task *task, struct vmm_shared_params *params)
+{
+    UINT32 lstart, lend, laddr;
+    struct vmm_page_directory *pdir;
+	struct vmm_page_table *ptbl;
+    BOOL idret = FALSE;
 
-	/* Setup mreg */
-	mreg->descriptor = desc;
-	mreg->type = VMM_MEMREGION_SHARED;
-	mreg->tsk_lstart = (ADDR)params->params[3];
-	mreg->tsk_lend = (ADDR)lend;
-	mreg->flags = params->params[4]; 
+    desc = (struct vmm_shared_descriptor*)kmalloc(sizeof(struct vmm_shared_descriptor));
+    mreg = (struct vmm_memory_region*)kmalloc(sizeof(struct vmm_memory_region));
+    idret = rb_free_value(&task->regions_id, &mreg->tsk_id_node.value);
 
-	/* Add region to the task */
-	vmm_region_add(task, mreg);
+    if(params->params[1] == params->params[0] && desc && mreg && idret)
+    {
+        /* Allocate descriptor */
+	    desc->owner_task = task->id;
+        desc->regions = NULL;
+                	    
+	    /* Setup mreg */
+        mreg->owner_task = task->id;
+	    mreg->descriptor = desc;
+	    mreg->type = VMM_MEMREGION_SHARED;
+	    mreg->tsk_node.low = (ADDR)params->params[3];
+	    mreg->tsk_node.high = (ADDR)lend;
+	    mreg->flags = params->params[4];
 
-	/* Restore task state */
+	    desc->owner_region = mreg;
+
+	    /* Add region to the task */
+	    ma_insert(&task->regions, &mreg->tsk_node);
+        rb_insert(&task->regions_id, &mreg->tsk_id_node);
+    }
+    else
+    {
+        // undo what we have done so far 
+        lstart = (UINT32)params->param[3];
+	    lend = (UINT32)params->param[0];
+	
+	    pdir = task->vmm_info.page_directory;
+
+	    while(lstart < lend)
+	    {
+		    /* Check if page table is present (it wont be swapped) */
+		    if(pdir->tables[PM_LINEAR_TO_DIR(lstart)].ia32entry.present == 1)
+		    {
+			    ptbl = (struct vmm_page_table*)PG_ADDRESS(PHYSICAL2LINEAR(pdir->tables[PM_LINEAR_TO_DIR(lstart)].b));
+		
+			    laddr = PHYSICAL2LINEAR(PG_ADDRESS(ptbl->pages[PM_LINEAR_TO_TAB(lstart)].entry.phy_page_addr));
+
+			    vmm_set_flags(task->id, (ADDR)laddr, FALSE, TAKEN_PG_FLAG_SHARED, FALSE); // page is no longer shared!
+		    }
+
+		    lstart += 0x1000;
+	    }
+    }
+
+    /* Restore task state */
 	task->state = TSK_NORMAL;
 
-	/* Unschedule all threads */
+	kfree(params);
+
+    /* schedule all threads again */
 	thr = task->first_thread;
 
 	while(thr != NULL)
@@ -441,14 +522,10 @@ UINT32 vmm_share_create_step(struct pm_task *task, struct vmm_shared_params *par
 		thr = thr->next_thread;
 	}
 
-	kfree(params);
-
 	/* Invoke command callback */
-	task->command_inf.ret_value = desc->id;
+	task->command_inf.ret_value = (desc)? ( (task->id << 16) | desc->id) : 0;
 	if(task->command_inf.callback != NULL)
-			task->command_inf.callback(task, IO_RET_OK);
-
-	return 1; // No errors, no Swap
+			task->command_inf.callback(task, (params->params[1] == params->params[0] && desc && mreg)? IO_RET_OK : IO_RET_ERR);
 }
 
 /*
@@ -458,11 +535,21 @@ INT32 vmm_share_create_exe_seek_callback(struct fsio_event_source *iosrc, INT32 
 {
 	struct pm_task *task = tsk_get(iosrc->id);
 
-    if(task == NULL) return 0;
+    if(task == NULL)
+    {
+        return 0;
+    }
+
+    struct vmm_shared_params *params = (struct vmm_shared_params*)task->io_finished.params[0];
+
+    if(ioret == IO_RET_ERR)
+    {
+        vmm_shared_create_end(task, params);
+        return 0;
+    }
 
 	UINT32 page_displacement, readsize;
-	struct vmm_shared_params *params = (struct vmm_shared_params*)task->io_finished.params[0];
-
+	
 	page_displacement = ((params->params[6] >> 16) & 0x0000FFFF);
 	readsize = (params->params[6] & 0x0000FFFF);
 			
@@ -480,7 +567,18 @@ INT32 vmm_share_create_exe_callback(struct fsio_event_source *iosrc, INT32 ioret
 {
 	struct pm_task *task = tsk_get(iosrc->id);
 
-    if(task == NULL) return 0;
+    if(task == NULL)
+    {
+        return 0;
+    }
+
+    struct vmm_shared_params *params = (struct vmm_shared_params*)task->io_finished.params[0];
+
+    if(ioret == IO_RET_ERR)
+    {
+        vmm_shared_create_end(task, params);
+        return 0;
+    }
 
 	return vmm_share_create_step(task, (struct vmm_shared_params*)task->io_finished.params[0], ioret);
 }
@@ -490,6 +588,19 @@ Invoked when a swap read has completed.
 */
 UINT32 vmm_share_create_swp_callback(struct pm_task *task, UINT32 ioret)
 {
+    if(task == NULL)
+    {
+        return 0;
+    }
+
+    struct vmm_shared_params *params = (struct vmm_shared_params*)task->io_finished.params[0];
+
+    if(ioret == IO_RET_ERR)
+    {
+        vmm_shared_create_end(task, params);
+        return 0;
+    }
+
 	return vmm_share_create_step(task, (struct vmm_shared_params*)task->swp_io_finished.params[0], ioret);
 }
 
@@ -499,13 +610,14 @@ Map a memory range on a task to other task shared area.
 RETURNS: TRUE if mapping begun.
 Invokes command_inf callback upon completion.
 */
-BOOL vmm_share_map(UINT16 descriptor_id, struct pm_task *task, ADDR laddr, UINT32 length, UINT16 perms)
+BOOL vmm_share_map(UINT32 descriptor_id, struct pm_task *task, ADDR laddr, UINT32 length, UINT16 perms)
 {
-	struct vmm_memory_region *mregit = NULL;
+	struct vmm_memory_region *mreg = NULL;
 	UINT32 lstart, lend;
 	struct vmm_shared_descriptor *desc = NULL;
 	struct vmm_shared_params *params = NULL;
 	struct pm_thread *thr = NULL;
+    struct pm_task *otask = NULL;
 
 	if(task->state != TSK_NORMAL) 
 		return FALSE;
@@ -517,34 +629,42 @@ BOOL vmm_share_map(UINT16 descriptor_id, struct pm_task *task, ADDR laddr, UINT3
 		return FALSE;
 	}
 
-	/* Check start is page aligned and length is divisible by 0x1000 */
-	if((UINT32)laddr % 0x1000 != 0 || length % 0x1000 != 0) return FALSE;
+    // check it does not collide with an executable area
+    if(loader_collides(task, laddr, laddr + length))
+        return FALSE;
 
-	laddr = TRANSLATE_ADDR(laddr, ADDR);
-	lstart = (UINT32)laddr;
-	lend = ((UINT32)laddr + length);
+	/* Check start is page aligned and length is divisible by PAGE_SIZE */
+	if((UINT32)laddr % PAGE_SIZE != 0 || length % PAGE_SIZE != 0) return FALSE;
+
+    otask = tsk_get(descriptor_id >> 16);
+
+    if(!otask || otask->state != TSK_NORMAL) 
+		return FALSE;
+
+    // check the region is valid
+    rbnode *n = rb_search(&otask->regions_id, (descriptor_id & 0x0000FFFF));
+
+    if(!n) return FALSE;
 
 	/* Get descriptor. */
-	desc = (struct vmm_shared_descriptor*)vmm_regiondesc_get(descriptor_id, VMM_MEMREGION_SHARED);
+    mreg = VMM_MEMREG_IDNODE2REG(n);
+
+	desc = (struct vmm_shared_descriptor*)mreg->descriptor;
 	
 	/* Check size is ok. */
-	if((UINT32)desc->shared_laddr_end - (UINT32)desc->shared_laddr_start < length) return FALSE;
+	if(!desc || (UINT32)desc->shared_laddr_end - (UINT32)desc->shared_laddr_start < length) 
+        return FALSE;
 	
-	if(desc == NULL) return FALSE;
+	/* Check there is an overlapping region on the task */
+	ma_node *n2 = ma_collition(&task->regions, laddr, laddr + length);
 
-	/* Check if a shared region already exists on the same task */
-	mregit = task->vmm_info.regions.first;
+    if(n2)
+        return FALSE;
+    
+    params = (struct vmm_shared_params*)kmalloc(sizeof(struct vmm_shared_params));
 
-	while(mregit != NULL)
-	{
-		if( (lstart <= (UINT32)mregit->tsk_lstart && lend >= (UINT32)mregit->tsk_lstart) 
-			|| (lstart <= (UINT32)mregit->tsk_lend && lend >= (UINT32)mregit->tsk_lstart) )
-		{
-			return FALSE;
-		}
-
-		mregit = mregit->next;
-	}
+	if(params == NULL) 
+        return FALSE;
 
 	/* Task state will be set to TSK_MMAPPING */
 	task->state = TSK_MMAPPING;
@@ -558,18 +678,14 @@ BOOL vmm_share_map(UINT16 descriptor_id, struct pm_task *task, ADDR laddr, UINT3
 		thr = thr->next_thread;
 	}
 
-	params = (struct vmm_shared_params*)kmalloc(sizeof(struct vmm_shared_params));
-
-	if(params == NULL) return FALSE;
-
 	/* Begin callback */
-	params->params[0] = lstart;	    // param 0 will hold start address
-	params->params[1] = lend;         // param 0 will hold ending address
-	params->params[2] = (UINT32)desc;	// descriptor pointer
-	params->params[3] = 0xFFFFFFFF;   // last swap address brought
-	params->params[4] = lstart;	    // param 4 will hold start address
-	params->params[5] = ((UINT32)perms & 0xFFFFFFFF);		// param 5 will contain permissions
-	params->params[6] = 0xFFFFFFFF;	// last address paged in
+	params->params[0] = lstart;         // param 0 will hold start address
+	params->params[1] = lend;           // param 0 will hold ending address
+	params->params[2] = (UINT32)mreg;   // memory region pointer
+	params->params[3] = 0xFFFFFFFF;     // last swap address brought
+	params->params[4] = lstart;         // param 4 will hold start address
+	params->params[5] = ((UINT32)perms & 0xFFFFFFFF);   // param 5 will contain permissions
+	params->params[6] = 0xFFFFFFFF;     // last address paged in
 	
 	task->swp_io_finished.params[0] = (UINT32)params;
 
@@ -598,7 +714,8 @@ UINT32 vmm_share_map_callback(struct pm_task *task, UINT32 ioret)
 	lstart = params->params[0];
 	lend = params->params[1];
 	last_swp = params->params[3];
-	desc = (struct vmm_shared_descriptor*)params->params[2];
+    mreg = (struct vmm_memory_region*)params->params[2];
+	desc = (struct vmm_shared_descriptor*)mreg->descriptor;
 
 	ostart = (UINT32)desc->shared_laddr_start;
 	oend = (UINT32)desc->shared_laddr_end;
@@ -617,7 +734,7 @@ UINT32 vmm_share_map_callback(struct pm_task *task, UINT32 ioret)
 	/* Check destination area is not swapped (if it is, I will free them no matter what is there, except for page tables) */
 	pdir = task->vmm_info.page_directory;
 
-	for(; lstart < lend; lstart += 0x1000)
+	for(; lstart < lend; lstart += PAGE_SIZE)
 	{
 		/* If page table is not present get us one */
 		if(pdir->tables[PM_LINEAR_TO_DIR(lstart)].ia32entry.present == 0)
@@ -677,16 +794,44 @@ UINT32 vmm_share_map_callback(struct pm_task *task, UINT32 ioret)
 
 	lstart = params->params[4];	
 	
-	/* Allocate memory region */
+	/* Allocate new memory region */
 	mreg = (struct vmm_memory_region*)kmalloc(sizeof(struct vmm_memory_region));
 
-	if(mreg == NULL) return FALSE;
+	if(mreg == NULL)
+    {
+        thr = task->first_thread;
+
+	    while(thr != NULL)
+	    {
+		    sch_activate(thr);
+		    thr = thr->next_thread;
+	    }
+
+        /* Invoke command callback */
+        task->command_inf.ret_value = 0;
+	    if(task->command_inf.callback != NULL)
+			    task->command_inf.callback(task, IO_RET_OK);
+        return 0;
+    }
 
 	otask = tsk_get(desc->owner_task);
     if(otask == NULL)
     {
         kfree(mreg);
-        return FALSE;
+
+        thr = task->first_thread;
+
+	    while(thr != NULL)
+	    {
+		    sch_activate(thr);
+		    thr = thr->next_thread;
+	    }
+
+        /* Invoke command callback */
+        task->command_inf.ret_value = 0;
+	    if(task->command_inf.callback != NULL)
+			    task->command_inf.callback(task, IO_RET_OK);
+        return 0;
     }
 	opdir = otask->vmm_info.page_directory;
 
@@ -696,25 +841,33 @@ UINT32 vmm_share_map_callback(struct pm_task *task, UINT32 ioret)
 	released from swap or allocated.
 	NOTE2: Here I assume all pages on sharing task are paged in, if not... god help us.
 	*/
-	for(; lstart < lend; lstart += 0x1000)
+	for(; lstart < lend; lstart += PAGE_SIZE)
 	{
 		optbl = (struct vmm_page_table*)PHYSICAL2LINEAR(PG_ADDRESS(opdir->tables[PM_LINEAR_TO_DIR(ostart)].b));
 
 		/* Set the same page on page table */
 		pm_page_in(task->id, (ADDR)lstart, (ADDR)optbl->pages[PM_LINEAR_TO_TAB(ostart)].entry.phy_page_addr, 2, ((task->swp_io_finished.params[5] & VMM_MEM_REGION_FLAG_WRITE)? PGATT_WRITE_ENA : 0));
 
-		ostart += 0x1000;
+		ostart += PAGE_SIZE;
 	}
 
-	/* Setup mreg */
+	/* create mreg for the child */
+    mreg->owner_task = task->id;
 	mreg->descriptor = desc;
 	mreg->type = VMM_MEMREGION_SHARED;
-	mreg->tsk_lstart = (ADDR)params->params[4];
-	mreg->tsk_lend = (ADDR)lend;
+	mreg->tsk_node.low = (ADDR)params->params[4];
+	mreg->tsk_node.high = (ADDR)lend;
 	mreg->flags = params->params[5]; 
 
 	/* Add region to the task */
-	vmm_region_add(task, mreg);
+	ma_insert(&task->regions, mreg);
+
+    /* Add region to descriptor regions */
+    mreg->next = desc->regions;
+    mreg->prev = NULL;
+    if(desc->regions)
+        desc->regions->prev = mreg;
+    desc->regions = mreg;
 
 	/* Restore task state */
 	task->state = TSK_NORMAL;
@@ -729,6 +882,7 @@ UINT32 vmm_share_map_callback(struct pm_task *task, UINT32 ioret)
 	}
 
 	/* Invoke command callback */
+    task->command_inf.ret_value = 1;
 	if(task->command_inf.callback != NULL)
 			task->command_inf.callback(task, IO_RET_OK);
 

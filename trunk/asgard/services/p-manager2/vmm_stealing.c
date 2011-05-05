@@ -119,7 +119,7 @@ void vmm_page_stealer()
 					if( (entry->data.b_pdir.tbl == 0) || ( pages_swapped < (pages_required >> 1) && pages_required > 30) )
 					{
 						/* Ignore pman pages.
-                        Here I'm also ignored file memory maps, but we should consider them and flush them if needed. */
+                        Here I'm also ignoring file memory maps, but we should consider them and flush them if needed. */
 						if(entry->data.b_pdir.tbl == 0 && (entry->data.b_pg.flags & (TAKEN_PG_FLAG_PMAN | TAKEN_PG_FLAG_PHYMAP | TAKEN_PG_FLAG_SHARED | TAKEN_PG_FLAG_FILE)))
 						{
 							int_set(0);
