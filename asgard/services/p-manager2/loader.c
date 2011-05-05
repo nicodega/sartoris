@@ -113,7 +113,7 @@ UINT32 loader_create_task(struct pm_task *task, char *path, UINT32 plength, int 
 }
 
 /* This function will return file possition to read based on the elf program headers.
-if address is not on the file, it'll return 0, else 1, and out_pos and our_size will be valid; 
+if address is not on the file, it'll return FALSE, else TRUE, and out_pos and our_size will be valid.
 NOTE: The way this has been made, we will require sections to be page aligned.
 */
 BOOL loader_filepos(struct pm_task *task, ADDR linear, UINT32 *outpos, UINT32 *outsize, INT32 *perms, INT32 *page_displacement)
@@ -185,6 +185,39 @@ BOOL loader_filepos(struct pm_task *task, ADDR linear, UINT32 *outpos, UINT32 *o
 		}
 		i++;
 	}
+	return FALSE;
+}
+
+
+/* This function will return TRUE if there is an executable section
+overlapping the provided interval with readonly or executable flag.
+NOTE: The way this has been made, we will require sections to be page aligned.
+*/
+BOOL loader_collides(struct pm_task *task, ADDR lstart, ADD lend)
+{
+	BYTE *headers = task->loader_inf.elf_pheaders;
+	UINT32 i = 0;
+	struct Elf32_Phdr *prog_header = NULL;
+
+	lstart = (ADDR)((UINT32)linear - SARTORIS_PROCBASE_LINEAR);
+	while(lstart < lend - SARTORIS_PROCBASE_LINEAR)
+    {
+	    while(i < task->loader_inf.elf_header.e_phnum)
+	    {
+		    prog_header = (struct Elf32_Phdr*) &headers[i * task->loader_inf.elf_header.e_phentsize];
+
+		    // consider only loadable segments
+		    if(prog_header->p_type == PT_LOAD 
+                && ((prog_header->p_flags & PF_EXEC) || ((prog_header->p_flags & PF_READ) && !(prog_header->p_flags & PF_WRITE)))
+                && ((UINT32)prog_header->p_vaddr <= (UINT32)lstart && (UINT32)lstart < (UINT32)prog_header->p_vaddr + (UINT32)prog_header->p_memsz))
+            {
+                return TRUE;
+            }
+            
+		    i++;
+	    }
+        lstart += PAGE_SIZE;
+    }
 	return FALSE;
 }
 
