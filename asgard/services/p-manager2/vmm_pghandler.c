@@ -120,7 +120,7 @@ BOOL vmm_handle_page_fault(UINT16 *thr_id, BOOL internal)
 		    /* Check Page is not being fetched by other thread */
             thread->vmm_info.pg_node.value = PG_ADDRESS(pf.linear);
                         
-            if(insertRedBlackTree(&task->vmm_info.wait_root, &thread->vmm_info.pg_node, TRUE) == 2)
+            if(rb_insert(&task->vmm_info.wait_root, &thread->vmm_info.pg_node, TRUE) == 2)
             {
                 pman_print_dbg("PF: Other Thread was waiting \n");
                 sch_deactivate(thread);
@@ -297,7 +297,7 @@ BOOL vmm_handle_page_fault(UINT16 *thr_id, BOOL internal)
 
         // we must insert the thread on the pg wait tree
         // in case another thread asks for the same page.
-        insertRedBlackTree(&task->vmm_info.wait_root, &thread->vmm_info.pg_node, FALSE);
+        rb_insert(&task->vmm_info.wait_root, &thread->vmm_info.pg_node, FALSE);
 		return TRUE;
 	} 
 	else 
@@ -447,9 +447,9 @@ void vmm_page_ioerror(struct pm_thread *thread, BOOL removeTBLTree)
             
             if(curr_thr->state == TSK_KILLED)
             {
-                removeChildRedBlackTree(&task->vmm_info.wait_root, currnode);
+                rb_remove_child(&task->vmm_info.wait_root, currnode);
                 if(removeTBLTree)
-                    removeChildRedBlackTree(&task->vmm_info.tbl_wait_root, &thread->vmm_info.tbl_node);
+                    rb_remove_child(&task->vmm_info.tbl_wait_root, &thread->vmm_info.tbl_node);
                 thr_destroy_thread(thread->id);
 
                 if(t->killed_threads == 0)
@@ -473,9 +473,9 @@ void vmm_page_ioerror(struct pm_thread *thread, BOOL removeTBLTree)
         currnode = on;
     }
 
-    removeRedBlackTree(&task->vmm_info.wait_root, &thread->vmm_info.pg_node);
+    rb_remove(&task->vmm_info.wait_root, &thread->vmm_info.pg_node);
     if(removeTBLTree)
-        removeChildRedBlackTree(&task->vmm_info.tbl_wait_root, &thread->vmm_info.tbl_node);
+        rb_remove_child(&task->vmm_info.tbl_wait_root, &thread->vmm_info.tbl_node);
     thread->flags &= ~THR_FLAG_PAGEFAULT;
 }
 
@@ -517,9 +517,9 @@ void vmm_check_threads_pg(struct pm_thread **thr, BOOL removeTBLTree)
                 athread = othr;
                
             /* this thread was killed and does not belong to the page fault task */
-		    removeChildRedBlackTree(&task->vmm_info.wait_root, &curr_thr->vmm_info.pg_node);
+		    rb_remove_child(&task->vmm_info.wait_root, &curr_thr->vmm_info.pg_node);
             if(removeTBLTree)
-                removeChildRedBlackTree(&task->vmm_info.tbl_wait_root, &curr_thr->vmm_info.tbl_node);
+                rb_remove_child(&task->vmm_info.tbl_wait_root, &curr_thr->vmm_info.tbl_node);
             
             if(curr_thr->task_id != task_id)
             {
@@ -548,9 +548,9 @@ void vmm_check_threads_pg(struct pm_thread **thr, BOOL removeTBLTree)
 	{
         thr_destroy_thread(thread->id);
 
-        removeRedBlackTree(&task->vmm_info.wait_root, &thread->vmm_info.pg_node); 
+        rb_remove(&task->vmm_info.wait_root, &thread->vmm_info.pg_node); 
         if(removeTBLTree)
-            removeRedBlackTree(&task->vmm_info.tbl_wait_root, &thread->vmm_info.tbl_node);
+            rb_remove(&task->vmm_info.tbl_wait_root, &thread->vmm_info.tbl_node);
 
         if(task->killed_threads == 0 && task->state == TSK_KILLED)
                 tsk_destroy(task);
@@ -601,19 +601,19 @@ void vmm_wake_pf_threads(struct pm_thread *thread)
 	}
 
     task = tsk_get(thread->vmm_info.fault_task);
-    removeRedBlackTree(&task->vmm_info.wait_root, &thread->vmm_info.pg_node); // remove al threads waiting for the page from the tree
+    rb_remove(&task->vmm_info.wait_root, &thread->vmm_info.pg_node); // remove al threads waiting for the page from the tree
 
 	/* 
 		If there are no threads on the vmm_info.swaptbl_next list unlock the table.
 	*/
-    rbnode *n = searchRedBlackTree(&task->vmm_info.tbl_wait_root, TBL_ADDRESS(thread->vmm_info.fault_address));
+    rbnode *n = rb_search(&task->vmm_info.tbl_wait_root, TBL_ADDRESS(thread->vmm_info.fault_address));
 	
 	if(n)
 	{
 		/* remove IOLCK from the table */
 		if(thread->vmm_info.tbl_node.next == NULL)
             vmm_set_flags(thread->task_id, (ADDR)PHYSICAL2LINEAR(vmm_get_tbl_physical(thread->task_id, thread->vmm_info.fault_address)), TRUE, TAKEN_EFLAG_IOLOCK, FALSE);
-        removeRedBlackTree(&task->vmm_info.tbl_wait_root, &thread->vmm_info.tbl_node); // remove al threads waiting for the page from the tree
+        rb_remove(&task->vmm_info.tbl_wait_root, &thread->vmm_info.tbl_node); // remove al threads waiting for the page from the tree
         thread->vmm_info.tbl_node.next = NULL;
 	}
 }

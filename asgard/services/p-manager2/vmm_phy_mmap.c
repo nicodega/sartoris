@@ -25,6 +25,33 @@
 #include "taken.h"
 #include "task_thread.h"
 #include "kmalloc.h"
+#include "rb.h"
+#include "loader.h"
+
+UINT32 check_low;
+UINT32 check_high;
+int result;
+int cexclusive;
+
+void wmm_phy_checkpf(rbnode *n)
+{
+    struct pm_thread *thread = thr_get(n->value2);
+
+    if(n->value >= check_low && n->value < check_high && (thread->flags & (THR_FLAG_PAGEFAULT | THR_FLAG_PAGEFAULT_TBL)))
+        result = 1;
+}
+
+BOOL wmm_phy_overlaps(rbnode *n)
+{
+    struct vmm_phymap_descriptor *pmap = MAREA2PHYMDESC(n);
+
+    if(pmap->exclusive || cexclusive)
+    {
+        result = 1;
+        return FALSE;
+    }
+    return TRUE;
+}
 
 /*
 This function will map a physical address range to the task address space.
@@ -36,8 +63,7 @@ BOOL vmm_phy_mmap(struct pm_task *task, ADDR py_start, ADDR py_end, ADDR lstart,
 	UINT32 laddr = TRANSLATE_ADDR(lstart, UINT32);
 	UINT32 pg_addr;
 	struct taken_entry *tentry = NULL;
-	struct vmm_phymap_descriptor *pmap = NULL, *gpmap = NULL;
-	struct vmm_memory_region *mreg, *mregit;
+	struct vmm_phymap_descriptor *pmap = NULL;
 	ADDR pg_tbl = NULL, pg = NULL;
 	struct vmm_page_table *tbl = NULL;
 	UINT32 maps = 0;
@@ -47,34 +73,41 @@ BOOL vmm_phy_mmap(struct pm_task *task, ADDR py_start, ADDR py_end, ADDR lstart,
 	struct vmm_pman_assigned_record *assigned = NULL;
 
 	/* Check address is not above max_addr */
-	if(task->vmm_info.max_addr <= (UINT32)lend)
-	{
-		return FALSE;
-	}
-
-	if((UINT32)lstart % 0x1000 != 0 || ((UINT32)lend) % 0x1000 != 0)
+	if((task->vmm_info.max_addr <= (UINT32)lend)
+        || ((UINT32)lstart % 0x1000 != 0 || ((UINT32)lend) % 0x1000 != 0)
+        || ((UINT32)py_start < FIRST_PAGE(PMAN_POOL_PHYS) && (UINT32)py_start > 0x1000))
 		return FALSE;
 
-	if((UINT32)py_start % 0x1000 != 0 || ((UINT32)py_end) % 0x1000 != 0)
-		return FALSE;
-
-	/* Check it's not too low. */
-	if((UINT32)py_start < FIRST_PAGE(PMAN_POOL_PHYS) && (UINT32)py_start > 0x1000)
-		return FALSE;
-	
-	lstart = TRANSLATE_ADDR(lstart, ADDR);
+    lstart = TRANSLATE_ADDR(lstart, ADDR);
 	lend = TRANSLATE_ADDR(lend, ADDR);
 
+    // check lstart and lend are "safe" to map
+    if(loader_collides(task, lstart, lend))
+        return FALSE;
+
+    // check there are no other memory regions overlapping on the same task
+    if(ma_collition(&task->regions, py_start, py_end))
+        return FALSE;
+    	
+	
 	/* Check a thread is not page faulting on the region */
-	thread = task->first_thread;
+    check_low = (UINT32)laddr;
+    check_high = (UINT32)lend;
+    result = 0;
+    rb_inorder(&task->wait_root, wmm_phy_checkpf);
 
-	while(thread != NULL)
-	{
-		if((thread->flags & (THR_FLAG_PAGEFAULT | THR_FLAG_PAGEFAULT_TBL)) && PG_ADDRESS(thread->vmm_info.fault_address) >= (UINT32)laddr && PG_ADDRESS(thread->vmm_info.fault_address) < (UINT32)lend)
-			return FALSE;
-		thread = thread->next_thread;
-	}
+    if(result)
+        return FALSE;
+    
+    // Check if it's already mapped to another task (or the same?)
+    ma_node *n = ma_collition(&vmm.phy_mem_areas, py_start, py_end);
+    result = 0;
+    cexclusive = exclusive;
+    ma_overlaps(&vmm.phy_mem_areas, py_start, py_end, wmm_phy_overlaps);
 
+    if(result)
+        return FALSE;
+    
 	/* 
 	Check if required physical range is mappeable.
 	
@@ -84,7 +117,7 @@ BOOL vmm_phy_mmap(struct pm_task *task, ADDR py_start, ADDR py_end, ADDR lstart,
 	*/
 	while(pstart < pend)
 	{
-		tentry = vmm_taken_get((ADDR)pstart);
+		tentry = vmm_taken_get((ADDR)PHISICAL2LINEAR(pstart));
 
 		if(tentry->data.b_pg.taken == 1)
 		{
@@ -93,35 +126,13 @@ BOOL vmm_phy_mmap(struct pm_task *task, ADDR py_start, ADDR py_end, ADDR lstart,
 				return FALSE;	// taken and cannot be mapped
 			}
 
-			if(tentry->data.b_pg.flags & TAKEN_PG_FLAG_PHYMAP)
-			{
-				/* Check physical mapping. Make sure it's not exclusive. */
-				pmap = (struct vmm_phymap_descriptor*)vmm.region_descriptors.first;
-
-				while(pmap != NULL)
-				{
-					if(pmap->type == VMM_MEMREGION_MMAP && (UINT32)pmap->py_start <= (UINT32)py_start && (UINT32)pmap->py_end >= (UINT32)py_end)
-					{
-						/* Already mapped on exclusive mode? */
-						if(pmap->exclusive || exclusive)
-							return FALSE;
-
-						maps++;
-
-						if(maps > 1) return FALSE;	// If there are more than 1 mappings fail
-
-						gpmap = pmap;
-						break;
-					}
-				}
-			}
-			else if(!(tentry->data.b_pg.flags & TAKEN_PG_FLAG_SHARED))
+			if(!(tentry->data.b_pg.flags & TAKEN_PG_FLAG_SHARED) && !(tentry->data.b_pg.flags & TAKEN_PG_FLAG_PHYMAP))
 			{
 				/* 
 				It's being used by a task but not physically mapped or shared... Unmap it!! :@
 				NOTE: If a thread was working on this page, it'll page fault wen runned again.
 				*/
-				assigned = &vmm.assigned_dir.table[PM_LINEAR_TO_DIR(PHYSICAL2LINEAR(pstart + (UINT32)SARTORIS_PROCBASE_LINEAR))]->entries[PM_LINEAR_TO_TAB(PHYSICAL2LINEAR(pstart + (UINT32)SARTORIS_PROCBASE_LINEAR))];
+				assigned = &vmm.assigned_dir.table[PM_LINEAR_TO_DIR(PHYSICAL2LINEAR(TRANSLATE_ADDR(pstart)))]->entries[PM_LINEAR_TO_TAB(PHYSICAL2LINEAR(TRANSLATE_ADDR(pstart)))];
 
                 if(tsk_get(assigned->task_id) == NULL) return 0;
 
@@ -135,19 +146,15 @@ BOOL vmm_phy_mmap(struct pm_task *task, ADDR py_start, ADDR py_end, ADDR lstart,
 				pg_addr = PG_ADDRESS(PHYSICAL2LINEAR(ptbl->pages[tentry->data.b_pg.tbl_index].entry.phy_page_addr));
 				
 				/* Page out from task */
-				page_out(assigned->task_id, (ADDR)(assigned->dir_index * 0x400000 + tentry->data.b_pg.tbl_index * 0x1000), 2);
+				page_out(assigned->task_id, (ADDR)(assigned->dir_index * 0x400000 + tentry->data.b_pg.tbl_index * PAGE_SIZE), 2);
 
 				/* Put page on VMM */
 				vmm_put_page((ADDR)pg_addr);
 			}
 		}
-		pstart += 0x1000;
+		pstart += PAGE_SIZE;
 	}
 
-	/*
-	TODO: I should check task won't attempt to map on an executable mapped area.
-	*/
-		
 	/* Check task address space can be mapped. */
 	while(laddr < (UINT32)lend)
 	{
@@ -178,27 +185,12 @@ BOOL vmm_phy_mmap(struct pm_task *task, ADDR py_start, ADDR py_end, ADDR lstart,
 		{
 			return FALSE;	// page table is swapped
 		}
-		laddr += 0x1000;
+		laddr += PAGE_SIZE;
 	}
-
-	/*
-	Check there is no other memory region overlapping.
-	*/
-	mregit = task->vmm_info.regions.first;
-
-	while(mregit != NULL)
-	{
-		if( (lstart <= mregit->tsk_lstart && lend >= mregit->tsk_lstart) 
-			|| (lstart <= mregit->tsk_lend && lend >= mregit->tsk_lstart) )
-		{
-			return FALSE;
-		}
-
-		mregit = mregit->next;
-	}
-
+    
 	/* 
-	Ok, memory range is available... great! lets have those physical pages!! 
+	Ok, memory range is available (both physical and linear)... 
+    great! lets have those physical pages!! 
 	*/
 	laddr = (UINT32)lstart;
 	pstart = PHYSICAL2LINEAR(py_start);
@@ -237,31 +229,62 @@ BOOL vmm_phy_mmap(struct pm_task *task, ADDR py_start, ADDR py_end, ADDR lstart,
 		lstart = (ADDR)((UINT32)lstart + 0x1000);
 	}
 
-	/* Create descriptor if it does not exists. */
-	if(gpmap == NULL || (gpmap->py_end != py_end || gpmap->py_start != py_start))
-	{
-		gpmap = (struct vmm_phymap_descriptor*)kmalloc(sizeof(struct vmm_phymap_descriptor));
-		gpmap->id = vmm_regiondesc_getid();
-		gpmap->exclusive = exclusive;
-		gpmap->py_start = py_start;
-		gpmap->py_end = py_end;
-		gpmap->references = 0;
+    // is there a physical map descripto with exactly the same bounds?
+    n = ma_search(&vmm.phy_mem_areas, py_start, py_end);
 
-		vmm_regiondesc_add(gpmap);
+    mreg = (struct vmm_memory_region*)kmalloc(sizeof(struct vmm_memory_region));
+    mreg->next = NULL;
+    mreg->prev = NULL;
+
+    if(!mreg)
+        return FALSE;
+
+    // find a free if for the memory region
+    if(!rb_free_value(task->regions_id, &mreg->tsk_id_node.value))
+	{
+		kfree(mreg);
+		return FALSE;
+	}
+    
+    if(n)
+    {
+        pmap = MAREA2PHYMDESC(n);
+
+        mreg->next = pmap->regions;
+        mreg->prev = NULL;
+        pmap->regions->prev = mreg;
+        pmap->regions = mreg;
+    }
+    else
+    {
+		pmap = (struct vmm_phymap_descriptor*)kmalloc(sizeof(struct vmm_phymap_descriptor));
+
+        if(!pmap)
+        {
+            kfree(mreg);
+            return FALSE;
+        }
+
+		pmap->exclusive = exclusive;
+		pmap->area.low = py_start;
+		pmap->area.high = py_end;
+		pmap->references = 0;
+
+        // insert the descriptor on the global structure
+		ma_insert(&vmm.phy_mem_areas, &pmap->area);
 	}
 
-	gpmap->references++;
+	pmap->references++;
 
 	/* Add task region */
-	mreg = (struct vmm_memory_region*)kmalloc(sizeof(struct vmm_memory_region));
-
-	mreg->descriptor = gpmap;
+	mreg->descriptor = pmap;
 	mreg->flags = VMM_MEM_REGION_FLAG_NONE | ((exclusive)? VMM_MEM_REGION_FLAG_EXCLUSIVE : VMM_MEM_REGION_FLAG_NONE);
-	mreg->tsk_lstart = (ADDR)laddr;
-	mreg->tsk_lend = lend;
+	mreg->tsk_node.low = (ADDR)laddr;
+	mreg->tsk_node.high = lend;
 	mreg->type = VMM_MEMREGION_MMAP;
 	
-	vmm_region_add(task, mreg);
+	rb_insert(&task->regions_id, &mreg->tsk_id_node);
+    ma_insert(&task->regions, &mreg->tsk_node);
 	
 	return TRUE;
 }
@@ -275,14 +298,18 @@ void vmm_phy_umap(struct pm_task *task, ADDR lstart)
 	
 	lstart = TRANSLATE_ADDR(lstart, ADDR);
 
-	mreg = vmm_region_get(task, (UINT32)lstart);
+    ma_node *n = rb_search_low(&task->regions);
 
-	if(mreg == NULL) return;
+    if(!n) return;
+
+	mreg = VMM_MEMREG_MEMA2MEMR(n);
+
+	if(mreg->type != VMM_MEMREGION_MMAP) return;
 
 	pmap = (struct vmm_phymap_descriptor*)mreg->descriptor;
 
 	/* Unmap from task address space. */
-	for(offset = (UINT32)mreg->tsk_lstart; offset < (UINT32)mreg->tsk_lend; offset += 0x1000)
+	for(offset = (UINT32)mreg->tsk_lstart; offset < (UINT32)mreg->tsk_lend; offset += PAGE_SIZE)
 	{
 		/* Page-Out from task address space */
 		page_out(task->id, (ADDR)offset, 2);
@@ -297,17 +324,36 @@ void vmm_phy_umap(struct pm_task *task, ADDR lstart)
 	if(pmap->references == 0)
 	{
 		/* Remove region descriptor */
-		vmm_regiondesc_remove(pmap);
+		a_remove(&vmm.phy_mem_areas, &pmap->area);
 
 		kfree(pmap);
 	}
+    else
+    {
+        // remove from regions list
+        if(mreg->prev == NULL)
+        {
+            pmap->regions = mreg->next;
+            if(pmap->regions)
+                pmap->regions->prev = NULL;
+        }
+        else if(mreg->next == NULL)
+        {
+            mreg->prev->next = NULL;
+        }
+        else
+        {
+            mreg->prev->next = mreg->next;
+            mreg->next->prev = mreg->prev;
+        }
+    }
 
 	/* Remove region from task. */
-	vmm_region_remove(task, mreg);
+	rb_remove(&task->regions_id, &mreg->tsk_id_node);
+    ma_remove(&task->regions, &mreg->tsk_node);
 
 	kfree(mreg);
 
-	pmap = NULL;
 	return;
 }
 
