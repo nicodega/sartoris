@@ -204,6 +204,12 @@ int ret_from_int(void)
     result = FAILURE;
     
     x = mk_enter(); /* enter critical block */
+
+    if(curr_state->sflags & SFLAG_RUN_INT)
+    {
+        arch_thread_int_ret();
+        return;
+    }
     
     if (int_stack_pointer > 0) 
 	{

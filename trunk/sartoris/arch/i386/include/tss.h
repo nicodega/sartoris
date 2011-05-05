@@ -39,6 +39,8 @@ struct tss
 };
 
 #define SFLAG_MMXFPU_STORED     0x1     // thread has MMX/FPU/SSE state stored
+#define SFLAG_SSE               0x2     // SSE, SSE2 and SSE3
+#define SFLAG_RUN_INT           0x4     // thread is runing a software interrupt
 
 /* Now we use a custom state management structure for threads  */
 struct thr_state

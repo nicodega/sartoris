@@ -24,6 +24,9 @@ global destroy_thread_c
 extern run_thread
 global run_thread_c
 
+extern run_thread_int
+global run_thread_int_c
+
 extern set_thread_run_perms
 global set_thread_run_perms_c
 
@@ -324,6 +327,12 @@ run_thread_c:
 	mov edx, 1
 	call do_syscall
 	retf 4
+
+run_thread_int_c:
+	mov ecx, run_thread_int
+	mov edx, 3
+	call do_syscall
+	retf 12
 	
 ;; int stack manipulation
 push_int_c:
