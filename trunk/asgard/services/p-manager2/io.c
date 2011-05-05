@@ -797,16 +797,14 @@ BOOL io_slot_begin_write(UINT32 possition, ADDR ptr, UINT32 ioslot_id)
 	return TRUE;
 }
 
-BOOL io_begin_takeover(struct fsio_event_source *iosrc, UINT32 fileid, UINT16 task)
+BOOL io_begin_takeover(struct fsio_event_source *iosrc, UINT32 fileid, ADDR fmap_desc, UINT16 task)
 {
 	struct stdfss_takeover msg_tko;
-	struct vmm_fmap_descriptor *fm = NULL;
 
 	/* Issue a takeover command to OFS Service */
 	switch(iosrc->type)
 	{
 		case FILE_IO_FMAP:
-			fm = (struct vmm_fmap_descriptor*)vmm_regiondesc_get(iosrc->id, VMM_MEMREGION_FMAP);
 		
 			/* Check if this source has pending IO */
 			if(iosrc->flags & IOEVT_FLAG_WAITING_RESPONSE) return FALSE;
@@ -815,7 +813,7 @@ BOOL io_begin_takeover(struct fsio_event_source *iosrc, UINT32 fileid, UINT16 ta
 			iosrc->smo = -1;
 
 			msg_tko.command   = STDFSS_TAKEOVER;
-			msg_tko.thr_id    = fm->id;
+			msg_tko.thr_id    = ((struct vmm_fmap_descriptor)fmap_desc)->id;
 			msg_tko.ret_port  = FMAP_IO_PORT;
 			msg_tko.file_id = fileid;
 			msg_tko.task_id = task;
