@@ -30,7 +30,7 @@
 #include "taken.h"
 #include "task_thread.h"
 #include <services/pmanager/services.h>
-
+#include "vmm_reg_rb.h"
 
 void calc_mem(struct multiboot_info *mbinf);
 
@@ -198,9 +198,9 @@ INT32 vmm_init(struct multiboot_info *multiboot, UINT32 ignore_start, UINT32 ign
     
 	vmm_swap_init();
     
-	/* Initialize memory regions. */
-	vmm.region_descriptors.first = NULL;
-	vmm.region_descriptors.total = 0;
+    /* Initialize region trees */
+    rb_init(&vmm.fmap_descriptors);
+    vmm.phy_mem_descriptors = NULL;
 
 	pman_print("VMM: Init Finished");
 
@@ -572,7 +572,10 @@ void vmm_put_page(ADDR page_laddress)
 
 	vmm.available_mem++;
 }
+
 // claim a task address space completely
+// NOTE: this function should be invoked after vmm_close_task
+// has finished.
 void vmm_claim(UINT16 task)
 {
 	struct vmm_page_directory *dir = NULL;
@@ -698,35 +701,34 @@ BOOL vmm_can_load(struct pm_task *tsk)
 void vmm_close_task(struct pm_task *task)
 {
 	/* Remove Shared and Physically mapped regions */
-	struct vmm_memory_region *mreg = task->vmm_info.regions.first;
+	struct vmm_memory_region *mreg;
 	struct vmm_memory_region *next = NULL; 
 
-	while(mreg != NULL)
-	{
-		next = mreg->next;
+    while(task->regions)
+    {
+        mreg = VMM_MEMREG_MEMA2MEMR(task->regions);
 
-		if(mreg->type != VMM_MEMREGION_FMAP)
+        struct vmm_region_descriptor *des = (struct vmm_region_descriptor*)mreg->descriptor;
+
+		/* Free region */
+        if(mreg->type == VMM_MEMREGION_FMAP)
 		{
-			struct vmm_region_descriptor *des = (struct vmm_region_descriptor*)mreg->descriptor;
-
-			des->references--;
-
-			if(des->references == 0)
-			{
-				/* Free region */
-				if(mreg->type == VMM_MEMREGION_MMAP)
-				{
-					vmm_phy_umap(task, mreg->tsk_lstart);
-				}
-				else
-				{
-					vmm_share_remove(task, mreg);
-				}
-			}
+            // this will be processed async
+            vmm_fmap_task_closing(task, mreg);
+            return;
 		}
-		mreg = next;
-	}
-        
+		else if(mreg->type == VMM_MEMREGION_MMAP)
+		{
+			vmm_phy_umap(task, mreg->tsk_lstart);
+		}
+		else
+		{
+			vmm_share_remove(task, mreg);
+		}
+
+        ma_remove(&task->regions, task->regions);
+    }
+            
     // if there are threads from other task waiting for a page
     // from this task, we will have to wake them when the task is destroyed
 
@@ -746,8 +748,11 @@ void vmm_init_task_info(struct task_vmm_info *vmm_info)
 	vmm_info->swap_read_smo = -1;
 	vmm_info->regions.first = NULL;
 	vmm_info->regions.total = 0;
-    vmm_info->wait_root = NULL;
-    vmm_info->tbl_wait_root = NULL;
+    rb_init(&vmm_info->regions_id);
+    vmm_info->shared = NULL;
+    vmm_info->regions = NULL;
+    rb_init(&vmm_info->wait_root);
+    rb_init(&tbl_wait_root);
 }
 
 void vmm_init_thread_info(struct pm_thread *thread)
