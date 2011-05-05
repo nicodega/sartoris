@@ -117,14 +117,24 @@ struct vmm_pman_assigned_directory
 } PACKED_ATT;
 
 /* Memory regions for tasks. */
+/*
+This structures will be kept on a tree in the task struct
+*/
+#define VMM_MEMREG_IDNODE2REG(a) ((struct vmm_memory_region*)((unsigned int)a - ((sizeof(struct vmm_memory_region) - sizeof(rbnode)))))
+// This define returns a pointer to a memory regions, based on it's tsk_node.
+#define VMM_MEMREG_MEMA2MEMR(a) ((struct vmm_memory_region*)(VMM_MEMREG_IDNODE2REG(a) + sizeof(ma_node)))
+
 struct vmm_memory_region
 {
-	ADDR tsk_lstart;		// This is where memory region begins (linear)
-	ADDR tsk_lend;			// This is where memory region ends (non inclusive)(linear)
-	UINT16 type;			// Memory region type: SHARED, FMAP, MMAP
-	UINT16 flags;			// Exclusive, write, execute, etc
-	ADDR descriptor;		// A typed memory region descriptor. 
-	struct vmm_memory_region *next;		// Next on task list
+    UINT16 owner_task;      // This is only used on shared areas
+	UINT16 type;            // Memory region type: SHARED, FMAP, MMAP
+	UINT16 flags;           // Exclusive, write, execute, etc
+	ADDR descriptor;        // The typed global memory region descriptor to which this memory regions belongs.
+                            // NOTE: Many memory regions might contain the same descriptor.
+	ma_node tsk_node;       // Node on task memory areas
+    rbnode tsk_id_node;     // Node on task memory regions by id tree
+    struct vmm_memory_region *next; // on the descriptor "regions" list
+    struct vmm_memory_region *prev; // on the descriptor "regions" list
 } PACKED_ATT;
 
 /* Memory region Types */
@@ -138,35 +148,26 @@ struct vmm_memory_region
 #define VMM_MEM_REGION_FLAG_WRITE		2
 #define VMM_MEM_REGION_FLAG_EXECUTE		3
 
-/* An ordered list of memory regions. (should be a tree or something like that) */
-struct vmm_memory_regions_list
-{
-	struct vmm_memory_region *first;	// First region.
-	UINT32 total;						// Total regions.
-} PACKED_ATT;
-
-/* Region Descriptors definition */
-struct vmm_region_descriptor
-{
-	UINT16 id;					
-	UINT16 references;						
-	UINT16 type;							
-	struct vmm_region_descriptor *next;
-	struct vmm_region_descriptor *prev;
-} PACKED_ATT; 
-
+/*
+Generic descriptor
+*/
+struct vmm_descriptor
+{					
+	struct vmm_memory_region *regions;  // memory regions referencing this descriptor
+};
 
 /* 
 File Mapping Regions descriptor. 
 */
-struct vmm_fmap_descriptor
-{
-	UINT16 id;					
-	UINT16 references;						
-	UINT16 type;							
-	struct vmm_region_descriptor *next;
-	struct vmm_region_descriptor *prev;
 
+#define MEMREGNODE2FMAPDESC(a) ((struct vmm_fmap_descriptor*)(VMM_MEMREG_IDNODE2REG(a)->descriptor))
+#define GNODE2FMAPDESC(a) ((struct vmm_fmap_descriptor*)((unsigned int)a - sizeof(struct vmm_fmap_descriptor) + sizeof(rbnode)))
+
+struct vmm_fmap_descriptor
+{					
+	struct vmm_memory_region *regions;  // memory regions referencing this descriptor
+    UINT16 references;
+    
 	UINT32 release_addr;				// Helper variable used on release
 	UINT32 offset;						// file offset
 	struct fsio_event_source iosrc;		// IO source for this descriptor
@@ -174,49 +175,41 @@ struct vmm_fmap_descriptor
 	UINT16 status;
 	UINT16 padding;
 	UINT16 creating_task;
+    rbnode gnode;                       // node on the global fmaps descriptor tree
 } PACKED_ATT;
 
 /* FMap descriptor status */
-#define VMM_FMAP_ACTIVE		1
-#define VMM_FMAP_CLOSING	2
+#define VMM_FMAP_ACTIVE            1
+#define VMM_FMAP_CLOSING           2
+#define VMM_FMAP_FLUSHING          3
+#define VMM_FMAP_CLOSING_RELEASE   4
 
 /* 
 Shared Pages Region Descriptor 
 */
+
+#define MAREA2SHAREDDESC(a) ((struct vmm_shared_descriptor*)((unsigned int)a - sizeof(struct vmm_shared_descriptor) + sizeof(ma_node)))
+
 struct vmm_shared_descriptor
 {
-	UINT16 id;					
-	UINT16 references;						
-	UINT16 type;							
-	struct vmm_region_descriptor *next;
-	struct vmm_region_descriptor *prev;
-
-	UINT16 owner_task;						// original owner of the page
-	ADDR shared_laddr_start;				// Linear address on child task
-	ADDR shared_laddr_end;
+	struct vmm_memory_region *regions;      // memory regions referencing this descriptor
+    UINT16 id;
+    UINT16 owner_task;					    // original owner of the page
+    struct vmm_memory_region *owner_region; // region representing this shared area on the owner task
 } PACKED_ATT;
 
 /* 
 Physical to linear mapping. (a task might require to map a given physical address to it's logical address) 
 */
+
+#define MAREA2PHYMDESC(a) ((struct vmm_phymap_descriptor*)((unsigned int)a - sizeof(struct vmm_phymap_descriptor) + sizeof(ma_node)))
+
 struct vmm_phymap_descriptor
 {
-	UINT16 id;					
-	UINT16 references;						
-	UINT16 type;	
-	BOOL exclusive;						  
-	struct vmm_region_descriptor *next;
-	struct vmm_region_descriptor *prev;
-
-	ADDR py_start;
-	ADDR py_end;
-} PACKED_ATT;
-
-/* Global Descriptors List */
-struct vmm_descriptors_list
-{
-	struct vmm_region_descriptor *first;
-	UINT16 total;
+	struct vmm_memory_region *regions;  // memory regions referencing this descriptor
+    int exclusive;                      // 1 if region is assiged exclusively.
+    int references;
+    ma_node area;                       // physical memory area on vmm phy_mem_areas
 } PACKED_ATT;
 
 struct thread_vmm_info;
@@ -234,10 +227,11 @@ struct task_vmm_info
 	UINT32 table_swap_addr;			/* Used when freing swap pages for the process. Holds swap address 
                                     for the last page table read from Swap Partition.                    */
 
-	struct vmm_memory_regions_list regions;		/* Task memory regions                                   */
-    rbt wait_root;                 /* This is the root of a red black tree with threads (not 
+	rbt regions_id;		            /* Task memory regions by id                                         */
+    memareas regions;               /* Task memory regions by linear address (fmaped or phy mapped)      */
+    rbt wait_root;                  /* This is the root of a red black tree with threads (not 
                                                necessarily threads from this task) waiting for pages.    */
-    rbt tbl_wait_root;             /* Red Black tree root of threads waiting for page tables.
+    rbt tbl_wait_root;              /* Red Black tree root of threads waiting for page tables.
                                                NOTE: If two threads are waiting for the same page, only 
                                                one of them will be on this tree.                         */
 } PACKED_ATT;
@@ -310,7 +304,9 @@ struct vmm_main
 	UINT32 swap_thr_distance;
 
 	/* Memory regions */
-	struct vmm_descriptors_list region_descriptors;
+    rbt      fmap_descriptors;    // each file will have a file id. This tree will contain all files taken by PMAN.
+    memareas phy_mem_areas;       // a structure with physical memory areas
+                                  // for telling if an area is already phy mapped.
 } vmm;
 
 void vmm_init_thread_info(struct pm_thread *thread);
@@ -439,7 +435,7 @@ struct pm_task *vmm_shared_getowner(struct pm_task *task, ADDR proc_laddr, ADDR 
 BOOL vmm_is_shared(struct pm_task *task, ADDR proc_laddr);
 void vmm_share_remove(struct pm_task *task, struct vmm_memory_region *mreg);
 BOOL vmm_share_create(struct pm_task *task, ADDR laddr, UINT32 length, UINT16 perms);
-BOOL vmm_share_map(UINT16 descriptor_id, struct pm_task *task, ADDR laddr, UINT32 length, UINT16 perms);
+BOOL vmm_share_map(UINT32 descriptor_id, struct pm_task *task, ADDR laddr, UINT32 length, UINT16 perms);
 
 
 /******************************************************************************************
@@ -504,13 +500,13 @@ Taken structure entry format:
 		If S is 1 this page is shared. index on table contains an index onto
 		an internal pman list of shared pages. 
 
-	Also the process manager table entry will be not marked as not present and the record will indicate the task/table index 
-	owning the page.
+	    Also the process manager table entry will be marked as not present and the record will indicate the task/table index 
+	    owning the page.
 
-		31   ...  12 | 11  ...   6 | 5 4 3 2 1 | 0
-		     Task    |  dir index  |   Flags   | N
+		    31   ...  12 | 11  ...   6 | 5 4 3 2 1 | 0
+		         Task    |  dir index  |   Flags   | N
 
-    N = 1 then Null record (page is present)
+        N = 1 then Null record (page is present)
 
 When a page table/ lvl 2 page is assigned to a task, its entry on the task's page dir/table will have the following format:
 
