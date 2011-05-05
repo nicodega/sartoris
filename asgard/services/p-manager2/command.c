@@ -472,7 +472,7 @@ void cmd_process_msg()
 				if(tsk->state == TSK_NORMAL)
 				{
 					tsk->command_inf.callback = cmd_finished__callback;
-					vmm_share_remove(tsk, (ADDR)vmm_region_get(tsk, ((struct pm_msg_share_mem_remove*)&msg)->start_addr));					
+                    vmm_share_remove(tsk, ((struct pm_msg_share_mem_remove*)&msg)->start_addr);					
 				}
 				else
 				{
