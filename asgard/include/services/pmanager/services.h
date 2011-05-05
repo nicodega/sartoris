@@ -300,10 +300,9 @@ struct pm_msg_mmap			   // PM_MMAP_CREATE
   short req_id;
   short response_port;
   unsigned int start_addr;
-  unsigned short perms;
-  unsigned short shared_mem_id;
+  unsigned int shared_mem_id;
   unsigned short length;
-  unsigned char padding;
+  unsigned char perms;
 } PACKED_ATT;
 
 struct pm_msg_mmap_remove     // PM_MMAP_REMOVE
