@@ -93,9 +93,9 @@ int arch_run_thread_int(int id, void *eip, void *stack)
 	if (page_dir_base == NULL) 
 		return FAILURE;
 
-	arch_switch_thread_int(GET_THRSTATE_ARCH(id), id, (unsigned int)page_dir_base);
+	arch_switch_thread_int(GET_THRSTATE_ARCH(id), id, (unsigned int)page_dir_base, eip, stack);
 #else
-	arch_switch_thread_int(GET_THRSTATE_ARCH(id), id, 0);
+	arch_switch_thread_int(GET_THRSTATE_ARCH(id), id, 0, eip, stack);
 #endif
 	return SUCCESS;
 }
