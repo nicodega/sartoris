@@ -5,6 +5,7 @@ bits 32
 
 global arch_switch_thread
 global arch_switch_thread_int
+global arch_is_soft_int
 global arch_detected_mmxfpu
 global mmx_state_owner
 
@@ -318,10 +319,18 @@ run_int_cont:
 ;; and will lead us here if the soft flag 
 ;; is set
 
-;; return from a fake interrupt
-;; void arch_thread_int_ret()
-;; ret from int should leave curr_state on ecx... 
-;; but lets load it anyway
+;;void arch_is_soft_int();
+arch_is_soft_int:
+	mov ecx, [curr_state]
+	mov eax, [ecx + thr_state.sflags]
+	and eax, SFLAG_RUN_INT
+	jz arch_is_soft_int_cont
+	xor eax, eax
+	ret
+arch_is_soft_int_cont:
+	call arch_thread_int_ret
+	mov eax, 1
+	ret	
 arch_thread_int_ret:
 	mov ecx, [curr_state]
 	;; when the target thread int handler 
