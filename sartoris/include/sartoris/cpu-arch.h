@@ -28,7 +28,7 @@ int arch_create_thread(int id, int priv, struct thread *thr);
 int arch_destroy_thread(int id, struct thread* thr);
 int arch_run_thread(int id);
 int arch_run_thread_int(int id, void *eip, void *stack);
-void arch_thread_int_ret();
+int arch_is_soft_int();
 
 int arch_create_int_handler(int number);
 int arch_destroy_int_handler(int number);
@@ -41,6 +41,8 @@ void arch_mem_cpy_words(int *src, int *dst, unsigned int len);
 void arch_mem_cpy_bytes(char *src, char *dst, unsigned int len);
 
 int arch_test_and_set(int *x, int value);
+
+int arch_req_pages();
 
 #ifdef PAGING
 
@@ -113,6 +115,3 @@ void arch_issue_page_fault(void);
 #endif
 
 #endif
-
-
-
