@@ -49,7 +49,7 @@ struct pm_task *vmm_shared_getowner(struct pm_task *task, ADDR proc_laddr, ADDR 
 	struct vmm_shared_descriptor *sdes = NULL;
 
 	/* Get memory region for this address */
-    ma_node *n = ma_search_point(&task->regions, proc_laddr);
+    ma_node *n = ma_search_point(&task->vmm_info.regions, (UINT32)proc_laddr);
 
     if(!n) return NULL;
 
@@ -75,7 +75,7 @@ BOOL vmm_is_shared(struct pm_task *task, ADDR proc_laddr)
 	struct vmm_memory_region *mreg = NULL;
 
 	/* Get memory region for this address */
-	ma_node *n = ma_search_point(&task->regions, proc_laddr);
+	ma_node *n = ma_search_point(&task->vmm_info.regions, (UINT32)proc_laddr);
 
     if(n == NULL) return FALSE;
 
@@ -95,11 +95,13 @@ void vmm_share_remove(struct pm_task *task, UINT32 lstart)
 	struct vmm_memory_region *cmreg = NULL, *next = NULL;
 	struct vmm_page_directory *pdir = NULL;
 	struct vmm_page_table *ptbl = NULL;
-	UINT32 lstart, lend, laddr;
+	UINT32 lend, laddr;
 	struct vmm_shared_descriptor *sdes;
 	UINT32 i = 0;
 
-    ma_node *mn = rb_search_low(&task->regions, lstart);
+	lstart = TRANSLATE_ADDR(lstart,UINT32);
+
+    ma_node *mn = rb_search_low(&task->vmm_info.regions, lstart);
 
     if(!mn) return;
 
@@ -115,7 +117,7 @@ void vmm_share_remove(struct pm_task *task, UINT32 lstart)
 		*/
 
         // remove memory region from the original owner
-        ma_remove(&task->regions, &sdes->owner_region->tsk_node);
+        ma_remove(&task->vmm_info.regions, &sdes->owner_region->tsk_node);
         kfree(sdes->owner_region);
 
         // promote the first child
@@ -132,8 +134,8 @@ void vmm_share_remove(struct pm_task *task, UINT32 lstart)
             // hmm now this area is no longer shared.. let's remove the shared marks
             // from the info field! (i.e. demote the pages to common pages, but let 
             // them paged in)
-            lstart = (UINT32)mreg->tsk_lstart;
-	        lend = (UINT32)mreg->tsk_lend;
+            lstart = (UINT32)mreg->tsk_node.low;
+	        lend = (UINT32)mreg->tsk_node.high;
 	
 	        pdir = task->vmm_info.page_directory;
 
@@ -153,7 +155,7 @@ void vmm_share_remove(struct pm_task *task, UINT32 lstart)
 	        }
 
             // remove the memory region from this task (it's no longer shared!)
-            ma_remove(&task->regions, &mreg->tsk_node);
+            ma_remove(&task->vmm_info.regions, &mreg->tsk_node);
             kfree(mreg);
         }
         return;
@@ -164,8 +166,8 @@ void vmm_share_remove(struct pm_task *task, UINT32 lstart)
     // with confidence and set all pages shared flag to
     // 0.
 
-	lstart = (UINT32)mreg->tsk_lstart;
-	lend = (UINT32)mreg->tsk_lend;
+	lstart = (UINT32)mreg->tsk_node.low;
+	lend = (UINT32)mreg->tsk_node.high;
 	
 	pdir = task->vmm_info.page_directory;
 
@@ -185,7 +187,7 @@ void vmm_share_remove(struct pm_task *task, UINT32 lstart)
 	}
 
 	/* Remove region from task */
-	ma_remove(&task->regions, &mreg->tsk_node);
+	ma_remove(&task->vmm_info.regions, &mreg->tsk_node);
     kfree(mreg);
 
     // we can safely remove the shared descriptor
@@ -230,7 +232,7 @@ BOOL vmm_share_create(struct pm_task *task, ADDR laddr, UINT32 length, UINT16 pe
 	laddr = TRANSLATE_ADDR(laddr, ADDR);
 
     /* Check if a region already exists on the same task, overlapping. */
-    ma_node *n = ma_collition(&task->regions, laddr, laddr + length);
+    ma_node *n = ma_collition(&task->vmm_info.regions, (UINT32)laddr, (UINT32)laddr + length);
 
     if(n)
     {
@@ -460,9 +462,10 @@ void vmm_shared_create_end(struct pm_task *task, struct vmm_shared_params *param
 	struct vmm_page_table *ptbl;
     BOOL idret = FALSE;
 
-    desc = (struct vmm_shared_descriptor*)kmalloc(sizeof(struct vmm_shared_descriptor));
-    mreg = (struct vmm_memory_region*)kmalloc(sizeof(struct vmm_memory_region));
-    idret = rb_free_value(&task->regions_id, &mreg->tsk_id_node.value);
+    struct vmm_shared_descriptor *desc = (struct vmm_shared_descriptor*)kmalloc(sizeof(struct vmm_shared_descriptor));
+    struct vmm_memory_region *mreg = (struct vmm_memory_region*)kmalloc(sizeof(struct vmm_memory_region));
+
+    idret = rb_free_value(&task->vmm_info.regions_id, &mreg->tsk_id_node.value);
 
     if(params->params[1] == params->params[0] && desc && mreg && idret)
     {
@@ -474,21 +477,21 @@ void vmm_shared_create_end(struct pm_task *task, struct vmm_shared_params *param
         mreg->owner_task = task->id;
 	    mreg->descriptor = desc;
 	    mreg->type = VMM_MEMREGION_SHARED;
-	    mreg->tsk_node.low = (ADDR)params->params[3];
-	    mreg->tsk_node.high = (ADDR)lend;
+	    mreg->tsk_node.low = params->params[3];
+	    mreg->tsk_node.high = lend;
 	    mreg->flags = params->params[4];
 
 	    desc->owner_region = mreg;
 
 	    /* Add region to the task */
-	    ma_insert(&task->regions, &mreg->tsk_node);
-        rb_insert(&task->regions_id, &mreg->tsk_id_node);
+	    ma_insert(&task->vmm_info.regions, &mreg->tsk_node);
+        rb_insert(&task->vmm_info.regions_id, &mreg->tsk_id_node, FALSE);
     }
     else
     {
         // undo what we have done so far 
-        lstart = (UINT32)params->param[3];
-	    lend = (UINT32)params->param[0];
+        lstart = (UINT32)params->params[3];
+	    lend = (UINT32)params->params[0];
 	
 	    pdir = task->vmm_info.page_directory;
 
@@ -514,7 +517,7 @@ void vmm_shared_create_end(struct pm_task *task, struct vmm_shared_params *param
 	kfree(params);
 
     /* schedule all threads again */
-	thr = task->first_thread;
+	struct pm_thread *thr = task->first_thread;
 
 	while(thr != NULL)
 	{
@@ -642,7 +645,7 @@ BOOL vmm_share_map(UINT32 descriptor_id, struct pm_task *task, ADDR laddr, UINT3
 		return FALSE;
 
     // check the region is valid
-    rbnode *n = rb_search(&otask->regions_id, (descriptor_id & 0x0000FFFF));
+    rbnode *n = rb_search(&otask->vmm_info.regions_id, (descriptor_id & 0x0000FFFF));
 
     if(!n) return FALSE;
 
@@ -652,11 +655,11 @@ BOOL vmm_share_map(UINT32 descriptor_id, struct pm_task *task, ADDR laddr, UINT3
 	desc = (struct vmm_shared_descriptor*)mreg->descriptor;
 	
 	/* Check size is ok. */
-	if(!desc || (UINT32)desc->shared_laddr_end - (UINT32)desc->shared_laddr_start < length) 
+	if(!desc || (UINT32)desc->owner_region->tsk_node.high - (UINT32)desc->owner_region->tsk_node.low < length) 
         return FALSE;
 	
 	/* Check there is an overlapping region on the task */
-	ma_node *n2 = ma_collition(&task->regions, laddr, laddr + length);
+	ma_node *n2 = ma_collition(&task->vmm_info.regions, (UINT32)laddr, (UINT32)laddr + length);
 
     if(n2)
         return FALSE;
@@ -717,8 +720,8 @@ UINT32 vmm_share_map_callback(struct pm_task *task, UINT32 ioret)
     mreg = (struct vmm_memory_region*)params->params[2];
 	desc = (struct vmm_shared_descriptor*)mreg->descriptor;
 
-	ostart = (UINT32)desc->shared_laddr_start;
-	oend = (UINT32)desc->shared_laddr_end;
+	ostart = (UINT32)desc->owner_region->tsk_node.low;
+	oend = (UINT32)desc->owner_region->tsk_node.high;
 
 	/* Free last swap address if not 0xFFFFFFFF */
 	if(last_swp != 0xFFFFFFFF)
@@ -855,12 +858,12 @@ UINT32 vmm_share_map_callback(struct pm_task *task, UINT32 ioret)
     mreg->owner_task = task->id;
 	mreg->descriptor = desc;
 	mreg->type = VMM_MEMREGION_SHARED;
-	mreg->tsk_node.low = (ADDR)params->params[4];
-	mreg->tsk_node.high = (ADDR)lend;
+	mreg->tsk_node.low = params->params[4];
+	mreg->tsk_node.high = lend;
 	mreg->flags = params->params[5]; 
 
 	/* Add region to the task */
-	ma_insert(&task->regions, mreg);
+	ma_insert(&task->vmm_info.regions, &mreg->tsk_node);
 
     /* Add region to descriptor regions */
     mreg->next = desc->regions;

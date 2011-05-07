@@ -39,15 +39,15 @@ UINT32 vmm_region_pageperms(struct vmm_memory_region *mreg)
 }
 
 /*
-Get a memory region from a descriptor.
+Get a memory region from a descriptor for a given task.
 */
-struct vmm_memory_region *vmm_region_get_bydesc(struct vmm_descriptor *descriptor)
+struct vmm_memory_region *vmm_region_get_bydesc(struct pm_task *task, struct vmm_descriptor *descriptor)
 {
 	struct vmm_memory_region *mreg = descriptor->regions;
 
 	while(mreg != NULL)
 	{
-		if(mreg->descriptor == desc)
+		if(mreg->owner_task == task->id)
 		{
 			break;
 		}

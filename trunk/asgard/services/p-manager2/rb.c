@@ -118,12 +118,12 @@ int rb_insert(rbt *t, rbnode *n, BOOL insert_only_if_found)
 	}
 
     // fix max and min
-    if(!min)
-        min = max = n;
-    else if(min->value > n->value)
-        min = n;
-    else if(max->value < n->value)
-        max = n;
+    if(!t->min)
+        t->min = t->max = n;
+    else if(t->min->value > n->value)
+        t->min = n;
+    else if(t->max->value < n->value)
+        t->max = n;
     
     // fix the tree
 	rb_insertFixup(t, n);
@@ -389,12 +389,12 @@ void rb_remove(rbt *t, rbnode *n)
         /* Replace and remove if found */
         if ( f != NULL ) 
         {
-            if(min == f && max == f)
-                min = max = n->parent;
-            else if(min == f)
-                min = n->parent;
-            else if(max == f)
-                max = n->parent;
+            if(t->min == f && t->max == f)
+                t->min = t->max = n->parent;
+            else if(t->min == f)
+                t->min = n->parent;
+            else if(t->max == f)
+                t->max = n->parent;
 
             // remove every thread from the list.
             s = f->next;
@@ -441,9 +441,9 @@ BOOL rb_free_value(rbt *t, UINT32 *value)
 			    while(n)
                 {
 				    if(n->link[0])
-					    n->link[0].color &= ~3;
-				    if n->link[1] 
-					    n->link[1].color &= ~3;
+					    n->link[0]->color &= ~3;
+				    if(n->link[1])
+					    n->link[1]->color &= ~3;
 				    n->color &= ~3;
 				    n = n->parent;
                 }
@@ -494,7 +494,7 @@ and invoking the callback for each node.
 */
 void rb_inorder(rbt *t, void (*callback)(rbnode *n))
 {
-    n = t->min;
+    rbnode *n = t->min;
     BOOL fromLeft = 0;
 
     while(n)
@@ -508,9 +508,9 @@ void rb_inorder(rbt *t, void (*callback)(rbnode *n))
                 while(n)
                 {
 				    if(n->link[0])
-					    n->link[0].color &= ~3;
-				    if n->link[1] 
-					    n->link[1].color &= ~3;
+					    n->link[0]->color &= ~3;
+				    if(n->link[1])
+					    n->link[1]->color &= ~3;
 				    n->color &= ~3;
 				    n = n->parent;
                 }

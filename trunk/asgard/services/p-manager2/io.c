@@ -394,7 +394,14 @@ void io_process_msg()
 		if (get_msg(FMAP_IO_PORT, &fs_res, &sender_task_id ) == SUCCESS) 
 		{
 			/* Get iodesc */
-			fm = (struct vmm_fmap_descriptor*)vmm_regiondesc_get(fs_res.thr_id, VMM_MEMREGION_FMAP);
+			rbnode *n = rb_search(&vmm.fmap_descriptors, fs_res.thr_id);
+
+			if(!n)
+			{
+				count--;
+				continue;
+			}
+			fm = GNODE2FMAPDESC(n);
 			iosrc = &fm->iosrc; 
 
 			if(!(iosrc->flags & IOEVT_FLAG_WAITING_RESPONSE))
@@ -813,7 +820,7 @@ BOOL io_begin_takeover(struct fsio_event_source *iosrc, UINT32 fileid, ADDR fmap
 			iosrc->smo = -1;
 
 			msg_tko.command   = STDFSS_TAKEOVER;
-			msg_tko.thr_id    = ((struct vmm_fmap_descriptor)fmap_desc)->id;
+			msg_tko.thr_id    = ((struct vmm_fmap_descriptor*)fmap_desc)->gnode.value;
 			msg_tko.ret_port  = FMAP_IO_PORT;
 			msg_tko.file_id = fileid;
 			msg_tko.task_id = task;
@@ -833,12 +840,18 @@ BOOL io_begin_release(struct fsio_event_source *iosrc)
 {
 	struct stdfss_return msg_return;
 	struct vmm_fmap_descriptor *fm = NULL;
+	rbnode *n;
 
 	/* Issue a return command to OFS Service */
 	switch(iosrc->type)
 	{
 		case FILE_IO_FMAP:
-			fm = (struct vmm_fmap_descriptor*)vmm_regiondesc_get(iosrc->id, VMM_MEMREGION_FMAP);
+			/* Get iodesc */
+			n = rb_search(&vmm.fmap_descriptors, iosrc->id);
+
+			if(!n) return FALSE;
+
+			fm = GNODE2FMAPDESC(n);
 
 			/* Check if this source has pending IO */
 			if(iosrc->flags & IOEVT_FLAG_WAITING_RESPONSE)
@@ -848,7 +861,7 @@ BOOL io_begin_release(struct fsio_event_source *iosrc)
 			iosrc->smo = -1;
 
 			msg_return.command   = STDFSS_RETURN;
-			msg_return.thr_id    = fm->id;
+			msg_return.thr_id    = fm->gnode.value;
 			msg_return.ret_port  = FMAP_IO_PORT;
 			msg_return.file_id = iosrc->file_id;
 

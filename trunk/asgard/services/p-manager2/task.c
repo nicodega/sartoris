@@ -85,8 +85,6 @@ struct pm_task *tsk_create(UINT16 id)
 	io_init_event(&t->io_finished, &t->io_event_src);
 	t->swp_io_finished.callback = NULL;
     
-	t->vmm_info.regions.first = NULL;
-	t->vmm_info.regions.total = 0;
 	t->killed_threads = 0;
 
     return t;

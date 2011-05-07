@@ -6,7 +6,8 @@ CXXFLAGS+= -I"../include"
 
 dependencies = sprintf.d printf.d init.d debug.d iolib.d format.d dirlib.d m_malloc.d critical_section.d io.d signals.d bmalloc.d new.d
 
-baseobjects = proc_entry.o start.o int.o reboot.o scheduler.o sprintf.o printf.o init.o debug.o iolib.o format.o dirlib.o structures parameters.o critical_section.o m_malloc.o pm_malloc.o bmalloc.o pbmalloc.o rawpiolib.o io.o signals.o psignals.o new.o
+baseobjects = proc_entry.o start.o int.o reboot.o scheduler.o sprintf.o printf.o init.o debug.o iolib.o format.o dirlib.o structures parameters.o \
+critical_section.o m_malloc.o pm_malloc.o bmalloc.o pbmalloc.o rawpiolib.o io.o signals.o psignals.o new.o
 
 all : $(baseobjects) stdlibcpp.o stdlib.o malloc.o
 	
@@ -64,7 +65,7 @@ clean :
 include ../include/dep_attach.mk
 
 stdlib_libs = start.o proc_entry.o init.o ./../klib/kserv-user.o int.o scheduler.o sprintf.o printf.o piolib.o dirlib.o ./pmalloc.o ./structures/string.o ./structures/int64.o \
-./structures/list.o ./structures/stdlibsim.o ./structures/int64.o debug.o ../drivers/screen/screen.o ./parameters.o
+./structures/list.o ./structures/stdlibsim.o debug.o ../drivers/screen/screen.o ./parameters.o
 
 stdlib.o : $(stdlib_libs)
 	$(LD) -i $(stdlib_libs) --Map stdlib.map  -o stdlib.o

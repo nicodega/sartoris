@@ -41,7 +41,7 @@ void wmm_phy_checkpf(rbnode *n)
         result = 1;
 }
 
-BOOL wmm_phy_overlaps(rbnode *n)
+BOOL wmm_phy_overlaps(ma_node *n)
 {
     struct vmm_phymap_descriptor *pmap = MAREA2PHYMDESC(n);
 
@@ -71,6 +71,7 @@ BOOL vmm_phy_mmap(struct pm_task *task, ADDR py_start, ADDR py_end, ADDR lstart,
 	struct vmm_page_directory *pdir = NULL;
 	struct vmm_page_table *ptbl = NULL;
 	struct vmm_pman_assigned_record *assigned = NULL;
+	struct vmm_memory_region *mreg;	
 
 	/* Check address is not above max_addr */
 	if((task->vmm_info.max_addr <= (UINT32)lend)
@@ -86,7 +87,7 @@ BOOL vmm_phy_mmap(struct pm_task *task, ADDR py_start, ADDR py_end, ADDR lstart,
         return FALSE;
 
     // check there are no other memory regions overlapping on the same task
-    if(ma_collition(&task->regions, py_start, py_end))
+    if(ma_collition(&task->vmm_info.regions, (UINT32)py_start, (UINT32)py_end))
         return FALSE;
     	
 	
@@ -94,16 +95,16 @@ BOOL vmm_phy_mmap(struct pm_task *task, ADDR py_start, ADDR py_end, ADDR lstart,
     check_low = (UINT32)laddr;
     check_high = (UINT32)lend;
     result = 0;
-    rb_inorder(&task->wait_root, wmm_phy_checkpf);
+    rb_inorder(&task->vmm_info.wait_root, wmm_phy_checkpf);
 
     if(result)
         return FALSE;
     
     // Check if it's already mapped to another task (or the same?)
-    ma_node *n = ma_collition(&vmm.phy_mem_areas, py_start, py_end);
+    ma_node *n = ma_collition(&vmm.phy_mem_areas, (UINT32)py_start, (UINT32)py_end);
     result = 0;
     cexclusive = exclusive;
-    ma_overlaps(&vmm.phy_mem_areas, py_start, py_end, wmm_phy_overlaps);
+    ma_overlaps(&vmm.phy_mem_areas, (UINT32)py_start, (UINT32)py_end, wmm_phy_overlaps);
 
     if(result)
         return FALSE;
@@ -117,7 +118,7 @@ BOOL vmm_phy_mmap(struct pm_task *task, ADDR py_start, ADDR py_end, ADDR lstart,
 	*/
 	while(pstart < pend)
 	{
-		tentry = vmm_taken_get((ADDR)PHISICAL2LINEAR(pstart));
+		tentry = vmm_taken_get((ADDR)PHYSICAL2LINEAR(pstart));
 
 		if(tentry->data.b_pg.taken == 1)
 		{
@@ -132,7 +133,7 @@ BOOL vmm_phy_mmap(struct pm_task *task, ADDR py_start, ADDR py_end, ADDR lstart,
 				It's being used by a task but not physically mapped or shared... Unmap it!! :@
 				NOTE: If a thread was working on this page, it'll page fault wen runned again.
 				*/
-				assigned = &vmm.assigned_dir.table[PM_LINEAR_TO_DIR(PHYSICAL2LINEAR(TRANSLATE_ADDR(pstart)))]->entries[PM_LINEAR_TO_TAB(PHYSICAL2LINEAR(TRANSLATE_ADDR(pstart)))];
+				assigned = &vmm.assigned_dir.table[PM_LINEAR_TO_DIR(PHYSICAL2LINEAR(TRANSLATE_ADDR(pstart,UINT32)))]->entries[PM_LINEAR_TO_TAB(PHYSICAL2LINEAR(TRANSLATE_ADDR(pstart,UINT32)))];
 
                 if(tsk_get(assigned->task_id) == NULL) return 0;
 
@@ -230,17 +231,19 @@ BOOL vmm_phy_mmap(struct pm_task *task, ADDR py_start, ADDR py_end, ADDR lstart,
 	}
 
     // is there a physical map descripto with exactly the same bounds?
-    n = ma_search(&vmm.phy_mem_areas, py_start, py_end);
+    n = ma_search(&vmm.phy_mem_areas, (UINT32)py_start, (UINT32)py_end);
 
     mreg = (struct vmm_memory_region*)kmalloc(sizeof(struct vmm_memory_region));
-    mreg->next = NULL;
-    mreg->prev = NULL;
-
+    
     if(!mreg)
         return FALSE;
 
+	mreg->next = NULL;
+    mreg->prev = NULL;
+	mreg->owner_task = task->id;
+
     // find a free if for the memory region
-    if(!rb_free_value(task->regions_id, &mreg->tsk_id_node.value))
+    if(!rb_free_value(&task->vmm_info.regions_id, &mreg->tsk_id_node.value))
 	{
 		kfree(mreg);
 		return FALSE;
@@ -266,8 +269,8 @@ BOOL vmm_phy_mmap(struct pm_task *task, ADDR py_start, ADDR py_end, ADDR lstart,
         }
 
 		pmap->exclusive = exclusive;
-		pmap->area.low = py_start;
-		pmap->area.high = py_end;
+		pmap->area.low = (UINT32)py_start;
+		pmap->area.high = (UINT32)py_end;
 		pmap->references = 0;
 
         // insert the descriptor on the global structure
@@ -279,12 +282,12 @@ BOOL vmm_phy_mmap(struct pm_task *task, ADDR py_start, ADDR py_end, ADDR lstart,
 	/* Add task region */
 	mreg->descriptor = pmap;
 	mreg->flags = VMM_MEM_REGION_FLAG_NONE | ((exclusive)? VMM_MEM_REGION_FLAG_EXCLUSIVE : VMM_MEM_REGION_FLAG_NONE);
-	mreg->tsk_node.low = (ADDR)laddr;
-	mreg->tsk_node.high = lend;
+	mreg->tsk_node.low = laddr;
+	mreg->tsk_node.high = (UINT32)lend;
 	mreg->type = VMM_MEMREGION_MMAP;
 	
-	rb_insert(&task->regions_id, &mreg->tsk_id_node);
-    ma_insert(&task->regions, &mreg->tsk_node);
+	rb_insert(&task->vmm_info.regions_id, &mreg->tsk_id_node, FALSE);
+    ma_insert(&task->vmm_info.regions, &mreg->tsk_node);
 	
 	return TRUE;
 }
@@ -298,7 +301,7 @@ void vmm_phy_umap(struct pm_task *task, ADDR lstart)
 	
 	lstart = TRANSLATE_ADDR(lstart, ADDR);
 
-    ma_node *n = rb_search_low(&task->regions);
+    ma_node *n = rb_search_low(&task->vmm_info.regions, (UINT32)lstart);
 
     if(!n) return;
 
@@ -309,13 +312,13 @@ void vmm_phy_umap(struct pm_task *task, ADDR lstart)
 	pmap = (struct vmm_phymap_descriptor*)mreg->descriptor;
 
 	/* Unmap from task address space. */
-	for(offset = (UINT32)mreg->tsk_lstart; offset < (UINT32)mreg->tsk_lend; offset += PAGE_SIZE)
+	for(offset = (UINT32)mreg->tsk_node.low; offset < (UINT32)mreg->tsk_node.high; offset += PAGE_SIZE)
 	{
 		/* Page-Out from task address space */
 		page_out(task->id, (ADDR)offset, 2);
 
 		/* Return page to VMM */
-		vmm_put_page((ADDR)((UINT32)pmap->py_start + (offset - (UINT32)mreg->tsk_lstart)));		
+		vmm_put_page((ADDR)((UINT32)pmap->area.low + (offset - (UINT32)mreg->tsk_node.low)));		
 	}
 
 	/* Remove structures */
@@ -324,7 +327,7 @@ void vmm_phy_umap(struct pm_task *task, ADDR lstart)
 	if(pmap->references == 0)
 	{
 		/* Remove region descriptor */
-		a_remove(&vmm.phy_mem_areas, &pmap->area);
+		ma_remove(&vmm.phy_mem_areas, &pmap->area);
 
 		kfree(pmap);
 	}
@@ -349,8 +352,8 @@ void vmm_phy_umap(struct pm_task *task, ADDR lstart)
     }
 
 	/* Remove region from task. */
-	rb_remove(&task->regions_id, &mreg->tsk_id_node);
-    ma_remove(&task->regions, &mreg->tsk_node);
+	rb_remove(&task->vmm_info.regions_id, &mreg->tsk_id_node);
+    ma_remove(&task->vmm_info.regions, &mreg->tsk_node);
 
 	kfree(mreg);
 

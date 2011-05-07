@@ -30,7 +30,7 @@
 #include "taken.h"
 #include "task_thread.h"
 #include <services/pmanager/services.h>
-#include "vmm_reg_rb.h"
+#include "rb.h"
 
 void calc_mem(struct multiboot_info *mbinf);
 
@@ -200,7 +200,7 @@ INT32 vmm_init(struct multiboot_info *multiboot, UINT32 ignore_start, UINT32 ign
     
     /* Initialize region trees */
     rb_init(&vmm.fmap_descriptors);
-    vmm.phy_mem_descriptors = NULL;
+    vmm.phy_mem_areas = NULL;
 
 	pman_print("VMM: Init Finished");
 
@@ -704,9 +704,9 @@ void vmm_close_task(struct pm_task *task)
 	struct vmm_memory_region *mreg;
 	struct vmm_memory_region *next = NULL; 
 
-    while(task->regions)
+    while(task->vmm_info.regions)
     {
-        mreg = VMM_MEMREG_MEMA2MEMR(task->regions);
+        mreg = VMM_MEMREG_MEMA2MEMR(task->vmm_info.regions);
 
         struct vmm_region_descriptor *des = (struct vmm_region_descriptor*)mreg->descriptor;
 
@@ -719,14 +719,14 @@ void vmm_close_task(struct pm_task *task)
 		}
 		else if(mreg->type == VMM_MEMREGION_MMAP)
 		{
-			vmm_phy_umap(task, mreg->tsk_lstart);
+			vmm_phy_umap(task, (ADDR)mreg->tsk_node.low);
 		}
 		else
 		{
-			vmm_share_remove(task, mreg);
+			vmm_share_remove(task, mreg->tsk_node.low);
 		}
 
-        ma_remove(&task->regions, task->regions);
+        ma_remove(&task->vmm_info.regions, task->vmm_info.regions);
     }
             
     // if there are threads from other task waiting for a page
@@ -746,13 +746,10 @@ void vmm_init_task_info(struct task_vmm_info *vmm_info)
 	vmm_info->expected_working_set = 0;
 	vmm_info->max_addr = 0;
 	vmm_info->swap_read_smo = -1;
-	vmm_info->regions.first = NULL;
-	vmm_info->regions.total = 0;
     rb_init(&vmm_info->regions_id);
-    vmm_info->shared = NULL;
     vmm_info->regions = NULL;
     rb_init(&vmm_info->wait_root);
-    rb_init(&tbl_wait_root);
+    rb_init(&vmm_info->tbl_wait_root);
 }
 
 void vmm_init_thread_info(struct pm_thread *thread)

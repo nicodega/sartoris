@@ -63,15 +63,9 @@ UINT32 loader_create_task(struct pm_task *task, char *path, UINT32 plength, int 
     task->loader_inf.param = param;
 
 	/* Reset VMM information on task */
-	task->vmm_info.swap_free_addr = (ADDR)0xFFFFFFFF;
-	task->vmm_info.table_swap_addr = 0;
-	task->vmm_info.expected_working_set = 0;
-	task->vmm_info.swap_read_smo = -1;
-	task->vmm_info.regions.first = NULL;
-	task->vmm_info.regions.total = 0;
+	vmm_init_task_info(&task->vmm_info);
 	task->vmm_info.page_count = 2;
 	task->vmm_info.max_addr = PMAN_TSK_MAX_ADDR;
-	task->vmm_info.swap_page_count = 0;
 
 	/* Create microkernel task */
 	mk_task.mem_adr = (ADDR)SARTORIS_PROCBASE_LINEAR;  /* paging mapped the memory here */
@@ -193,13 +187,13 @@ BOOL loader_filepos(struct pm_task *task, ADDR linear, UINT32 *outpos, UINT32 *o
 overlapping the provided interval with readonly or executable flag.
 NOTE: The way this has been made, we will require sections to be page aligned.
 */
-BOOL loader_collides(struct pm_task *task, ADDR lstart, ADD lend)
+BOOL loader_collides(struct pm_task *task, ADDR lstart, ADDR lend)
 {
 	BYTE *headers = task->loader_inf.elf_pheaders;
 	UINT32 i = 0;
 	struct Elf32_Phdr *prog_header = NULL;
 
-	lstart = (ADDR)((UINT32)linear - SARTORIS_PROCBASE_LINEAR);
+	lstart = (ADDR)((UINT32)lstart - SARTORIS_PROCBASE_LINEAR);
 	while(lstart < lend - SARTORIS_PROCBASE_LINEAR)
     {
 	    while(i < task->loader_inf.elf_header.e_phnum)
