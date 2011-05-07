@@ -23,27 +23,34 @@
 
 #include "types.h"
 
-#define RED   1
-#define BLACK 0
-
 struct _rbnode
 {
     UINT32 value;                       // Memory address the thread is waiting for.
+	UINT32 value2;                      // we will allow a second value on the nodes
 	struct _rbnode *link[0];            // 0 Left node, 1 right
 	struct _rbnode *parent;             // parent node
 	int color;                          // color of the node
     struct _rbnode *next;	            // used for nodes with the same value
     struct _rbnode *prev;
-	UINT32 value2;                      // we will allow a second value on the nodes
 };
 
-typedef struct _rbnode* rbt;
+struct _rbtree
+{
+    rbnode *root;
+    rbnode *max;
+    rbnode *min;
+}
+
+typedef struct _rbtree rbt;
 typedef struct _rbnode rbnode;
 
-rbnode *searchRedBlackTree(rbt *t, UINT32 value);
-int insertRedBlackTree(rbt *t, rbnode *n, BOOL insert_only_if_found);
-void removeChildRedBlackTree(rbt *t, rbnode *n);
-void removeRedBlackTree(rbt *t, rbnode *n);
+void rb_init(rbt *t);
+rbnode *rb_search(rbt *t, UINT32 value);
+int rb_insert(rbt *t, rbnode *n, BOOL insert_only_if_found);
+void rb_remove_child(rbt *t, rbnode *n);
+void rb_remove(rbt *t, rbnode *n);
+BOOL rb_free_value(rbt *t, UINT32 *value);
+BOOL rb_inorder(rbt *t, void (*callback)(rbnode *n));
 
 #endif
 

@@ -25,17 +25,20 @@
 #include "rb.h"
 #include "pman_print.h"
 
+#define RED   1
+#define BLACK 0
+
 rbnode *getUncle(rbnode *n);
 rbnode *getGrandParent(rbnode *n);
 void leftRotate(rbt *t, rbnode *n);
 void rightRotate(rbt *t, rbnode *n);
 rbnode *singleRotation (rbt *t, rbnode *n, int dir );
 rbnode *doubleRotation(rbt *t, rbnode *n, int dir );
-void insertRedBlackTreeFixup(rbt *t, rbnode *n);
+void rb_insertFixup(rbt *t, rbnode *n);
 
-rbnode *searchRedBlackTree(rbt *t, UINT32 value) 
+rbnode *rb_search(rbt *t, UINT32 value) 
 {
-	rbnode *current = *t;
+	rbnode *current = t->root;
 			
 	while (current != NULL && current->value != value) 
 	{
@@ -45,19 +48,26 @@ rbnode *searchRedBlackTree(rbt *t, UINT32 value)
 			current = current->link[1];
 	}
 		
-	if(current != NULL && current->value == value)
+	if(current != NULL)
         return current;
     else
         return NULL;
-}	
+}
+
+void rb_init(rbt *t)
+{
+    t->root = NULL;
+    t->min = NULL;
+    t->max = NULL;
+}
 
 // returns 
 // - 1 if item was added
 // - 2 if node existed and it was added to the same node
-int insertRedBlackTree(rbt *t, rbnode *n, BOOL insert_only_if_found) 
+int rb_insert(rbt *t, rbnode *n, BOOL insert_only_if_found) 
 {
     rbnode *parent = NULL;
-	rbnode *current = *t;
+	rbnode *current = t->root;
     
     n->link[0] = NULL;
     n->link[1] = NULL;
@@ -75,7 +85,7 @@ int insertRedBlackTree(rbt *t, rbnode *n, BOOL insert_only_if_found)
 		}
 		else
 		{
-			if(n->value == current->value)
+            if(n->value == current->value)
             {
 
                 n->prev = current->next;
@@ -97,7 +107,7 @@ int insertRedBlackTree(rbt *t, rbnode *n, BOOL insert_only_if_found)
 	
 	if(parent == NULL) 
 	{ 
-		*t = n;
+		t->root = n;
 	} 
 	else 
 	{
@@ -107,8 +117,16 @@ int insertRedBlackTree(rbt *t, rbnode *n, BOOL insert_only_if_found)
 			parent->link[1] = n;
 	}
 
+    // fix max and min
+    if(!min)
+        min = max = n;
+    else if(min->value > n->value)
+        min = n;
+    else if(max->value < n->value)
+        max = n;
+    
     // fix the tree
-	insertRedBlackTreeFixup(t, n);
+	rb_insertFixup(t, n);
     return 1;
 }
 
@@ -129,7 +147,7 @@ rbnode *getGrandParent(rbnode *n)
 	return n->parent->parent;
 }
 
-void insertRedBlackTreeFixup(rbt *t, rbnode *n) 
+void rb_insertFixup(rbt *t, rbnode *n) 
 {
 	rbnode *y = NULL;
 		
@@ -187,7 +205,7 @@ void insertRedBlackTreeFixup(rbt *t, rbnode *n)
 	}
 
     // save us from a red violation at the root
-	(*t)->color = BLACK;
+	(t->root)->color = BLACK;
 }
 
 void leftRotate(rbt *t, rbnode *n) 
@@ -198,7 +216,7 @@ void leftRotate(rbt *t, rbnode *n)
 	/* Hang a on n's parent */
 	if(n->parent == NULL)
 	{
-		*t = y;
+		t->root = y;
 		y->parent = NULL;
 	}
 	else
@@ -228,7 +246,7 @@ void rightRotate(rbt *t, rbnode *n)
 	/* Hang a on n's parent */
 	if(n->parent == NULL)
 	{
-		*t = y;
+		t->root = y;
 		y->parent = NULL;
 	}
 	else
@@ -271,7 +289,7 @@ rbnode *doubleRotation(rbt *t, rbnode *n, int dir )
     return singleRotation(t, n, dir );
 }
 
-void removeChildRedBlackTree(rbt *t, rbnode *n)
+void rb_remove_child(rbt *t, rbnode *n)
 {
     if(n->next != NULL)
     {
@@ -291,12 +309,12 @@ void removeChildRedBlackTree(rbt *t, rbnode *n)
     }
     else
     {
-        removeRedBlackTree(t, n);
+        rb_remove(t, n);
     }
 }
 
 // this implements a top-down Red Black t deletion.
-void removeRedBlackTree(rbt *t, rbnode *n)
+void rb_remove(rbt *t, rbnode *n)
 {
     // This algorithm implementation was taken (mostly)
     // from an explanation on red black trees by Julienne Walker
@@ -308,12 +326,12 @@ void removeRedBlackTree(rbt *t, rbnode *n)
  
     s = NULL;
 
-    if ( *t != NULL ) 
+    if ( t->root != NULL ) 
     {
         /* Set up helpers */
         q = &head;
         g = p = NULL;
-        q->link[1] = *t;
+        q->link[1] = t->root;
  
         /* Search and push a red down */
         while ( q->link[dir] != NULL ) 
@@ -334,7 +352,7 @@ void removeRedBlackTree(rbt *t, rbnode *n)
             {
                 if ( q->link[!dir]->color == RED )
                 {
-                    p = p->link[last] = singleRotation (t, q, dir );
+                    p = singleRotation (t, q, dir );
                 }
                 else if ( q->link[!dir]->color == BLACK ) 
                 {
@@ -354,9 +372,9 @@ void removeRedBlackTree(rbt *t, rbnode *n)
                             int dir2 = g->link[1] == p;
  
                             if ( s->link[last]->color == RED )
-                                g->link[dir2] = doubleRotation(t, p, last );
+                                doubleRotation(t, p, last );
                             else if ( s->link[!last]->color == RED )
-                                g->link[dir2] = singleRotation(t, p, last );
+                                singleRotation(t, p, last );
  
                             /* Ensure correct coloring */
                             q->color = g->link[dir2]->color = RED;
@@ -371,6 +389,13 @@ void removeRedBlackTree(rbt *t, rbnode *n)
         /* Replace and remove if found */
         if ( f != NULL ) 
         {
+            if(min == f && max == f)
+                min = max = n->parent;
+            else if(min == f)
+                min = n->parent;
+            else if(max == f)
+                max = n->parent;
+
             // remove every thread from the list.
             s = f->next;
             while(s)
@@ -389,8 +414,132 @@ void removeRedBlackTree(rbt *t, rbnode *n)
         }
  
         /* Update root and make it black */
-        *t = head.link[1];
-        if ( *t != NULL )
-            (*t)->color = BLACK;
+        t->root = head.link[1];
+        if ( t->root != NULL )
+            (t->root)->color = BLACK;
+    }
+}
+
+/*
+Finds a value starting at 0 not on the tree.
+This function has O(n) running time. It traverses the tree 
+inorder, marking nodes and evaluating a node only when 
+all it's left tree has been evaluated.
+*/
+BOOL rb_free_value(rbt *t, UINT32 *value)
+{
+    int cand = 0;
+    rbnode *n = t->min;
+    BOOL fromLeft = 0;
+
+    while(n)
+    {
+	    if (fromLeft || !n->link[0])
+		{
+            if( n->value > cand || n == t->max )
+            {
+			    while(n)
+                {
+				    if(n->link[0])
+					    n->link[0].color &= ~3;
+				    if n->link[1] 
+					    n->link[1].color &= ~3;
+				    n->color &= ~3;
+				    n = n->parent;
+                }
+                if(n != t->max)
+                {
+                    *value = cand;
+			        return TRUE;
+                }
+                else
+                {
+                    return FALSE;
+                }
+            }
+		    cand = n->value + 1;
+        }
+	    if(!(n->color & 3))
+        {
+		    n->color |= 3;
+		    if(n->link[0] && !(n->link[0]->color & 3))
+            {
+			    fromLeft = FALSE;
+			    n = n->link[0];
+			    continue;
+            }
+		    if(n->link[1] && !(n->link[1]->color & 3))
+			{
+                fromLeft = FALSE;
+			    n = n->link[1];
+			    continue;
+            }
+        }
+	    if(n->parent != NULL)
+        {
+		    fromLeft = (n->parent->link[0] == n);
+		    if( n->link[0] )
+			    n->link[0]->color &= ~3;
+		    if( n->link[1] )
+			    n->link[1]->color &= ~3;
+		    n = n->parent;
+		}
+    }
+}
+
+    
+/*
+Traverses the full tree (inorder) in O(n) time, without using a list,
+and invoking the callback for each node.
+*/
+void rb_inorder(rbt *t, void (*callback)(rbnode *n))
+{
+    n = t->min;
+    BOOL fromLeft = 0;
+
+    while(n)
+    {
+	    if (fromLeft || !n->link[0])
+		{
+            callback(n);
+			
+            if( n == t->max )
+            {
+                while(n)
+                {
+				    if(n->link[0])
+					    n->link[0].color &= ~3;
+				    if n->link[1] 
+					    n->link[1].color &= ~3;
+				    n->color &= ~3;
+				    n = n->parent;
+                }
+            }
+        }
+	    if(!(n->color & 3))
+        {
+		    n->color |= 3;
+		    if(n->link[0] && !(n->link[0]->color & 3))
+            {
+			    fromLeft = FALSE;
+			    n = n->link[0];
+			    continue;
+            }
+		    if(n->link[1] && !(n->link[1]->color & 3))
+			{
+                fromLeft = FALSE;
+			    n = n->link[1];
+			    continue;
+            }
+        }
+	    if(n->parent != NULL)
+        {
+		    fromLeft = (n->parent->link[0] == n);
+		    if( n->link[0] )
+			    n->link[0]->color &= ~3;
+		    if( n->link[1] )
+			    n->link[1]->color &= ~3;
+		    n = n->parent;
+		}
     }
 }

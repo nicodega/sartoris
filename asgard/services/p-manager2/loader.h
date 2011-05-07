@@ -54,6 +54,7 @@ UINT32 loader_create_task(struct pm_task *task, char *path, UINT32 plength, int 
 INT32 loader_fileopen_finished(struct fsio_event_source *iosrc, INT32 ioret);
 void loader_calculate_working_set(struct pm_task *task);
 BOOL loader_filepos(struct pm_task *task, ADDR linear, UINT32 *outpos, UINT32 *outsize, INT32 *perms, INT32 *page_displacement);
+BOOL loader_collides(struct pm_task *task, ADDR lstart, ADD lend);
 
 #endif
 
