@@ -34,15 +34,16 @@ struct _rbnode
     struct _rbnode *prev;
 };
 
+typedef struct _rbnode rbnode;
+
 struct _rbtree
 {
     rbnode *root;
     rbnode *max;
     rbnode *min;
-}
+};
 
 typedef struct _rbtree rbt;
-typedef struct _rbnode rbnode;
 
 void rb_init(rbt *t);
 rbnode *rb_search(rbt *t, UINT32 value);
@@ -50,7 +51,7 @@ int rb_insert(rbt *t, rbnode *n, BOOL insert_only_if_found);
 void rb_remove_child(rbt *t, rbnode *n);
 void rb_remove(rbt *t, rbnode *n);
 BOOL rb_free_value(rbt *t, UINT32 *value);
-BOOL rb_inorder(rbt *t, void (*callback)(rbnode *n));
+void rb_inorder(rbt *t, void (*callback)(rbnode *n));
 
 #endif
 

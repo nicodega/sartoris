@@ -24,8 +24,12 @@ an Interval tree, using an augmented Red-Black tree.
 This will allow us to insert, remove and query for collitions in O(log(n)) time.
 */
 
+#include "vmm_memarea.h"
+
 #define RED   1
 #define BLACK 0
+
+#define MAX(a,b) ((a > b)? a : b)
 
 ma_node *ma_uncle(ma_node *n);
 ma_node *ma_gparent(ma_node *n);
@@ -65,7 +69,7 @@ This function runs in O(I + log(n)) time on the worst case,
 where I is the ammount of intervals overlapping the provided
 interval.
 */
-void ma_overlaps(memareas *t, UINT32 low, UINT32 high, BOOL (*callback)(rbnode *n)) 
+void ma_overlaps(memareas *t, UINT32 low, UINT32 high, BOOL (*callback)(ma_node *n)) 
 {
 	ma_node *current = *t;
     UINT32 nlow = low;
@@ -138,7 +142,7 @@ ma_node *ma_search_point(memareas *t, UINT32 p)
 
 ma_node *rb_search_low(memareas *t, UINT32 low) 
 {
-	rbnode *current = t->root;
+	ma_node *current = *t;
 			
 	while (current != NULL && current->low != low) 
 	{
@@ -162,22 +166,21 @@ int ma_insert(memareas *t, ma_node *n)
     
     n->link[0] = NULL;
     n->link[1] = NULL;
-    n->next = NULL;
-    n->prev = NULL;
+	n->max = n->high;	
 
     // traverse the tree and find a place for this new node
 	while (current != NULL) 
 	{
 		parent = current;
 			
-		if (compare(n, current) < 0) 
+		if (n->low < current->low) 
 		{	
             lastLeft = current;
 			current = current->link[0];
 		}
 		else
 		{
-            if(compare(n, current) == 0)
+            if(n->low == current->low)
             {
                return FALSE;
             }
@@ -196,7 +199,7 @@ int ma_insert(memareas *t, ma_node *n)
 	} 
 	else 
 	{
-		if (compare(parent, n) > 0)
+		if (parent->low > n->low)
 			parent->link[0] = n;
 		else
 			parent->link[1] = n;
@@ -252,7 +255,7 @@ void ma_fix_insert(memareas *t, ma_node *n)
 			} 
 			else 
 			{
-				if (n == n->parent->link[1])) 
+				if (n == n->parent->link[1]) 
 				{
 					n = n->parent;
 					ma_lrotation(t, n);
@@ -339,7 +342,7 @@ void ma_lrotation(memareas *t, ma_node *n)
 	n->parent = y;
 	y->link[0] = n;
 
-    ma_fix_max(n,y);
+    ma_fix_maxs(n,y);
 }
 	
 void ma_rrotation(memareas *t, ma_node *n) 
@@ -371,7 +374,7 @@ void ma_rrotation(memareas *t, ma_node *n)
 	n->parent = y;
 	y->link[1] = n;
 
-    ma_fix_max(n,y);
+    ma_fix_maxs(n,y);
 }
 
 ma_node *ma_single_rotation(memareas *t, ma_node *n, int dir )
@@ -423,10 +426,10 @@ void ma_remove(memareas *t, ma_node *n)
             /* Update helpers */
             g = p, p = q;
             q = q->link[dir];
-            dir = compare(q, n) < 0;
+            dir = (q->low < n->low);
  
             /* if we found the node, save it */
-            if ( compare(q, n)==0 )
+            if ( q->low == n->low )
                 f = q;
  
             /* Push the red node down */
@@ -473,12 +476,10 @@ void ma_remove(memareas *t, ma_node *n)
         /* Replace and remove if found */
         if ( f != NULL ) 
         {            
-            f->vleft = q->vleft;
-            f->vright = q->vright;
-            f->next = q->next;
-            f->prev = NULL;
+            f->low = q->low;
+            f->high = q->high;
             f->parent = q->parent;
-            f->max = q;
+            f->max = q->max;
             p->link[p->link[1] == q] = q->link[q->link[0] == NULL];            
         }
  

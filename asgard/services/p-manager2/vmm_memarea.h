@@ -28,8 +28,8 @@ struct _memarea_node
     UINT32 low;                         // left memory boundary
 	UINT32 high;                        // right memory boundary
     UINT32 max;                         // augmentation (maximum "high" from subtree rooted at this node)
-    struct _regrbnode *link[0];         // 0 Left node, 1 right
-	struct _regrbnode *parent;          // parent node
+    struct _memarea_node *link[0];      // 0 Left node, 1 right
+	struct _memarea_node *parent;       // parent node
 	int color;                          // color of the node
 };
 
@@ -43,7 +43,7 @@ ma_node *rb_search_low(memareas *t, UINT32 low);
 int ma_insert(memareas *t, ma_node *n);
 void ma_remove(memareas *t, ma_node *n);
 BOOL ma_inorder(memareas *t, void (*callback)(ma_node *n));
-void ma_overlaps(memareas *t, UINT32 low, UINT32 high, BOOL (*callback)(rbnode *n));
+void ma_overlaps(memareas *t, UINT32 low, UINT32 high, BOOL (*callback)(ma_node *n));
 
 #endif
 

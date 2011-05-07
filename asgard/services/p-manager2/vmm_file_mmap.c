@@ -49,11 +49,11 @@ BOOL vmm_page_filemapped(struct pm_task *task, struct pm_thread *thread, ADDR pa
 	/* If a memory region with type VMM_MEMREGION_FMAP exists, return TRUE and begin IO */
 	if(task->vmm_info.regions == NULL) return FALSE;
     
-    ma_node *n = ma_search_point(task->vmm_info.regions, UINT32 page_laddr);
+    ma_node *n = ma_search_point(&task->vmm_info.regions, (UINT32)page_laddr);
 
 	if(n == NULL) return FALSE;
 
-    mreg = VMM_MEMREG_ADDRNODE2REG(n);
+    mreg = VMM_MEMREG_MEMA2MEMR(n);
 
 	fmd = (struct vmm_fmap_descriptor*)mreg->descriptor;
 
@@ -134,7 +134,7 @@ UINT32 vmm_fmap(UINT16 task_id, UINT32 fileid, UINT16 fs_task, ADDR start, UINT3
 	}
 
     // get an ID for the memory descriptor on the task 
-	if(!rb_free_value(&task->regions_id, &new_mreg->tsk_id_node.value))
+	if(!rb_free_value(&task->vmm_info.regions_id, &new_mreg->tsk_id_node.value))
 	{
 		kfree(new_fm);
 		kfree(new_mreg);
@@ -149,21 +149,21 @@ UINT32 vmm_fmap(UINT16 task_id, UINT32 fileid, UINT16 fs_task, ADDR start, UINT3
 	new_fm->iosrc.smo = -1;
 	new_fm->status = VMM_FMAP_ACTIVE;
 	new_fm->offset = offset;
-	new_fm->next = NULL;
 	new_fm->creating_task = task->id;
 	new_fm->references = 1;	// This should change when we can share files mapped between tasks.
     new_fm->regions = new_mreg;
 	
+	new_mreg->owner_task = task_id;
     new_mreg->next = new_mreg->prev = NULL;
-	new_mreg->tsk_node.high = (ADDR)((UINT32)start + size);
-	new_mreg->tsk_node.low = start;
+	new_mreg->tsk_node.high = ((UINT32)start + size);
+	new_mreg->tsk_node.low = (UINT32)start;
 	new_mreg->flags = perms;
 	new_mreg->next = NULL;
 	new_mreg->type = VMM_MEMREGION_FMAP;
     new_mreg->descriptor = new_fm;
 
 	/* Check region does not intersect with other region on this task address space. */
-	ma_node *n = ma_collition(&task->regions, start, start + size);
+	ma_node *n = ma_collition(&task->vmm_info.regions, (UINT32)start, (UINT32)start + size);
 
     if(n)
     {
@@ -226,8 +226,8 @@ UINT32 vmm_fmap(UINT16 task_id, UINT32 fileid, UINT16 fs_task, ADDR start, UINT3
 	}
 
     /* Add new_mreg on the task lists */
-    ma_insert(&task->regions, &new_mreg->tsk_node);
-    rb_search(&task->regions_id, &new_mreg->tsk_id_node);
+    ma_insert(&task->vmm_info.regions, &new_mreg->tsk_node);
+    rb_search(&task->vmm_info.regions_id, new_mreg->tsk_id_node.value);
 
 	/* Once takeover is OK, new_fm will be addede to the global list. 
     I can't add it now, because I don't have a */
@@ -260,8 +260,10 @@ BOOL vmm_fmap_release(struct pm_task *task, ADDR lstart)
 	struct vmm_fmap_descriptor *fmd = NULL;
 	UINT32 addr;
 
+	lstart = TRANSLATE_ADDR(lstart, ADDR);
+
 	/* Find our mapping */
-	ma_node *n = ma_search_point(&task->regions, (UINT32)lstart);
+	ma_node *n = ma_search_point(&task->vmm_info.regions, (UINT32)lstart);
 
 	if(n == NULL) return FALSE;
 
@@ -277,12 +279,12 @@ BOOL vmm_fmap_release(struct pm_task *task, ADDR lstart)
 		thread = thread->next_thread;
 	}
 
-    vmm_fmap_release_mreg(task, mreg, 0);
+    vmm_fmap_release_mreg(task, mreg);
 }
 
 BOOL vmm_fmap_release_mreg(struct pm_task *task, struct vmm_memory_region *mreg)
 {
-	fmd = (struct vmm_fmap_descriptor*)mreg->descriptor;
+	struct vmm_fmap_descriptor *fmd = (struct vmm_fmap_descriptor*)mreg->descriptor;
 
     if(fmd->status == VMM_FMAP_FLUSHING) // since we only allow one command on the task command 
                                          // queue, there cannot be a flush command executing.. 
@@ -290,7 +292,7 @@ BOOL vmm_fmap_release_mreg(struct pm_task *task, struct vmm_memory_region *mreg)
     {
         // fmap is flushing.. we must wait until it completes
         // but let's tell the current action we intend to close the FMAP
-        tmd->status = VMM_FMAP_CLOSING_RELEASE;
+        fmd->status = VMM_FMAP_CLOSING_RELEASE;
         return FALSE;
     }
 	else if(fmd->status != VMM_FMAP_ACTIVE)
@@ -306,7 +308,7 @@ BOOL vmm_fmap_release_mreg(struct pm_task *task, struct vmm_memory_region *mreg)
         // this fmap still has references from other task
 
 		/* Unmap Pages from task address space */
-		addr = (UINT32)mreg->tsk_node.low;
+		UINT32 addr = (UINT32)mreg->tsk_node.low;
 
 		for(; addr < (UINT32)mreg->tsk_node.high; addr += 0x1000)
 		{
@@ -314,10 +316,12 @@ BOOL vmm_fmap_release_mreg(struct pm_task *task, struct vmm_memory_region *mreg)
 		}
 
 		/* Remove memory region from trees */
-		ma_remove(&task->regions, &mreg->tsk_node);
-        rb_remove(&task->regions_id, &mreg->tsk_id_node);
+		ma_remove(&task->vmm_info.regions, &mreg->tsk_node);
+        rb_remove(&task->vmm_info.regions_id, &mreg->tsk_id_node);
 
-        fmd->region = NULL;
+        fmd->regions = fmd->regions->next;
+		if(fmd->regions)
+			fmd->regions->prev = NULL;
 		kfree(mreg);
 
 		return TRUE;
@@ -341,13 +345,15 @@ BOOL vmm_fmap_release_mreg(struct pm_task *task, struct vmm_memory_region *mreg)
 /*
 This function will flush to IO device modified pages
 */
-BOOL vmm_fmap_flush(struct pm_task *task, ADDR tsk_node.low)
+BOOL vmm_fmap_flush(struct pm_task *task, ADDR lstart)
 {
 	struct vmm_memory_region *mreg = NULL;
 	struct vmm_fmap_descriptor *fmd = NULL;
 
+	lstart = TRANSLATE_ADDR(lstart, ADDR);
+
 	/* Find our mapping */
-	ma_node *n = ma_search_point(&task->regions, (UINT32)tsk_node.low);
+	ma_node *n = ma_search_point(&task->vmm_info.regions, (UINT32)lstart);
 
 	if(n == NULL) return FALSE;
 
@@ -380,7 +386,7 @@ BOOL vmm_fmap_flush(struct pm_task *task, ADDR tsk_node.low)
 void vmm_fmap_task_closing(struct pm_task *task, struct vmm_memory_region *mreg)
 {	
     task->command_inf.callback = vmm_fmap_closed_callback;
-    vmm_fmap_release_mreg(task, mreg, 1);
+    vmm_fmap_release_mreg(task, mreg);
 }
 
 /* Callback invoked when closing an fmap because the task is being killed */
@@ -397,26 +403,22 @@ NOTE: IO src belongs to fmap descriptor!
 INT32 fmap_takeover_callback(struct fsio_event_source *iosrc, INT32 ioret)
 {
 	struct pm_task *task = NULL;
-	struct vmm_fmap_descriptor *fm;
+	struct vmm_fmap_descriptor *fm = MEMREGNODE2FMAPDESC(rb_search(&vmm.fmap_descriptors, iosrc->id));
 	struct vmm_memory_region *mreg;
 	struct pm_thread *thr = NULL;
 
-    task = tsk_get(new_fm->io_finished.params[0]);  // params[0] has the task id
+	if(fm == NULL) return 0;
+
+    task = tsk_get(fm->io_finished.params[0]);  // params[0] has the task id
 
 	if(task == NULL) return 0;
-
-    rbnode *n = rb_search(&task->regions_id, iosrc->id);
-
-    if(!n) return 0;
-
-    fm = IDNODE2FMAPDESC(n);
-    	
+	    	
 	/* If file open succeded send a successful response. */
 	if(ioret == IO_RET_ERR)
 	{
         /* Takeover failed, remove the memory region from it's trees */
-        ma_remove(&task->regions, &fm->regions->tsk_node);
-        rb_remove(&task->regions_id, &fm->regions->tsk_id_node);
+        ma_remove(&task->vmm_info.regions, &fm->regions->tsk_node);
+        rb_remove(&task->vmm_info.regions_id, &fm->regions->tsk_id_node);
 
 		kfree(fm);
 		kfree(mreg);
@@ -427,7 +429,7 @@ INT32 fmap_takeover_callback(struct fsio_event_source *iosrc, INT32 ioret)
 		fm->iosrc.file_id = fm->gnode.value = task->io_finished.params[0];
 
         /* Add the FMAP descriptor to the global list */
-        rb_insert(&vmm.fmap_descriptors, &fm->gnode);
+        rb_insert(&vmm.fmap_descriptors, &fm->gnode, FALSE);
 	}
 
 	/* Activate task threads again. */
@@ -451,14 +453,16 @@ IO src belongs to an FMAP descriptor.
 */
 INT32 vmm_fmap_flush_callback(struct fsio_event_source *iosrc, INT32 ioret)
 {
-	struct vmm_fmap_descriptor *fm = MEMREGNODE2FMAPDESC(rb_search(&vmm->fmap_descriptors, iosrc->id));
+	struct vmm_fmap_descriptor *fm = MEMREGNODE2FMAPDESC(rb_search(&vmm.fmap_descriptors, iosrc->id));
 	struct pm_task *task = tsk_get(fm->creating_task);
 	struct vmm_page_directory *pdir = task->vmm_info.page_directory;
 	struct vmm_page_table *tbl = NULL;
-	struct vmm_memory_region *mreg = vmm_region_get_bydesc((struct vmm_descriptor*)fm);
+	struct vmm_memory_region *mreg;
 	struct vmm_pman_assigned_record *assigned = NULL;
-
+	
     if(task == NULL) return 0;
+
+	mreg = vmm_region_get_bydesc(task, (struct vmm_descriptor*)fm);
 
 	if(ioret == IO_RET_OK)
 	{
@@ -489,7 +493,7 @@ INT32 vmm_fmap_flush_callback(struct fsio_event_source *iosrc, INT32 ioret)
         // if there is an FMAP release pending, let's finish the 
         // flush early.. FMAP will be released and all remaining
         // dirty pages will be written
-        if(fm->state == VMM_FMAP_CLOSING_RELEASE)
+        if(fm->status == VMM_FMAP_CLOSING_RELEASE)
         {
             vmm_fmap_task_closing(task, mreg);
             return 0;        
@@ -573,7 +577,7 @@ INT32 vmm_fmap_flush_callback(struct fsio_event_source *iosrc, INT32 ioret)
 	}
 	else
 	{
-        if(fm->state == VMM_FMAP_CLOSING_RELEASE)
+        if(fm->status == VMM_FMAP_CLOSING_RELEASE)
         {
             vmm_fmap_task_closing(task, mreg);
             return 0;        
@@ -588,14 +592,18 @@ INT32 vmm_fmap_flush_callback(struct fsio_event_source *iosrc, INT32 ioret)
 
 INT32 vmm_fmap_flush_seek_callback(struct fsio_event_source *iosrc, INT32 ioret)
 {
-	struct vmm_fmap_descriptor *fm = MEMREGNODE2FMAPDESC(rb_search(&vmm->fmap_descriptors, iosrc->id));
+	struct vmm_fmap_descriptor *fm = MEMREGNODE2FMAPDESC(rb_search(&vmm.fmap_descriptors, iosrc->id));
 	struct pm_task *task = tsk_get(fm->creating_task);
-	struct vmm_memory_region *mreg = vmm_region_get_bydesc((struct vmm_descriptor*)fm);
+	struct vmm_memory_region *mreg;
 	struct vmm_page_directory *pdir = task->vmm_info.page_directory;
 	struct vmm_page_table *tbl = NULL;
 	struct vmm_pman_assigned_record *assigned = NULL;
 
     if(task == NULL) return 0;
+
+	mreg = vmm_region_get_bydesc(task, (struct vmm_descriptor*)fm);
+
+	if(mreg == NULL) return 0;
 
 	tbl = (struct vmm_page_table *)PHYSICAL2LINEAR(PG_ADDRESS(pdir->tables[PM_LINEAR_TO_TAB(fm->release_addr)].b));
 		
@@ -635,23 +643,26 @@ INT32 vmm_fmap_flush_seek_callback(struct fsio_event_source *iosrc, INT32 ioret)
 
 INT32 vmm_fmap_realeased_callback(struct fsio_event_source *iosrc, INT32 ioret)
 {
-	struct vmm_fmap_descriptor *fm = MEMREGNODE2FMAPDESC(rb_search(&vmm->fmap_descriptors, iosrc->id));
+	struct vmm_fmap_descriptor *fm = MEMREGNODE2FMAPDESC(rb_search(&vmm.fmap_descriptors, iosrc->id));
 	struct pm_task *task = tsk_get(fm->creating_task);
-	struct vmm_memory_region *mreg = vmm_region_get_bydesc((struct vmm_descriptor*)fm);
+	struct vmm_memory_region *mreg;
 
     if(task == NULL) return 0;
+
+	mreg = vmm_region_get_bydesc(task, (struct vmm_descriptor*)fm);
+
+	if(mreg == NULL) return 0;
 
 	if(ioret == IO_RET_OK)
 	{
 		/* Remove memory region from trees */
-		ma_remove(&task->regions, &mreg->tsk_node);
-        rb_remove(&task->regions_id, &mreg->tsk_id_node);
+		ma_remove(&task->vmm_info.regions, &mreg->tsk_node);
+        rb_remove(&task->vmm_info.regions_id, &mreg->tsk_id_node);
 
-        fmd->region = NULL;
 		kfree(mreg);
 
 		/* Remove FMAP descriptor from global list */
-		rb_remove(&vmm.fmap_descriptors, &fm.gnode);
+		rb_remove(&vmm.fmap_descriptors, &fm->gnode);
 
 		/* Free structures */
 		kfree(fm);
@@ -678,7 +689,7 @@ Invoked when flushing is complete.
 */
 INT32 vmm_fmap_flushed_callback(struct fsio_event_source *iosrc, INT32 ioret)
 {
-	struct vmm_fmap_descriptor *fm = MEMREGNODE2FMAPDESC(rb_search(&vmm->fmap_descriptors, iosrc->id));
+	struct vmm_fmap_descriptor *fm = MEMREGNODE2FMAPDESC(rb_search(&vmm.fmap_descriptors, iosrc->id));
 	struct pm_task *task = tsk_get(fm->creating_task);
 
     if(task == NULL) return 0;

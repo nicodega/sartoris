@@ -27,6 +27,7 @@
 #include "page_stack.h"
 #include "formats/ia32paging.h"
 #include "rb.h"
+#include "vmm_memarea.h"
 
 #define VMM_INITIAL_AGE 4
 
@@ -120,13 +121,13 @@ struct vmm_pman_assigned_directory
 /*
 This structures will be kept on a tree in the task struct
 */
-#define VMM_MEMREG_IDNODE2REG(a) ((struct vmm_memory_region*)((unsigned int)a - ((sizeof(struct vmm_memory_region) - sizeof(rbnode)))))
+#define VMM_MEMREG_IDNODE2REG(a) ((struct vmm_memory_region*)((UINT32)a - ((sizeof(struct vmm_memory_region) - sizeof(rbnode)))))
 // This define returns a pointer to a memory regions, based on it's tsk_node.
-#define VMM_MEMREG_MEMA2MEMR(a) ((struct vmm_memory_region*)(VMM_MEMREG_IDNODE2REG(a) + sizeof(ma_node)))
+#define VMM_MEMREG_MEMA2MEMR(a) ((struct vmm_memory_region*)((UINT32)VMM_MEMREG_IDNODE2REG(a) + sizeof(ma_node)))
 
 struct vmm_memory_region
 {
-    UINT16 owner_task;      // This is only used on shared areas
+    UINT16 owner_task;      
 	UINT16 type;            // Memory region type: SHARED, FMAP, MMAP
 	UINT16 flags;           // Exclusive, write, execute, etc
 	ADDR descriptor;        // The typed global memory region descriptor to which this memory regions belongs.
@@ -414,7 +415,7 @@ void vmm_regiondesc_remove(ADDR prdesc);
 void vmm_regiondesc_remove_byid(UINT16 ID);
 UINT16 vmm_regiondesc_getid();
 UINT32 vmm_region_pageperms(struct vmm_memory_region *mreg);
-struct vmm_memory_region *vmm_region_get_bydesc(struct pm_task *task, ADDR desc);
+struct vmm_memory_region *vmm_region_get_bydesc(struct pm_task *task, struct vmm_descriptor *desc);
 struct vmm_memory_region *vmm_region_get(struct pm_task *task, UINT32 tsk_lstart);
 void vmm_region_add(struct pm_task *task, struct vmm_memory_region *mreg);
 void vmm_region_remove(struct pm_task *task, struct vmm_memory_region *mreg);
@@ -433,7 +434,7 @@ void vmm_phy_umap(struct pm_task *task, ADDR lstart);
 /* SHARED PAGES */
 struct pm_task *vmm_shared_getowner(struct pm_task *task, ADDR proc_laddr, ADDR *owner_laddr, UINT32 *attrib);
 BOOL vmm_is_shared(struct pm_task *task, ADDR proc_laddr);
-void vmm_share_remove(struct pm_task *task, struct vmm_memory_region *mreg);
+void vmm_share_remove(struct pm_task *task, UINT32 lstart);
 BOOL vmm_share_create(struct pm_task *task, ADDR laddr, UINT32 length, UINT16 perms);
 BOOL vmm_share_map(UINT32 descriptor_id, struct pm_task *task, ADDR laddr, UINT32 length, UINT16 perms);
 
