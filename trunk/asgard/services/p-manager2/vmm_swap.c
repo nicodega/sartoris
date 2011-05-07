@@ -56,12 +56,12 @@ BOOL vmm_check_swap_tbl(struct pm_task *task, struct pm_thread *thread, ADDR pg_
 		a table while pfaults are still being served) 
 		*/
 
-        rbnode *n = searchRedBlackTree(&task->vmm_info.tbl_wait_root, TBL_ADDRESS(pg_laddr));
+        rbnode *n = rb_search(&task->vmm_info.tbl_wait_root, TBL_ADDRESS(pg_laddr));
 
         if(n)
         {
             thread->vmm_info.tbl_node.value = TBL_ADDRESS(pg_laddr);
-		    insertRedBlackTree(&task->vmm_info.tbl_wait_root, &thread->vmm_info.tbl_node, FALSE);
+		    rb_insert(&task->vmm_info.tbl_wait_root, &thread->vmm_info.tbl_node, FALSE);
         }
 		
 		/* Put the thread on hold for both the table and the page. */
@@ -80,7 +80,7 @@ BOOL vmm_check_swap_tbl(struct pm_task *task, struct pm_thread *thread, ADDR pg_
 
         // insert in the page waiting list
         thread->vmm_info.pg_node.value = PG_ADDRESS(pg_laddr);
-        insertRedBlackTree(&task->vmm_info.wait_root, &thread->vmm_info.pg_node, FALSE);
+        rb_insert(&task->vmm_info.wait_root, &thread->vmm_info.pg_node, FALSE);
 				
 		/* begin IO read operation, for the page table. */
 		thread->vmm_info.page_in_address = vmm_get_page(task->id, PG_ADDRESS(pg_laddr));
@@ -171,7 +171,7 @@ BOOL vmm_check_swap(struct pm_task *task, struct pm_thread *thread, ADDR pg_ladd
 	    thread->swp_io_finished.callback = swap_page_read_callback;
 	    io_begin_pg_read( (pdir->tables[PM_LINEAR_TO_DIR(pg_laddr)].record.addr << 3), thread->vmm_info.page_in_address, thread);
 
-        insertRedBlackTree(&task->vmm_info.wait_root, &thread->vmm_info.pg_node, FALSE);
+        rb_insert(&task->vmm_info.wait_root, &thread->vmm_info.pg_node, FALSE);
 		
 	    return TRUE;
     }
@@ -254,8 +254,9 @@ void vmm_swap_empty(struct pm_task *task, BOOL iocall)
 		}
 	}
 
-	/* Begin File Mappings closing */
-	vmm_fmap_close_all(task);
+	/* Finished! we must invoke the command callback */
+	if(task->io_finished.callback != NULL) 
+        task->io_finished.callback( &task->io_event_src, IO_RET_OK);
 }
 
 /* 
@@ -415,7 +416,7 @@ UINT32 swap_table_read_callback(struct pm_thread *thread, UINT32 ioret)
 						/* Wake all pending threads (same table, same page) */
 						vmm_wake_pf_threads(curr_thr);
 					}
-                    removeChildRedBlackTree(&task->vmm_info.tbl_wait_root, &curr_thr->vmm_info.tbl_node);
+                    rb_remove_child(&task->vmm_info.tbl_wait_root, &curr_thr->vmm_info.tbl_node);
 				}
                 
 				currnode = currnode->next;

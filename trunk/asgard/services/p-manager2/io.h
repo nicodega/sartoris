@@ -224,7 +224,7 @@ void ioslot_return(UINT32 id);
 Begin a Takeover operation on STDFSS (used for FMAPS)
 Upon completion the source callback function will be invoked.
 */
-BOOL io_begin_takeover(struct fsio_event_source *iosrc, UINT32 fileid, UINT16 task);
+BOOL io_begin_takeover(struct fsio_event_source *iosrc, UINT32 fileid, ADDR fmap_desc, UINT16 task);
 /*
 Begin a Release operation on STDFSS (used for FMAPS)
 Upon completion the source callback function will be invoked.
