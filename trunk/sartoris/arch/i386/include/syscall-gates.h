@@ -61,6 +61,12 @@ extern int resume_int_c(void);
 
 extern int last_error_c(void);
 
+extern int ttrace_begin_c(int thr_id, int task_id);
+extern int ttrace_end_c(int thr_id, int task_id);
+extern int ttrace_reg_c(int thr_id, int reg, void *value, int set);
+extern int ttrace_mem_read_c(int thr_id, void *src, void *dst, int size);
+extern int ttrace_mem_write_c(int thr_id, void *src, void *dst, int size);
+
 #ifdef _METRICS_
 extern int get_metrics_c(void);
 #endif

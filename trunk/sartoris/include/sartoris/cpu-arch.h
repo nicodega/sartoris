@@ -90,6 +90,15 @@ int arch_cpy_from_task(int task, char* src, char* dst, unsigned int len, int x);
 
 void arch_dump_cpu(void);
 
+/* ttrace */
+int arch_ttrace_begin(int thr_id);
+void arch_ttrace_end(int thr_id);
+int arch_ttrace_set_reg(int thr_id, int reg, void *value);
+int arch_ttrace_get_reg(int thr_id, int reg, void *value);
+int arch_ttrace_reg_size(int reg);
+int arch_ttrace_get_regs(int thr_id, void *ptr_regs);
+int arch_ttrace_set_regs(int thr_id, void *ptr_regs);
+
 #ifndef HAVE_INL_CLI
 int arch_cli(void);   
 #endif

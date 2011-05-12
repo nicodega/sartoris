@@ -6,9 +6,9 @@
 
 /* Our state structure size, including stack size */
 #ifdef FPU_MMX
-#define ARCH_STATE_SIZE (576 + STACK0_SIZE)
+#define ARCH_STATE_SIZE (72 + 512 + STACK0_SIZE)
 #else
-#define ARCH_STATE_SIZE (60 + STACK0_SIZE)
+#define ARCH_STATE_SIZE (72 + STACK0_SIZE)
 #endif
 /* Size needed for per-task information on arch dependant section */
 #define ARCH_TASK_SIZE (sizeof(struct i386_task))

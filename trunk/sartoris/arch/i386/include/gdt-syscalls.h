@@ -45,8 +45,14 @@
 
 %define LAST_ERROR               (0x29 << 3)
 
+%define TTRACE_BEGIN             (0x2a << 3)
+%define TTRACE_END               (0x2b << 3)
+%define TTRACE_REG               (0x2c << 3)
+%define TTRACE_MEM_READ          (0x2d << 3)
+%define TTRACE_MEM_WRITE         (0x2e << 3)
+
 %ifdef _METRICS_
-%define GET_METRICS              (0x2a << 3)
+%define GET_METRICS              (0x2f << 3)
 %endif
 
 

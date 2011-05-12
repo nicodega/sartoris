@@ -161,36 +161,34 @@ int set_port_perm(int port, struct permissions *perms)
 	int x, result;
 	struct task *task;
     
-    perms = (struct permissions*)MAKE_KRN_PTR(perms);
-	result = FAILURE;
+    result = FAILURE;
 
     x = mk_enter(); /* enter critical block */
     
-    
-        if (0 <= port && port < MAX_TSK_OPEN_PORTS) 
-        {
-            task = GET_PTR(curr_task,tsk);
+    if (0 <= port && port < MAX_TSK_OPEN_PORTS) 
+    {
+        task = GET_PTR(curr_task,tsk);
     		    
-		    if (task->open_ports[port] != NULL) 
-		    {
-                if(validate_perms_ptr(perms, &task->open_ports[port]->perms, MAX_TSK, -1))
-	            {
-                    result = SUCCESS;
-                }
-                else
-                {
-                    init_perms(&task->open_ports[port]->perms);
-                }
-		    }
+		if (task->open_ports[port] != NULL) 
+		{
+            if(validate_perms_ptr(perms, &task->open_ports[port]->perms, MAX_TSK, -1))
+	        {
+                result = SUCCESS;
+            }
             else
             {
-                set_error(SERR_INVALID_PORT);
+                init_perms(&task->open_ports[port]->perms);
             }
-        }
+		}
         else
         {
             set_error(SERR_INVALID_PORT);
         }
+    }
+    else
+    {
+        set_error(SERR_INVALID_PORT);
+    }
 	
     mk_leave(x); /* exit critical block */
   

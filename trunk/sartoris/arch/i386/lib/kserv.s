@@ -56,6 +56,12 @@ global resume_int
 
 global last_error
 
+global ttrace_begin
+global ttrace_end
+global ttrace_reg
+global ttrace_mem_read
+global ttrace_mem_write
+
 %ifdef _METRICS_
 global get_metrics
 %endif
@@ -349,7 +355,47 @@ last_error:
 	call LAST_ERROR : 0x00000000
 	pop ebp
 	ret
-	
+
+ttrace_begin:
+	push ebp
+	mov ebp, esp
+	pass_arguments 2
+	call TTRACE_BEGIN : 0x00000000
+	pop ebp
+	ret
+        
+ttrace_end:
+    push ebp
+	mov ebp, esp
+	pass_arguments 2
+	call TTRACE_END : 0x00000000
+	pop ebp
+	ret
+
+ttrace_reg:
+    push ebp
+	mov ebp, esp
+	pass_arguments 4
+	call TTRACE_REG : 0x00000000
+	pop ebp
+	ret
+
+ttrace_mem_read:
+    push ebp
+	mov ebp, esp
+	pass_arguments 4
+	call TTRACE_MEM_READ : 0x00000000
+	pop ebp
+	ret
+
+ttrace_mem_write:
+	push ebp
+	mov ebp, esp
+	pass_arguments 4
+	call TTRACE_MEM_WRITE : 0x00000000
+	pop ebp
+	ret
+
 %ifdef _METRICS_
 get_metrics:
 	push ebp

@@ -72,10 +72,11 @@ struct c_thread_unit
 	/* Pointer to next free thread. Used only when thread is free. */
 	struct c_thread_unit *next_free;
 	/* Arch dependant information structure buffer */
-	unsigned char arch[ARCH_STATE_SIZE] __align(16);
+	unsigned char arch[ARCH_STATE_SIZE];
 };
 
 #define CONT_THR_STATE_PTR(thr) ((void*)&((struct c_thread_unit*)thr)->arch)
+#define CONTR_THR_FROM_THRSTATE(state) ((struct thread*)((unsigned int)state - sizeof(struct thread) - 4))
 
 #define PADDING(s,count) (PG_SIZE - sizeof(struct s) * count - sizeof(struct c_header))
 

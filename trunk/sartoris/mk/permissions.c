@@ -26,11 +26,12 @@ void init_perms(struct permissions *perms)
 }
 
 // Validate permissions pointer and structure.
-// perms is a user space linear address pointer page aligned (mapped to kernel space).
+// perms is a user space linear address pointer page aligned (NOT mapped to kernel space).
 int validate_perms_ptr(struct permissions *perms, struct permissions *perms_dest, int max, int task)
 {
     struct permissions p;
     unsigned int len, start;
+    struct permissions *kperms = MAKE_KRN_PTR(perms);
 
     if( task == -1 
         && VALIDATE_PTR(perms) 
@@ -38,8 +39,8 @@ int validate_perms_ptr(struct permissions *perms, struct permissions *perms_dest
         && ((unsigned int)perms) % PG_SIZE == 0 )
     {
         // this could produce a page fault..
-        start = perms->start;
-        len = perms->length;
+        start = kperms->start;
+        len = kperms->length;
     }
     else if (task != -1 
         && VALIDATE_PTR_TSK(task,perms) 
@@ -48,7 +49,7 @@ int validate_perms_ptr(struct permissions *perms, struct permissions *perms_dest
     {
         // map the other task perms structure to access it.
         // NOTE: This might return NULL if the page is not present and a page fault was issued.
-        while(arch_get_perms(task, perms, &p) != SUCCESS){}
+        while(arch_get_perms(task, kperms, &p) != SUCCESS){}
 
         start = p.start;
         len = p.length;
@@ -65,7 +66,7 @@ int validate_perms_ptr(struct permissions *perms, struct permissions *perms_dest
     {
         perms_dest->start = start;
         perms_dest->length = len;
-        perms_dest->bitmap = (unsigned int*)((unsigned int)perms + 2 * sizeof(unsigned int));
+        perms_dest->bitmap = (unsigned int*)((unsigned int)kperms + 2 * sizeof(unsigned int));
 		set_error(SERR_OK);
         return SUCCESS;
     }

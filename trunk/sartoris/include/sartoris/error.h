@@ -43,6 +43,9 @@ To get the last error you can invoke last_error syscall.
 #define SERR_INTERRUPT_NOT_ACTIVE     31
 #define SERR_INTERRUPT_NOT_NESTING    32
 #define SERR_INTERRUPTS_MAXED         33
+#define SERR_NOT_TRACING              34
+#define SERR_ALREADY_TRACING          35
+#define SERR_INVALID_REG              36
 
 #ifdef __KERNEL__
 static inline void set_error(short error)
