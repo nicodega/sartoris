@@ -101,6 +101,9 @@ void build_tss(struct thr_state *thr_state, int id, int task_num, int priv, void
 		thr_state->eflags = 0x00002002;
 	else 
 		thr_state->eflags = 0x00002202; /* bits 12,13: iopl=2 bit 9: int enable; bit 1: reserved */  
+
+    thr_state->sints = 0;
+    thr_state->stack_winding = NULL;
 }
 
 

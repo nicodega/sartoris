@@ -178,9 +178,9 @@ int arch_cpy_from_task(int task, char* src, char* dst, unsigned int len, int x)
 
 			}
 			else
-			{ /* issue page fault for source (imported) task */
-
-				last_page_fault.task_id = task;
+			{ 
+                /* issue page fault for source (imported) task */
+                last_page_fault.task_id = task;
 				last_page_fault.thread_id = curr_thread;
 				last_page_fault.linear = &src[i];
                 last_page_fault.pg_size = PG_SIZE;

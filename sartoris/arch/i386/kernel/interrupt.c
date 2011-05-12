@@ -18,6 +18,7 @@ struct seg_desc idt[MAX_IRQ] __align(8); // (intel says its better if its 8 byte
 
 unsigned int exc_error_code;
 int int7handler;                // if it's 1 then there's a handler for int7
+int int1handler;                // if it's 1 then there's a handler for int1
 extern void default_int();
 
 int arch_create_int_handler(int number) 
@@ -34,6 +35,11 @@ int arch_create_int_handler(int number)
 		return 0;
 	}
 #endif
+    if(number == 1)
+    {
+        int1handler = 1;
+        return 0;
+    }
     
 	ep = idt_call_table[number];
     
@@ -68,6 +74,11 @@ int arch_destroy_int_handler(int number)
         int7handler = 0;
 		return 0;
 	}
+    if(number == 1)
+    {
+        int1handler = 0;
+        return 0;
+    }
 
 	if ( (number > 31) && (number < 48) ) 
 	{

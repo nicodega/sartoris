@@ -1,11 +1,11 @@
 /*  
- *   Sartoris i386 dependent header
- *   
- *   Copyright (C) 2002, Santiago Bazerque and Nicolas de Galarreta
- *   
- *   sbazerqu@dc.uba.ar                
- *   nicodega@gmail.com
- */
+*   Sartoris 0.5 i386 kernel screen driver
+*   
+*   Copyright (C) 2002-2010, Santiago Bazerque and Nicolas de Galarreta
+*   
+*   sbazerqu@dc.uba.ar                
+*   nicodega@gmail.com
+*/
 
 #ifndef I386
 #define I386
@@ -16,7 +16,11 @@
 #include "paging.h"
 #include "kernel-arch.h"
 
-#define STACK0_SIZE 0x590     /* 1.3 kb. Remember to change it on state_switch if changed here. */
+#ifdef FPU_MMX
+#define STACK0_SIZE 1383     /* ~1.3 kb. Remember to change it on state_switch.s if changed here. */
+#else
+#define STACK0_SIZE 1895
+#endif
 
 #define __align(a) __attribute__ ((aligned (a)))
 
@@ -45,6 +49,5 @@ struct i386_task
 
 #define GET_TASK_ARCH(id) ((struct i386_task *)CONT_TSK_ARCH_PTR(GET_PTR(id,tsk)))
 #define GET_THRSTATE_ARCH(id) ((struct thr_state*)CONT_THR_STATE_PTR(GET_PTR(id,thr)))
-
 #endif
 

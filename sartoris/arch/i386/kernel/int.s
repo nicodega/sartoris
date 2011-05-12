@@ -36,19 +36,28 @@ extern curr_task
 extern arch_detected_mmxfpu
 extern caps_exception
 
-%define KRN_DATA 0x10
-	
-%macro int_hook 1
-	pushf ;; this is not necesary, interrupt calls preserve eflags
-	pusha
-	push dword %1
+extern stack_winding_int
+extern stack_unwind_int
 
+extern curr_state
+
+%define KRN_DATA 0x10
+
+%define NOT_TRAP_FLAG  0xFFFFFEFF
+%define TRAP_FLAG      0x100
+
+;; REMEMBER: This code is executed on privilege 0!
+;; that's why we can wind and unwind freely.
+%macro int_hook
+    call stack_winding_int
+	push dword %1
 	jmp int_run
 %endmacro
 
 %macro int_hook_pop_error 1
 	push ds
 	push eax
+
 	mov eax, 0x10
 	mov ds, eax
 		
@@ -57,15 +66,39 @@ extern caps_exception
 
 	mov eax, [esp]
 	mov [esp+8], eax	; set error code position with eax val
-	pop eax
-	pop ds
+	pop eax             ; ignore our eax push (dont use add for it touches the flags)
+    pop ds
 	pop eax             ; now eax has its original value which was stored on esp+8
 	
-	pushf
-	pusha
+	call stack_winding_int
 	push dword %1
 	jmp int_run
 %endmacro
+
+	;; that was terrible, but the only way to know which interrupt we
+	;; are handling is through the entry point. so i think it's the
+	;; only way. maybe there is a way to do this with the assembler,
+	;; but i don't know how to.
+
+int_run:
+	pop eax			; eax <- int number
+
+	push ds
+	push es
+	
+	mov ecx, KRN_DATA
+	mov ds, ecx
+	mov es, ecx
+	
+	push eax
+	call handle_int
+	add esp, 4
+
+	pop es
+	pop ds
+
+    call stack_unwind_int
+	iret
 
 int_code_start:
 	
@@ -133,33 +166,6 @@ int_60: int_hook 60
 int_61: int_hook 61
 int_62: int_hook 62
 int_63: int_hook 63
-
-
-	;; that was terrible, but the only way to know which interrupt we
-	;; are handling is through the entry point. so i think it's the
-	;; only way. maybe there is a way to do this with the assembler,
-	;; but i don't know how to.
-
-int_run:
-	pop eax			; eax <- int number
-
-	push ds
-	push es
-	
-	mov ecx, KRN_DATA
-	mov ds, ecx
-	mov es, ecx
-	
-	push eax
-	call handle_int
-	add esp, 4
-
-	pop es
-	pop ds
-	popa
-	popf
-	iret
- 
 
 idt_call_table:	
 dd int_0
@@ -245,13 +251,6 @@ div_err:
 	push ds
 	push es
 	mov esi, div_err_msg
-	jmp exceptional_death
-debug:
-	push dword 0    ; error is 0
-	pusha	
-	push ds
-	push es
-	mov esi, debug_msg
 	jmp exceptional_death
 nmi:
 	push dword 0    ; error is 0
@@ -361,16 +360,59 @@ simd_ext:
 	jmp exceptional_death
 	
 extern int7handler
-	
+extern int1handler
+
+;; we will handle this interrupt here first and check 
+;; if the processor is stepping. If it is, we will handle 
+;; the int until we return to userland.
+debug:
+    pushf
+    push eax
+    push ebx
+    mov eax, dr6
+    and eax, 0x4000
+    jz debug_not_stepping
+    ;; are we on sartoris code??
+    ;; get the eip from the stack
+    mov eax, [esp + (12*4)]
+    cmp eax, 0x7000000
+    jb debug_sartoris                          ;; next instruction is on saroris code, continue stepping
+debug_not_stepping:
+    pop ebx
+    pop eax
+    popf
+    cmp dword [int1handler], 0
+    je debug_error
+    call stack_winding_int
+    ;; call handle int 	
+	push dword 7
+	call handle_int
+	add esp, 4
+    call stack_unwind_int
+    iret
+debug_sartoris:
+    ;; set the trap flag again
+    mov eax, [esp+12]                          ;; get the flags from the stack
+    or eax, TRAP_FLAG
+    mov dword [esp+12], eax                    ;; popf will have the step flag
+    pop ebx
+    pop eax
+    popf
+    iret                                       ;; next trap will be on the instruction that follows (intel docs says so)
+debug_error:
+	push dword 0    ; error is 0
+	pusha	
+	push ds
+	push es
+	mov esi, debug_msg
+	jmp exceptional_death
+
 ;; since we implemented software task switching and
 ;; mmx fpu sse support, this exception will be handled first by us
 bits 32
 no_copro:
-	pusha
-	push ds
-	push es
-	pushf
-
+    call stack_winding_int
+	
 	mov ecx, KRN_DATA
 	mov ds, ecx
 	mov es, ecx
@@ -394,10 +436,7 @@ no_copro_present:
 	call handle_int
 	add esp, 4
 	
-	popf
-	pop es
-	pop ds
-	popa
+	call stack_unwind_int
 	iret
 	
 no_copro_die:
@@ -407,10 +446,7 @@ no_copro_die:
 	jmp exceptional_death
 	
 no_copro_end:
-	popf
-	pop es
-	pop ds	
-	popa
+	call stack_unwind_int
 	iret
 	
 

@@ -66,6 +66,13 @@ int mem_size(int smo_id);
 /* Errors */
 int last_error();
 
+/* Thread tracing */
+int ttrace_begin(int thr_id, int task_id);
+int ttrace_end(int thr_id, int task_id);
+int ttrace_reg(int thr_id, int reg, void *value, int set);
+int ttrace_mem_read(int thr_id, void *src, void *dst, int size);
+int ttrace_mem_write(int thr_id, void *src, void *dst, int size);
+
 #ifdef _METRICS_
 int get_metrics(struct sartoris_metrics *m);
 #endif

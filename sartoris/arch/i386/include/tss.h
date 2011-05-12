@@ -1,6 +1,8 @@
 #ifndef __TSS_H
 #define __TSS_H
 
+#include "ttrace.h"
+
 #define SWITCH_FLUSH_TLB
 
 /* the back_link and all the segment selectors 
@@ -38,11 +40,18 @@ struct tss
 	unsigned int io_map;
 };
 
-#define SFLAG_MMXFPU_STORED     0x1     // thread has MMX/FPU/SSE state stored
-#define SFLAG_SSE               0x2     // SSE, SSE2 and SSE3
-#define SFLAG_RUN_INT           0x4     // thread is runing a software interrupt
+#define SFLAG_MMXFPU_STORED     0x1     // thread has MMX/FPU/SSE state stored (remember to change the value if changed on state_switch.s)
+#define SFLAG_SSE               0x2     // SSE, SSE2 and SSE3 (remember to change the value if changed on state_switch.s)
+#define SFLAG_RUN_INT           0x4     // thread is runing a software interrupt (remember to change the value if changed on state_switch.s)
+#define SFLAG_TRACEABLE         0x8     // thread is "traceable", we must wind/unwind the stack (remember to change the value if changed on stack_windings.s)
+#define SFLAG_DBG               0x10    // if this flag is set, winding must save/restore debug information
+#define SFLAG_TRACE_REQ         0x20    // if this flag is set, a task requested tracing on the thread.
+#define SFLAG_TRACE_END         0x40    // if this flag is set, tracing stopped for the thread and it's stack winding must be removed for the last time.
 
-/* Now we use a custom state management structure for threads  */
+/* Now we use a custom state management structure for threads.
+If thread structure size is changed, we should add padding before
+the mmx state, to align it to 16bytes.
+Size: 96 bytes (without mmx state)*/
 struct thr_state
 {
 	unsigned int sflags;	// a bunch of sartoris flags
@@ -60,11 +69,13 @@ struct thr_state
 	unsigned int es;
 	unsigned int ds;
 	unsigned int ldt_sel;
+	struct regs *stack_winding;	   // this will contain common and segment registers when an interrupt or run_thread is invoked
+                                   // it will be filled only when ttrace is active on the thread and the interrupt is not generated
+                                   // on sartoris code.
+    unsigned int sints;            // ammount of interrupts triggered while on sartoris code when a trace is being performed
 #ifdef FPU_MMX
-	unsigned int mmx[128]; // for preserving FPU/MMX registers
-#endif
-#ifdef SSE
-	
+    unsigned int padding;
+	unsigned int mmx[128];         // for preserving FPU/MMX registers (given the size of thread and all the c_thread_unit, this will be 16 byte aligned)
 #endif
 };
 

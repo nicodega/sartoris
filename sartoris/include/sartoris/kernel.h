@@ -13,10 +13,10 @@
 #include <sartoris/types.h>
 
 /* limitations and init params */
-#define MAX_ALLOC_LINEAR   0x7000000   /* 112 MB () */
+#define MAX_ALLOC_LINEAR   0x7000000   /* 112 MB (remember to change stack_windings and int.s debug routine on i386 if this value is modified) */
 #define MIN_TASK_OFFSET    MAX_ALLOC_LINEAR
 
-#define MAX_SCA						37    /* max system calls */
+#define MAX_SCA						42    /* max system calls */
 #define MAX_TSK						4096  /* max tasks */
 #define MAX_THR						16384 /* max concurrent threads of execution */
 #define MAX_IRQ						64    /* max irqs */
@@ -72,7 +72,7 @@ struct permissions
 #ifdef __KERNEL__
     unsigned int *bitmap;
 #endif
-};
+} __attribute__ ((__packed__));
 
 /* main data structures */
 struct task 
@@ -95,6 +95,11 @@ struct task
 #endif
 } __attribute__ ((__packed__));
 
+/*
+NOTE: If this struct size is changed, check thread_state on
+arch part for i386 for 16 byte alignment.
+Size 40 bytes.
+*/
 struct thread 
 {
 	int task_num;
@@ -108,7 +113,7 @@ struct thread
     char page_faulted;					/* used to know if we have produced a page fault */
     char padding;
 	short last_error;                   // last error (see error.h)
-	struct c_thread_unit *next_free;	// used only when free	
+    int trace_task;                     // if -1 no task is allowed to trace this thread. If it's not -1, the specified task can.
 #endif
 } __attribute__ ((__packed__));
 

@@ -1,7 +1,7 @@
 
 bits 32
 
-%define STACK0_SIZE 1424 ;; remember this comes from kernel.h
+%define STACK0_SIZE 1416 ;; remember this comes from kernel.h
 
 global arch_switch_thread
 global arch_switch_thread_int
@@ -23,8 +23,10 @@ extern arch_caps
 %define SFLAG_MMXFPU_STORED     0x1
 %define SFLAG_SSE               0x2       ;; SSE, SSE2 and SSE3
 %define SFLAG_RUN_INT           0x4
+%define SFLAG_TRACE_REQ         0x20
 %define NOT_SFLAG_MMXFPU        0xFFFFFFFE
 %define NOT_SFLAG_RUN_INT       0xFFFFFFFB
+%define NOT_SFLAG_TRACE_REQ     0xFFFFFFDF
 %define CR0_TS                  0x8
 %define MMX_NO_OWNER            0xFFFFFFFF
 
@@ -45,8 +47,10 @@ struc thr_state
 	.es resd 1;
 	.ds resd 1;
 	.ldt_sel resd 1;
+	.stack_winding resd 1;
+    .sints resd 1;
 %ifdef FPU_MMX
-	.padding resd 1;
+    .padding resd 1;
 	.mmx  resd 128;       ;; for preserving FPU/MMX registers
 %endif
 endstruc
@@ -190,6 +194,13 @@ run_thread_int_cont_switch:
 	jne _first_time
     
 _dummy_eip:
+    ;; in case other process is being debugged
+    ;; disable debug registers
+    xor eax, eax
+    mov eax, dr7
+    and eax, 0xFFFFFF00
+    mov dr7, eax
+
 	;; restore general purpose registers 
 	mov ebx, [ecx + thr_state.ebx]
 	mov esi, [ecx + thr_state.esi]
@@ -201,7 +212,18 @@ _dummy_eip:
 	mov ebp, [ecx + thr_state.ebp]
 	mov eax, [ecx + thr_state.esp]
 	mov esp, eax
-		
+	
+    ;; put eflags on eax
+	mov eax, [ecx + thr_state.eflags]
+    mov edx, [ecx + thr_state.sflags]
+	and edx, SFLAG_TRACE_REQ
+	jz _dummy_no_trace
+    and edx, NOT_SFLAG_TRACE_REQ
+    mov dword [ecx + thr_state.sflags], edx
+    or eax, 0x100       ;; set the trap flag, so a step interrupt is executed just when we hit userspace
+    ;; our first winding will be created when the debug exception is raised
+_dummy_no_trace:
+
 	;; load eflags register now 
 	mov eax, [ecx + thr_state.eflags]
 	push eax
@@ -222,19 +244,19 @@ _first_time:
 	ldmxcsr [arch_caps + 16]
 no_sse:	
 %endif
-	;; setup our stack0
+	;; setup our stack
 	xor ebp, ebp
 	mov eax, [ecx + thr_state.esp]
 	mov esp, eax
-				
+	
 	;; simulate inter privilege callf
 	;; stack should be like this (grows down):
 	;;   _____
 	;;  |  ss   | 0
 	;;  |  esp  |
 	;;  |  cs   |
-	;;  |  eip  |
-	;;  |       | <- esp
+	;;  |  eip  | <- esp
+
 	push dword [ecx + thr_state.ss]
 	push dword [ecx + thr_state.ebp]
 	push dword [ecx + thr_state.cs]
@@ -242,20 +264,28 @@ no_sse:
 
 	;; set eip to _dummy_eip so we never fall here again
 	mov dword [ecx + thr_state.eip], _dummy_eip
-
-	;; load eflags register now 
-	mov eax, [ecx + thr_state.eflags]
-		
+    		
 	;; first time -> load ds and es
 	mov ebx, [ecx + thr_state.es]
 	mov es, ebx
 	mov ebx, [ecx + thr_state.ds]
 	mov ds, ebx
-	
+    
+    ;; put eflags on eax
+	mov eax, [ecx + thr_state.eflags]
+
+    mov ebx, [ecx + thr_state.sflags]
+	and ebx, SFLAG_TRACE_REQ
+	jz no_trace
+    and ebx, NOT_SFLAG_TRACE_REQ
+    mov dword [ecx + thr_state.sflags], ebx
+    or eax, 0x100       ;; set the trap flag, so a step interrupt is executed just when we hit userspace
+    ;; our first winding will be created when the debug exception is raised
+no_trace:
 	;; restore flags (interrupts should be disabled here)
 	push eax
-	popf
-	
+    xor eax,eax
+    popf
 	retf   ;; God help us!!
 	
 

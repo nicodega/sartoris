@@ -34,6 +34,10 @@ global write_mem
 global mem_size
 
 global last_error
+
+global ttrace_reg
+global ttrace_mem_read
+global ttrace_mem_write
 	
 get_current_task:
 	push ebp
@@ -173,5 +177,29 @@ last_error:
 	push ebp
 	mov ebp, esp
 	call LAST_ERROR : 0x00000000
+	pop ebp
+	ret
+
+ttrace_reg:
+    push ebp
+	mov ebp, esp
+	pass_arguments 4
+	call TTRACE_REG : 0x00000000
+	pop ebp
+	ret
+
+ttrace_mem_read:
+    push ebp
+	mov ebp, esp
+	pass_arguments 4
+	call TTRACE_MEM_READ : 0x00000000
+	pop ebp
+	ret
+
+ttrace_mem_write:
+	push ebp
+	mov ebp, esp
+	pass_arguments 4
+	call TTRACE_MEM_WRITE : 0x00000000
 	pop ebp
 	ret
