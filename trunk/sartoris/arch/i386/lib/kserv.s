@@ -21,6 +21,7 @@ global destroy_thread
 global set_thread_run_perms
 global set_thread_run_mode
 global run_thread
+global run_thread_int
 global get_current_thread
 
 global grant_page_mk
@@ -54,6 +55,12 @@ global pop_int
 global resume_int
 
 global last_error
+
+global ttrace_begin
+global ttrace_end
+global ttrace_reg
+global ttrace_mem_read
+global ttrace_mem_write
 
 %ifdef _METRICS_
 global get_metrics
@@ -127,6 +134,14 @@ run_thread:
 	mov ebp, esp
 	pass_arguments 1
 	call RUN_THREAD : 0x00000000
+	pop ebp
+	ret
+
+run_thread_int:
+	push ebp
+	mov ebp, esp
+	pass_arguments 3
+	call RUN_THREAD_INT : 0x00000000
 	pop ebp
 	ret
 
@@ -338,6 +353,47 @@ last_error:
 	push ebp
 	mov ebp, esp
 	call LAST_ERROR : 0x00000000
+	pop ebp
+	ret
+
+
+ttrace_begin:
+	push ebp
+	mov ebp, esp
+	pass_arguments 2
+	call TTRACE_BEGIN : 0x00000000
+	pop ebp
+	ret
+        
+ttrace_end:
+    push ebp
+	mov ebp, esp
+	pass_arguments 2
+	call TTRACE_END : 0x00000000
+	pop ebp
+	ret
+
+ttrace_reg:
+    push ebp
+	mov ebp, esp
+	pass_arguments 4
+	call TTRACE_REG : 0x00000000
+	pop ebp
+	ret
+
+ttrace_mem_read:
+    push ebp
+	mov ebp, esp
+	pass_arguments 4
+	call TTRACE_MEM_READ : 0x00000000
+	pop ebp
+	ret
+
+ttrace_mem_write:
+	push ebp
+	mov ebp, esp
+	pass_arguments 4
+	call TTRACE_MEM_WRITE : 0x00000000
 	pop ebp
 	ret
 	

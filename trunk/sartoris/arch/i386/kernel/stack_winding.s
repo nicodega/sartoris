@@ -16,10 +16,9 @@ bits 32
 
 extern curr_state
 
-%define SFLAG_TRACEABLE         0x8
-%define SFLAG_DBG               0x10
-%define SFLAG_TRACE_END         0x40
-%define NOT_SFLAG_TRACE_END     0xFFFFFFBF
+%define SFLAG_TRACEABLE         0x10
+%define SFLAG_DBG               0x20
+%define SFLAG_TRACE_END         0x80
 %define NOT_INT_ENABLE          0xFFFFFDFF          ;; not eflags IF
 %define KRN_DATA                0x10
 
@@ -244,7 +243,7 @@ xchg bx,bx
     ret
 stack_unwind_int_cont2:
     ;; remove end mark if it was set
-    and ecx, NOT_SFLAG_TRACE_END
+    and ecx, ~SFLAG_TRACE_END
     mov eax, [curr_state]
     mov dword [eax], ecx
     xor edx, edx
@@ -325,10 +324,10 @@ stack_unwind_syscall_cont:
 xchg bx,bx
     add esp, 4                              ;; remove ebx from the stack, we will get it on popad
     ;; remove end mark if it was set
-    and edx, NOT_SFLAG_TRACE_END
+    and edx, ~SFLAG_TRACE_END
     mov ebx, [curr_state]
     mov dword [ebx], edx
-    mov ebx, edx                            ;; now ebx has satoris flags again without NOT_SFLAG_TRACE_END
+    mov ebx, edx                            ;; now ebx has satoris flags again without ~NOT_SFLAG_TRACE_END
     xor edx, edx
     and ebx, SFLAG_DBG
     jz stack_unwind_int_nodbg
