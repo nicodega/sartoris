@@ -1,0 +1,83 @@
+[2.0.0]	- alpha 1
+	- Tasks now won't be initialized when created. I created init_task syscall for
+	  that.
+	- Only 4 LDT segment selectors are defined on GDT (one for each privilege level) (before version 2.0 one ldt was created for each task).
+	- Dynamic memory implemented. Will issue PF to get/free pages for the microkernel.
+	- Software interrupts implementation
+		Allows running a thread specifying an eip and stack. Upon run
+		current thread registers (C convention) and flags will remain the same.
+        This can be useful to implement signals on an OS on top of sartoris.
+	- MMX/FPU/SSE/SSE2/3DNOW! state preservation support on x86 arch.
+	- Capabilities API (CPUID)
+        Now RDTSC and RDPMC are enabled for processes.
+	- Optional (#define _METRICS_) Metrics API 
+		Currently only supports SMO/Messages/Ports/dynamic-memory metrics and a syscall to get the struct.
+	- run_thread permission bitmaps are now implemented in user space. This might not be the best option
+      but will let the OS handle te paging, and since we support so many threads now, we could not afford that on
+      sartoris itself.
+	- Multiboot compliant loader (hopefully).
+	- Pop/Push/Resume Interrupts implemented for interrupt stack manipulation from non nested ints.
+      This could be used on the OS on top to handle interrupts page faults, it they are allowed.
+	- Now ports must be opened manually. Compatibility with version 0.5.3 is deprecated.
+	- Kernel now loads itself from the first megabyte and up, preserving the BIOS.
+	  (implemented entering Unreal Mode) and a new segment is available on the ldt for
+      privilege 1 tasks.
+    - new ttrace system calls for debugging. ttrace functions allow a process to inspect or set
+      a thread registers (including the eip), or read/write it's memory. 
+      Since this adds overhead to interrupt handling and system calls (because of the stack winding/unwinding)
+      only threads being traced will incurr such overhead. Tracing can be started only by a 
+      privilege 1 task, but register and memory operations are allowed to any privilege, because
+      when sartoris is told to trace a thread, we must specify which task is allowed to do so.
+      If a debugger process tries to write on a read only page on the traced thread/task, a page
+      fault exception will be raised, and it'll be up to the OS on top to allow such an operation
+      or kill the process if it was not allowed.
+      When tracing starts for a thread, it's state won't be accesible until it's executed for the first time
+      after ttrace_begin invoke. A step int1 will be raised once the thread is executed after
+      ttrace_begin. If the task tries to do anything while the thread is tracing but has never executed, 
+      every ttrace function except for ttrace_end will fail.
+
+[0.6.0] - Prerelease 8
+	- Fixed smos implementation with paging.
+	- Fixed offset increment on smos when reading or writing.
+	- Changed memory layout.
+
+[0.6.0] - Prerelease 7
+	- New syscalls: get_current_thread, get_current_task, get_last_int
+	- Paging support for x86 is partially implemented!
+	- Created specific int-handling system calls. Threading and interrupt
+          handling are orthogonal now.
+        - Moved the interrupt stack to the arch-independent section.
+          (to do: interrupt privileges and in-kernel PIC handling)
+        - Modified privilege system, removing types PRC_TSK and SRV_TSK. Now
+          the microkernel keeps an integer privilege level per-task, with
+          zero being most privileged. Tasks of levels 0 and 1 have access to 
+          the input-output space (in current implementations). Some system 
+          calls are restricted to levels 0 and 1. Levels from 2 to [integer 
+          size] may be used by the operating system to represent additional
+          rings of protection.
+        - Threading and messaging permissions may be set on a per-task basis,
+          and using privilege levels (here is where the levels beyond 2 may
+          be of use). 
+        - IMPORTANT NOTE: All threads with privilege levels 0 or 1 start
+          with the interrupt flag cleared under i386. Set it when it is
+          necessary or your services will lock up the machine. [It's done this
+          way to ease the implementation of interrupt handlers.]
+
+[0.5.3] - Included new boot sector, we can load from any primary partition
+          within the first ~500 MB of any BIOS addressable hard disk as well
+          as from a floppy. It uses DOS partitioning, set partition type to
+          0xd0. The bootable flag is, well, disregarded.
+
+[0.5.2] - Moved Oblivion out of the Sartoris tree. 
+        - Redesigned Makefiles to use an inherited compile enviroment.
+        - Tested gcc 3.0.1. It works fine.
+        - Implemented automatic dependency generation. See "make dep".
+        - Added a new architecture: Li386emu. This is an attempt to emulate
+          an i386-like architecture inside of a Linux process.
+ 
+[0.5.1] - Lots of security enhancements in the kernel. 
+        - Fix to IRQ_DRIVEN threads, now exceptions can be driven.
+        - Minor enhancements and bugfixes to Oblivion.
+
+[0.5.0] - Sartoris intial release, with Oblivion 0.01 included.
+        - This is what went to the Computer Organization II people. 
