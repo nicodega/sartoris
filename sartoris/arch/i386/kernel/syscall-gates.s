@@ -21,6 +21,9 @@ global create_thread_c
 extern destroy_thread
 global destroy_thread_c
 	
+extern run_thread_int
+global run_thread_int_c
+
 extern run_thread
 global run_thread_c
 
@@ -283,6 +286,9 @@ mem_size_c:
 
 run_thread_c:
 	syscall_def 1, run_thread
+
+run_thread_int_c:
+	syscall_def 3, run_thread
 	
 ;; int stack manipulation
 push_int_c:

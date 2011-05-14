@@ -23,7 +23,8 @@ extern int create_thread_c(int, struct thread*);
 extern int destroy_thread_c(int);
 extern int set_thread_run_perms_c(int thr_id, struct permissions *perm);
 extern int set_thread_run_mode_c(int thr_id, int priv, int mode);
-extern int run_thread_c(int);
+extern int run_thread_c(int id);
+extern int run_thread_int_c(int id, void *eip, void *stack);
 extern int get_current_thread_c(int);
 
 extern int page_in_c(int task, void *linear, void *physical, int level, int attrib);
@@ -59,6 +60,12 @@ extern int pop_int_c(void);
 extern int resume_int_c(void);
 
 extern int last_error_c(void);
+
+extern int ttrace_begin_c(int thr_id, int task_id);
+extern int ttrace_end_c(int thr_id, int task_id);
+extern int ttrace_reg_c(int thr_id, int reg, void *value, int set);
+extern int ttrace_mem_read_c(int thr_id, void *src, void *dst, int size);
+extern int ttrace_mem_write_c(int thr_id, void *src, void *dst, int size);
 
 #ifdef _METRICS_
 extern int get_metrics_c(void);

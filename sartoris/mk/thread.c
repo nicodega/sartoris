@@ -269,6 +269,100 @@ int run_thread(int id)
 	return result;
 }
 
+
+/*
+Software interrupt. This allows runing a thread within a given stack starting at a specific eip.
+If stack is null current thread stack will be used.
+*/
+int run_thread_int(int id, void *eip, void *stack)
+{
+	int x, res;
+	int prev_curr_thread;
+	int result;
+	struct thread *thread;
+	struct task *task;
+    unsigned int *perms;
+
+	result = FAILURE;
+
+	x = mk_enter(); /* enter critical block */
+    	
+    if (0 <= id && id < MAX_THR && TST_PTR(id,thr))
+	{
+        thread = GET_PTR(id,thr);
+        
+        // NOTE: test_permission could produce a page fault
+        if(curr_priv != 0 
+            && thread->invoke_mode == PERM_REQ 
+            && test_permission(thread->task_num, &thread->run_perms, curr_thread) == FAILURE)
+        {
+            mk_leave(x);
+		    return FAILURE;
+        }
+        
+        if (thread->invoke_mode != DISABLED) 
+		{            
+            if( curr_priv <= thread->invoke_level 
+                || thread->invoke_mode == UNRESTRICTED 
+                || thread->invoke_mode == PERM_REQ)
+			{                
+    			if (id != curr_thread) 
+				{
+					prev_curr_thread = curr_thread;
+					task = GET_PTR(thread->task_num,tsk);
+
+					curr_thread = id;
+					curr_task = thread->task_num;
+					curr_base = task->mem_adr;
+					curr_priv = task->priv_level;
+
+                    result = arch_run_thread_int(id, eip, stack);
+
+					if ( result !=  SUCCESS ) 
+					{                        
+                        set_error(SERR_ERROR);
+						thread = GET_PTR(prev_curr_thread,thr);
+						task = GET_PTR(thread->task_num,tsk);
+
+						/* rollback: thread switching failed! */
+						curr_thread = prev_curr_thread;
+						curr_task = thread->task_num;
+						curr_base = task->mem_adr;
+						curr_priv = task->priv_level;
+					}
+                    else
+                    {
+                        set_error(SERR_OK);
+                    }
+				}
+                else
+                {
+                    set_error(SERR_SAME_THREAD);
+                }
+			}
+            else
+            {
+                set_error(SERR_NO_PERMISSION);
+            }
+		}
+        else
+        {
+            set_error(SERR_INVALID_THR);
+        }
+    }
+    else
+    {
+        if(0 > id || id >= MAX_THR)
+            set_error(SERR_INVALID_ID);
+        else
+            set_error(SERR_INVALID_THR);
+    }
+
+	mk_leave(x); /* exit critical block */
+
+	return result;
+}
+
 int set_thread_run_perms(int thr_id, struct permissions *perms)
 {
     struct thread *thread;

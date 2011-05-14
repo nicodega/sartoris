@@ -27,10 +27,9 @@ extern arch_caps
 %define SFLAG_MMXFPU_STORED     0x1
 %define SFLAG_SSE               0x2       ;; SSE, SSE2 and SSE3
 %define SFLAG_RUN_INT           0x4
-%define SFLAG_TRACE_REQ         0x20
-%define NOT_SFLAG_MMXFPU        0xFFFFFFFE
-%define NOT_SFLAG_RUN_INT       0xFFFFFFFB
-%define NOT_SFLAG_TRACE_REQ     0xFFFFFFDF
+%define SFLAG_RUN_INT_START     0x8
+%define SFLAG_RUN_INT_STATE     0x100
+%define SFLAG_TRACE_REQ         0x40
 %define CR0_TS                  0x8
 %define MMX_NO_OWNER            0xFFFFFFFF
 
@@ -80,7 +79,33 @@ arch_switch_thread:
 	;; ds:ecx will contain thread state 
 	;; mov eax,[ecx + thr_state.xxxx]
 	mov ecx, [curr_state]					;; now ecx contains the state of the running thread
-	
+
+    ;; if we are on a soft interrupt, this means we interrupted the 
+    ;; soft int (with a run_thread or an interrupt) and ge got here.
+    ;; If that's the case, we must preserve our original thread 
+    ;; C convension registers (ebp, esi, edi, ebx, esp)
+	mov eax, [ecx + thr_state.sflags]
+    mov edx, eax
+	and eax, SFLAG_RUN_INT
+    jz arch_switch_thread_softint_cont
+    and edx, SFLAG_RUN_INT_START
+    jnz arch_switch_thread_softint_cont
+    ;; preserve the thread registers before it was runned again
+    mov eax, [ecx + thr_state.ebp]
+    push eax
+    mov eax, [ecx + thr_state.esi]
+    push eax
+    mov eax, [ecx + thr_state.edi]
+    push eax
+    mov eax, [ecx + thr_state.ebx]
+    push eax
+    mov eax, [ecx + thr_state.esp]
+    push eax
+    mov eax, [ecx + thr_state.sflags]
+    or eax, SFLAG_RUN_INT_STATE
+    mov dword [ecx + thr_state.sflags], eax
+arch_switch_thread_softint_cont:
+
 	;; edx will contain cr3 for new thread
 	mov edx, [ebp+16]			            ;; now edx contains cr3 for new thread
 	
@@ -177,14 +202,25 @@ _mmx_cont:
 	mov fs, eax
 	mov eax, [ecx + thr_state.gs]
 	mov gs, eax
+
+    ;; in case other process is being debugged
+    ;; disable debug registers
+    xor eax, eax
+    mov eax, dr7
+    and eax, 0xFFFFFF00
+    mov dr7, eax
     
     ;*****************************************************
 	; Support for soft interrupts on a given thread
 	;*****************************************************
 	;; this might not be the first time, but a run_thread_int
 	mov eax, [ecx + thr_state.sflags]
-	and eax, SFLAG_RUN_INT
-	jnz run_thread_int_cont
+    mov edx, eax
+	and eax, SFLAG_RUN_INT_START
+    jz run_thread_int_cont_switch
+    and edx, ~SFLAG_RUN_INT_START
+    mov dword [ecx + thr_state.sflags], edx          ;; remove the soft int start flag so we won't fall here again
+	jmp run_thread_int_cont
 
 run_thread_int_cont_switch:
     ;; Now, since we have implemented software thread switching
@@ -196,14 +232,7 @@ run_thread_int_cont_switch:
 	jne _first_time
     
 _dummy_eip:
-    ;; in case other process is being debugged
-    ;; disable debug registers
-    xor eax, eax
-    mov eax, dr7
-    and eax, 0xFFFFFF00
-    mov dr7, eax
-
-	;; restore general purpose registers 
+    ;; restore general purpose registers 
 	mov ebx, [ecx + thr_state.ebx]
 	mov esi, [ecx + thr_state.esi]
 	mov edi, [ecx + thr_state.edi]
@@ -221,7 +250,7 @@ _dummy_eip:
 	and edx, SFLAG_TRACE_REQ
 	jz _dummy_no_trace
     xchg bx,bx
-    and edx, NOT_SFLAG_TRACE_REQ
+    and edx, ~SFLAG_TRACE_REQ
     mov dword [ecx + thr_state.sflags], edx
     or eax, 0x100       ;; set the trap flag, so a step interrupt is executed just when we hit userspace
     ;; our first winding will be created when the debug exception is raised
@@ -232,7 +261,7 @@ _dummy_no_trace:
 	push eax
 	popf			;; interrupts should be disabled
 	
-	pop ebp
+	pop ebp                             
 	xor eax, eax                        ;; in case we were invoked from run_thread_int		
 	ret
 	
@@ -248,7 +277,7 @@ _first_time:
 no_sse:	
 %endif
     ;; setup our stack0
-	xor ebp, ebp
+    xor ebp, ebp
     mov eax, [ecx + thr_state.esp]
 	mov esp, eax
 
@@ -275,7 +304,7 @@ no_sse:
 	and ebx, SFLAG_TRACE_REQ
 	jz no_trace
     xchg bx,bx
-    and ebx, NOT_SFLAG_TRACE_REQ
+    and ebx, ~SFLAG_TRACE_REQ
     mov dword [ecx + thr_state.sflags], ebx
     or eax, 0x100       ;; set the trap flag, so a step interrupt is executed just when we hit userspace
     ;; our first winding will be created when the debug exception is raised
@@ -309,8 +338,8 @@ arch_switch_thread_int:
 	mov eax, 1
 	ret
 run_thread_int_ok:
-	or eax, SFLAG_RUN_INT
-	mov [ecx + thr_state.sflags], eax		; we are now on soft int
+	or eax, (SFLAG_RUN_INT|SFLAG_RUN_INT_START)
+	mov [ecx + thr_state.sflags], eax		; we are now on soft int (starting it)
 	jmp arch_switch_thread
 	
 	;; On next line, thread state has been 
@@ -321,9 +350,9 @@ run_thread_int_ok:
 	;; because upon return we will 
 	;; recover regs as usual
 run_thread_int_cont:
-	;; we still have stack0 from the call, we can
-	;; use ebp
-	;; get stack being used
+	;; we still have stack0 from the call and we can use ebp
+    ;; because it was set by arch_switch_thread
+    ;; get stack being used
 	cmp dword [ebp + 24], 0x0
 	je thread_stack	 
 	mov eax, [ebp + 24] 
@@ -332,10 +361,9 @@ thread_stack:
 	mov eax, [ecx + thr_state.esp]
 run_int_cont:
 	;; load eflags register now 
-	mov eax, [ecx + thr_state.eflags]
-	push eax
+	mov edx, [ecx + thr_state.eflags]
+	push edx
 	popf
-	
 	;; simulate a far call (return will be performed 
 	;; by ret_from_int
 	push dword [ecx + thr_state.ss]
@@ -360,28 +388,35 @@ run_int_cont:
 arch_is_soft_int:
 	mov ecx, [curr_state]
 	mov eax, [ecx + thr_state.sflags]
+    mov edx, eax
 	and eax, SFLAG_RUN_INT
 	jnz arch_is_soft_int_cont
 	xor eax, eax
 	ret
 arch_is_soft_int_cont:
-	call arch_thread_int_ret
-	mov eax, 1
-	ret	
-arch_thread_int_ret:
+    mov eax, edx
+    ;; see if we had a switch on the soft int!
+    and eax, SFLAG_RUN_INT_STATE
+    jz arch_is_soft_int_cont2
+    ;; restore the thread original state to it's state structure
+    pop eax
+    mov dword [ecx + thr_state.ebp], eax
+    pop eax
+    mov dword [ecx + thr_state.esi], eax
+    pop eax
+    mov dword [ecx + thr_state.edi], eax
+    pop eax
+    mov dword [ecx + thr_state.ebx], eax
+    pop eax
+    mov dword [ecx + thr_state.esp], eax
+arch_is_soft_int_cont2:
+    ;; remove softint flags
+    and edx, ~(SFLAG_RUN_INT_STATE|SFLAG_RUN_INT|SFLAG_RUN_INT_START)
 xchg bx,bx
-	mov ecx, [curr_state]
-	;; when the target thread int handler 
-	;; made a far call to us, he left on our
-	;; stack0 his 4 dwords... remove them!!! muahahahah
-	;; when we remove them, we ensure everything is
-	;; ok to come back to state switch (because we left 
-	;; everything ok except for regs, flags and stack)
-	mov eax, esp
-	add esp, 16			;; remove far call :)
-	
 	;; Now the thread is as if he has just returned
 	;; to its original state switch
+    ;; ecx points to the "new state"
+    ;; and all C registers are safe!
 	jmp run_thread_int_cont_switch
 
 ;;***************************************************************************************
