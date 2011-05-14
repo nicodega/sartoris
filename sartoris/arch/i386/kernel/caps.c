@@ -1,7 +1,8 @@
 
 #include "caps.h"
+#include "i386.h"
 
-struct arch_capabilities arch_caps;
+struct arch_capabilities arch_caps __align (16);
 
 int arch_caps_hascpuid()
 {

@@ -24,11 +24,11 @@ extern arch_caps
 ;; on its manual volume 3 :)
 ;;
 
+%define SCAP_SSE                0x20       ;; SSE, SSE2 and SSE3
 %define SFLAG_MMXFPU_STORED     0x1
-%define SFLAG_SSE               0x2       ;; SSE, SSE2 and SSE3
-%define SFLAG_RUN_INT           0x4
-%define SFLAG_RUN_INT_START     0x8
-%define SFLAG_RUN_INT_STATE     0x100
+%define SFLAG_RUN_INT           0x2
+%define SFLAG_RUN_INT_START     0x4
+%define SFLAG_RUN_INT_STATE     0x8
 %define SFLAG_TRACE_REQ         0x40
 %define CR0_TS                  0x8
 %define MMX_NO_OWNER            0xFFFFFFFF
@@ -172,21 +172,6 @@ restore_state:
 	;; ds:ecx will contain thread state 
 	mov ecx, [ebp+8]           ;; now ecx contains &thr_states[id]
 	mov [curr_state], ecx      ;; update curr_state to the new one
-%ifdef FPU_MMX	
-	;; if task is NOT mmx_state_owner
-	;; set ts, if not, clear it
-	cmp ecx, dword [mmx_state_owner]
-	je _mmx_owner
-	;; set cr0 TS again
-	mov eax, cr0
-	or eax, CR0_TS
-	mov cr0, eax
-	jmp _mmx_cont
-_mmx_owner:
-	;; clear TS
-	clts
-_mmx_cont:
-%endif
 	
 	;; load ldt register
 	;; indicating wich priv
@@ -232,6 +217,22 @@ run_thread_int_cont_switch:
 	jne _first_time
     
 _dummy_eip:
+
+%ifdef FPU_MMX	
+	;; if task is NOT mmx_state_owner
+	;; set ts, if not, clear it
+	cmp ecx, dword [mmx_state_owner]
+	jne _mmx_owner
+	;; set cr0 TS again
+	mov eax, cr0
+	or eax, CR0_TS
+	mov cr0, eax
+	jmp _mmx_cont
+_mmx_owner:
+	;; clear TS
+	clts
+_mmx_cont:
+%endif
     ;; restore general purpose registers 
 	mov ebx, [ecx + thr_state.ebx]
 	mov esi, [ecx + thr_state.esi]
@@ -269,12 +270,22 @@ _first_time:
 	;; load initial mxcsr if SSE is present
 	;; only for the first time
 %ifdef FPU_MMX
-	mov eax, [ecx + thr_state.sflags]
-	and eax, SFLAG_SSE                  ;; should we check caps instead of this?
+    clts                        ;; clear TS here so ldmxcsr won't raise the exception
+    mov eax, [arch_caps]
+	and eax, SCAP_SSE
 	jz no_sse
 	xor eax, eax
 	ldmxcsr [arch_caps + 16]
 no_sse:	
+	;; if task is NOT mmx_state_owner
+	;; set ts, if not, clear it
+	cmp ecx, dword [mmx_state_owner]
+	jne _mmx_cont2
+	;; set cr0 TS again
+	mov eax, cr0
+	or eax, CR0_TS
+	mov cr0, eax
+_mmx_cont2:	
 %endif
     ;; setup our stack0
     xor ebp, ebp
