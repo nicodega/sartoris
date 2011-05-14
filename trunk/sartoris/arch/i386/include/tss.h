@@ -39,14 +39,13 @@ struct tss
 };
 
 #define SFLAG_MMXFPU_STORED     0x1     // thread has MMX/FPU/SSE state stored (remember to change the value if changed on state_switch.s)
-#define SFLAG_SSE               0x2     // SSE, SSE2 and SSE3 (remember to change the value if changed on state_switch.s)
-#define SFLAG_RUN_INT           0x4     // thread is runing a software interrupt (remember to change the value if changed on state_switch.s)
-#define SFLAG_RUN_INT_START     0x8     // thread is starting to run as a soft int
-#define SFLAG_TRACEABLE         0x10     // thread is "traceable", we must wind/unwind the stack (remember to change the value if changed on stack_windings.s)
+#define SFLAG_RUN_INT           0x2     // thread is runing a software interrupt (remember to change the value if changed on state_switch.s)
+#define SFLAG_RUN_INT_START     0x4     // thread is starting to run as a soft int
+#define SFLAG_RUN_INT_STATE     0x8     // thread was running on a soft int and it was interrupted
+#define SFLAG_TRACEABLE         0x10    // thread is "traceable", we must wind/unwind the stack (remember to change the value if changed on stack_windings.s)
 #define SFLAG_DBG               0x20    // if this flag is set, winding must save/restore debug information
 #define SFLAG_TRACE_REQ         0x40    // if this flag is set, a task requested tracing on the thread.
 #define SFLAG_TRACE_END         0x80    // if this flag is set, tracing stopped for the thread and it's stack winding must be removed for the last time.
-#define SFLAG_RUN_INT_STATE     0x100   // thread was running on a soft int and it was interrupted
 
 /* Now we use a custom state management structure for threads  */
 struct thr_state
