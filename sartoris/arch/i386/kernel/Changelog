@@ -1,2 +1,0 @@
-[15-2-02] - cleared a bit the exception throwing macro in int.s (the one that
-            pops the error code and calls the run_int thing).
