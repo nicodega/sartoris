@@ -36,11 +36,11 @@ UINT32 loader_create_task(struct pm_task *task, char *path, UINT32 plength, int 
 
 	/* Get a Page for the Directory */
 	task->vmm_info.page_directory = (struct vmm_page_directory*)vmm_get_dirpage(task->id);
-
+    
 	if(task->vmm_info.page_directory == NULL) 
 		return PM_NOT_ENOUGH_MEM;
 	
-	/* if we got here, task id is valid, the task slot is free,
+    /* if we got here, task id is valid, the task slot is free,
 	the path got through fine (smo is ok) and we have enough
 	memory at least for a new page directory */
     
@@ -63,11 +63,12 @@ UINT32 loader_create_task(struct pm_task *task, char *path, UINT32 plength, int 
     task->loader_inf.param = param;
 
 	/* Reset VMM information on task */
-	vmm_init_task_info(&task->vmm_info);
-	task->vmm_info.page_count = 2;
+	// do not invoke vmm_init_task_info, it would NULL our 
+    // directory and it was invoked on tsk_create.
+    task->vmm_info.page_count = 2;
 	task->vmm_info.max_addr = PMAN_TSK_MAX_ADDR;
-
-	/* Create microkernel task */
+    
+    /* Create microkernel task */
 	mk_task.mem_adr = (ADDR)SARTORIS_PROCBASE_LINEAR;  /* paging mapped the memory here */
 	mk_task.size = PMAN_TASK_SIZE;						/* task size is 4GB - kernel space size (0x800000) */
 	mk_task.priv_level = tsk_priv[type];       
@@ -77,13 +78,12 @@ UINT32 loader_create_task(struct pm_task *task, char *path, UINT32 plength, int 
 		pman_print_and_stop("Could not create task %i ", task->id);
         return PM_ERROR;
     }
-
-	/* Pagein the Page directory on task address space */
-	pm_page_in(task->id, 0, (ADDR)LINEAR2PHYSICAL(task->vmm_info.page_directory), 0, 0);
-
-	/* Get a Page Table for the task */
+    /* Pagein the Page directory on task address space */
+    pm_page_in(task->id, 0, (ADDR)LINEAR2PHYSICAL(task->vmm_info.page_directory), 0, 0);
+    
+    /* Get a Page Table for the task */
 	pg_address = vmm_get_tblpage(task->id, SARTORIS_PROCBASE_LINEAR);
-
+    
 	if(pg_address == NULL) 
 	{
 		vmm_put_page(task->vmm_info.page_directory);

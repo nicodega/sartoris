@@ -161,7 +161,6 @@ global read_code        ; not really global, but i want to breakpoint
 section .text
 
 keyb_int_thread_entry:
-    
     cli
     xor eax, eax        ; the initial TSS has this registers in zero,
     xor ebx, ebx        ; so this shouldn't be really necessary.

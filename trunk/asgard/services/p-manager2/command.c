@@ -686,7 +686,7 @@ void cmd_create_thread(struct pm_msg_create_thread *msg, UINT16 creator_task_id)
 	}while(curr_thr != NULL);
 
 	mk_thread.stack = thread->stack_addr = (ADDR)STACK_ADDR(PMAN_THREAD_STACK_BASE - stack_slot * 0x20000);
-
+        
 	/* Set thread entry point from elf file if 0 is specified. */
 	if(msg->entry_point == 0)
 		mk_thread.ep = (ADDR)task->loader_inf.elf_header.e_entry;
@@ -742,8 +742,8 @@ void cmd_create_thread(struct pm_msg_create_thread *msg, UINT16 creator_task_id)
 		/* If it's a page of a system service, lock the page */
 		if(task->flags & TSK_FLAG_SYS_SERVICE) 
 			vmm_set_flags(thread->task_id, pg, TRUE, TAKEN_EFLAG_SERVICE, TRUE);
-
-		pm_page_in(thread->task_id, (ADDR)((UINT32)thread->stack_addr + SARTORIS_PROCBASE_LINEAR), (ADDR)LINEAR2PHYSICAL(pg), 2, PGATT_WRITE_ENA);
+        
+        pm_page_in(thread->task_id, (ADDR)((UINT32)thread->stack_addr + SARTORIS_PROCBASE_LINEAR), (ADDR)LINEAR2PHYSICAL(pg), 2, PGATT_WRITE_ENA);
 		
         // set init data at the begining of the stack
 		if(pg != NULL && msg->interrupt == 0)
