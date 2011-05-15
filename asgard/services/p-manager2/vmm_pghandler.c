@@ -94,7 +94,9 @@ BOOL vmm_handle_page_fault(UINT16 *thr_id, BOOL internal)
 			    pman_print_and_stop("PF: NULL TASK/THREAD");
 
 		    if(thread->state == THR_INTHNDL)
-			    pman_print_and_stop("INT HADLER PAGE FAULT!");
+            {
+			    pman_print_and_stop("INT HADLER PAGE FAULT! linear %x, task: %i, thr: %i ", pf.linear, pf.task_id, pf.thread_id);
+            }
         		
 		    thread->vmm_info.fault_entry.addr = 0;
 		    thread->vmm_info.fault_entry.present = 0;
