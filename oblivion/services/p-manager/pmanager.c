@@ -227,17 +227,27 @@ void process_manager(void)
                     case LOADING:
                         if(fs_res.op == FS_SIZE)
                         {
-                            prcsize[i] = fs_res.smo_buff;
-                            do_load(i);
-                            fetch_file_begin(i, RAMFS_TASK);
+                            if (fs_res.result < 0)
+                            {
+                                inform_load_error(i, FS_NO_SUCH_FILE);
+                                show_prompt(i);
+                            } 
+                            else
+                            {
+                                prcsize[i] = fs_res.smo_buff;
+                                do_load(i);
+                                fetch_file_begin(i, RAMFS_TASK);
+                            }
                         }
                         else
                         {
                             claim_mem(fs_res.smo_name);
                             claim_mem(fs_res.smo_buff);
+                            fs_res.smo_buff = -1;
                             if (fs_res.result<0)
                             {
                                 inform_load_error(i, FS_NO_SUCH_FILE);
+                                show_prompt(i);
                             } 
                             else 
                             {
@@ -324,6 +334,8 @@ int strlen(char *s)
     return l;
 }
 
+int print_loc = 0;
+
 void console_begin(int term) 
 {
     struct csl_io_msg csl_io;
@@ -375,7 +387,6 @@ void show_prompt(int term)
 void get_input(int term) 
 {
     int i;
-
     restore_cmd[term] = 0;
     for (i=0; i<INPUT_LENGTH; i++)
     {
@@ -386,13 +397,13 @@ void get_input(int term)
             break;
         }
     }
+
     get_size(term, RAMFS_TASK, RAMFS_INPUT_PORT);
 }
 
 void get_size(int term, int fs_task, int ret_port) 
 {    
     struct fs_command io_msg;
-
     state[term] = LOADING;
     loadservice[term] = 0;
     int i, j, l = strlen(txt_input[term]);
@@ -409,6 +420,7 @@ void get_size(int term, int fs_task, int ret_port)
         }
     }
     
+    prcsize[i] = 0;
     io_msg.op = FS_SIZE;
     io_msg.smo_name = share_mem(fs_task, txt_input[term], INPUT_LENGTH, READ_PERM);
     io_msg.id = term;
@@ -419,8 +431,7 @@ void get_size(int term, int fs_task, int ret_port)
 
 void fetch_file_begin(int term, int fs_task)
 {
-    struct fs_command io_msg;
-                   
+    struct fs_command io_msg;               
     io_msg.op = FS_READ;
     io_msg.smo_name = share_mem(fs_task, txt_input[term], INPUT_LENGTH, READ_PERM);
     io_msg.smo_buff = share_mem(fs_task, load_buffer[term], PAGE_SIZE, WRITE_PERM);
@@ -441,8 +452,7 @@ void fetch_file_begin(int term, int fs_task)
 
 void fetch_file_cont(int term, int fs_task)
 {
-    struct fs_command io_msg;
-
+    struct fs_command io_msg;  
     io_msg.op = FS_READ;
     io_msg.smo_name = share_mem(fs_task, txt_input[term], INPUT_LENGTH, READ_PERM);
     io_msg.smo_buff = share_mem(fs_task, load_buffer[term], PAGE_SIZE, WRITE_PERM);
@@ -487,7 +497,6 @@ void do_load(int term)
     struct thread prc_thread;
     int csl[4];
     int i;
-    
     prc_task.mem_adr = (void*)SARTORIS_PROC_BASE_LINEAR;
 
     prc_task.size = PRC_SLOT_SIZE;
@@ -604,17 +613,17 @@ void spawn_handlers(void)
     create_int_handler(SIMD_FAULT, EXC_HANDLER_THR, false, 0);
 }
 
-
 void handler(void) 
 {
     int prog_id, j;
     int exception;
     char done;
     char *msg;
+    int errcode;
+    int *ptr;
 
     for(;;) {
-
-        exception = get_last_int();
+        exception = get_last_int(&errcode);
 
         if (running >= BASE_PROC_THR) 
         {                  
@@ -659,8 +668,8 @@ void handler(void)
             csl_print(prog_id, msg, 0x7, strlen(msg), prog_id);
         } 
         else 
-        { /* a service thread crashed! */
-
+        { 
+            /* a service thread crashed! */
             txt_server_error[35] = ((running / 10) % 10) + '0';
             txt_server_error[36] = (running % 10) + '0';       
 

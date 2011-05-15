@@ -1,6 +1,6 @@
 CPPFLAGS += -I"../../include"
 
-subdirs = idle helloworld misbehav c++test jedi mmx prmtst
+subdirs = idle helloworld misbehav jedi mmx prmtst
 
 export CC CFLAGS CPPFLAGS CXX CXXFLAGS LD AS ASFLAGS
 
