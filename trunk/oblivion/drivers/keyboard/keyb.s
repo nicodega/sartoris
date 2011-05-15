@@ -152,8 +152,7 @@ read_code:
 
 	sti			; ok, interrupts are back up.		
 
-%endif			
-
+%endif
 	mov al, EOI		; first things first
 	out PICm0, al		; acknowledge the interrupt
 

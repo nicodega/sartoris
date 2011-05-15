@@ -32,6 +32,8 @@ volatile int full_buf;
 volatile int next_read;
 volatile int next_write;
 
+int print_ln = 0;
+
 char str[MAX_CSL_WRITE];
 
 char txt_reboot[] = "\n\n-> console server: the system is going down for reboot NOW!";
@@ -174,7 +176,6 @@ void do_io(void)
     /* see if any scans are done and do echo */
     for (i=0; i<NUM_VIRTUAL; i++) {
         if (t[i].scanning && t[i].modified) {
-
             t[i].modified = 0;
 
             if (t[i].echo) {
@@ -352,6 +353,7 @@ void vt_reset(int i)
     t[i].cursor_pos=0;
     t[i].print_len=0;
     t[i].input_len=0;
+    t[i].modified = 0;
     if (i==cur_screen) 
     {
         cursor_off();  

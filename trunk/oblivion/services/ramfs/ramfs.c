@@ -42,10 +42,11 @@ void ramfs(void)
 
     readfat((void*)ramfiledata, &nfiles, fatable);
     int k =0;
+    
     for (;;) 
     {
         string_print("RAMFS ALIVE",21*160,k++);
-
+        
         while (get_msg_count(FS_CMD_PORT)>0) 
         {
             get_msg(FS_CMD_PORT, &io_msg, &id);
@@ -60,8 +61,15 @@ void ramfs(void)
                     else
                     {
                         filenum = get_filenum(name);
-                        io_msg.smo_buff = fatable[filenum].filesize;
-                        acknowledge(FS_OK, id, &io_msg);                    
+                        if(filenum == -1)
+                        {                            
+                            acknowledge(FS_FAIL, id, &io_msg);
+                        }
+                        else
+                        {
+                            io_msg.smo_buff = fatable[filenum].filesize;
+                            acknowledge(FS_OK, id, &io_msg);   
+                        }
                     }
                     break;
                 case FS_READ:
