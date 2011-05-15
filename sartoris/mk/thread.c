@@ -366,6 +366,7 @@ int run_thread_int(int id, void *eip, void *stack)
 int set_thread_run_perms(int thr_id, struct permissions *perms)
 {
     struct thread *thread;
+    struct permissions prm;
 	int x, result = FAILURE;
     
     x = mk_enter();
@@ -392,11 +393,12 @@ int set_thread_run_perms(int thr_id, struct permissions *perms)
 
     thread = GET_PTR(thr_id,thr);
         
-    if(validate_perms_ptr(perms, &thread->run_perms, MAX_THR, thread->task_num))
+    if(validate_perms_ptr(perms, &prm, MAX_THR, thread->task_num))
     {   
         // Validate the thread still exists
         if(TST_PTR(thr_id,thr))
         {
+            thread->run_perms = prm;
 	        result = SUCCESS;
             set_error(SERR_OK);
         }
