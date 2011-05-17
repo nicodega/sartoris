@@ -41,9 +41,7 @@ int arch_create_task(int num, struct task *tsk)
 int arch_destroy_task(int task_num) 
 {
 	struct i386_task *tinf = GET_TASK_ARCH(task_num);
-
-	inv_ldt_desc(task_num);
-
+    
 	if(first_task == tinf)
 	{
 		first_task = first_task->next;
