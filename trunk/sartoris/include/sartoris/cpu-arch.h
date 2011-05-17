@@ -21,8 +21,8 @@
 
 void arch_init_cpu(void);
 
-int arch_create_task(int task_num, struct task *tsk);
-int arch_destroy_task(int num);
+int arch_create_task(int id, struct task *tsk);
+int arch_destroy_task(int id);
 
 int arch_create_thread(int id, int priv, struct thread *thr);
 int arch_destroy_thread(int id, struct thread* thr);

@@ -62,6 +62,13 @@ int write_mem(int smo_id, int off, int size, void *src);
 int pass_mem(int smo_id, int target_task);
 int mem_size(int smo_id);
 
+/* tracing */
+int ttrace_begin(int thr_id, int task_id);
+int ttrace_end(int thr_id, int task_id);
+int ttrace_reg(int thr_id, int reg, void *value, int set);
+int ttrace_mem_read(int thr_id, void *src, void *dst, int size);
+int ttrace_mem_write(int thr_id, void *src, void *dst, int size);
+
 /* Errors */
 int last_error();
 

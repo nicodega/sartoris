@@ -109,14 +109,6 @@ void switch_ldt_desc(struct i386_task *tinf, int priv)
 	gdt[i].dword1 = D_DW1_BASE(ldt_adr) + D_DW1_LIMIT(LDT_SIZE) + perms;
 }
 
-void inv_ldt_desc(int task_num) 
-{
-	/* 
-	We now use only one LDT per privilege... 
-	do not invalidate *anything*
-	*/
-}
-
 /* Initialize global TSS descriptor on GDT */
 int init_tss_desc() 
 {

@@ -68,6 +68,5 @@ int init_tss_desc();
 void hook_syscall(int num, int dpl, void *ep, unsigned int nparams);
 void build_ldt(struct i386_task *tinf, int task_num, void *mem_adr, unsigned int size, int type);
 void switch_ldt_desc(struct i386_task *tinf, int type);
-void inv_ldt_desc(int task_num);
 
 #endif
