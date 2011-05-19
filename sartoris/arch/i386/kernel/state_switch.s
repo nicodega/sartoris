@@ -1,12 +1,6 @@
 
 bits 32
 
-%ifdef FPU_MMX
-%define STACK0_SIZE 1407 ;; remember this comes from kernel.h
-%else
-%define STACK0_SIZE 1991
-%endif
-
 global arch_switch_thread
 global arch_switch_thread_int
 global arch_is_soft_int
@@ -24,39 +18,7 @@ extern arch_caps
 ;; on its manual volume 3 :)
 ;;
 
-%define SCAP_SSE                0x20       ;; SSE, SSE2 and SSE3
-%define SFLAG_MMXFPU_STORED     0x1
-%define SFLAG_RUN_INT           0x2
-%define SFLAG_RUN_INT_START     0x4
-%define SFLAG_RUN_INT_STATE     0x8
-%define SFLAG_TRACE_REQ         0x40
-%define CR0_TS                  0x8
-%define MMX_NO_OWNER            0xFFFFFFFF
-
-;; Now we use a custom state management structure for threads  
-struc thr_state
-	.sflags resd 1;
-	.eip resd 1;
-	.eflags resd 1; 
-	.ebx resd 1;
-	.ebp resd 1;
-	.esp resd 1;
-	.esi resd 1;
-	.edi resd 1;
-	.ss resd 1;
-	.fs resd 1;
-	.gs resd 1;
-	.cs resd 1;
-	.es resd 1;
-	.ds resd 1;
-	.ldt_sel resd 1;
-	.stack_winding resd 1;
-    .sints resd 1;
-%ifdef FPU_MMX
-    .padding resd 1;
-	.mmx  resd 128;       ;; for preserving FPU/MMX registers
-%endif
-endstruc
+%include "defines.inc"
 
 ;; size in bytes of thr_state
 %ifdef FPU_MMX
@@ -217,7 +179,6 @@ run_thread_int_cont_switch:
 	jne _first_time
     
 _dummy_eip:
-
 %ifdef FPU_MMX	
 	;; if task is NOT mmx_state_owner
 	;; set ts, if not, clear it
@@ -250,23 +211,28 @@ _mmx_cont:
     mov edx, [ecx + thr_state.sflags]
 	and edx, SFLAG_TRACE_REQ
 	jz _dummy_no_trace
-    xchg bx,bx
+    mov edx, [ecx + thr_state.sflags]
     and edx, ~SFLAG_TRACE_REQ
     mov dword [ecx + thr_state.sflags], edx
     or eax, 0x100       ;; set the trap flag, so a step interrupt is executed just when we hit userspace
     ;; our first winding will be created when the debug exception is raised
 _dummy_no_trace:
+    pop ebp
 
 	;; load eflags register now 
-	mov eax, [ecx + thr_state.eflags]
 	push eax
+	xor eax, eax                        ;; in case we were invoked from run_thread_int		
 	popf			;; interrupts should be disabled
 	
-	pop ebp                             
-	xor eax, eax                        ;; in case we were invoked from run_thread_int		
 	ret
 	
 _first_time:
+    ;; set debug registers to 0
+    mov eax, 0x400          ;; bit 11 must be 1
+    mov dr7, eax
+    mov eax, 0xFFFF0FF0       ;; bit 11 must be 1
+    mov dr6, eax
+
 	;; load initial mxcsr if SSE is present
 	;; only for the first time
 %ifdef FPU_MMX
@@ -314,7 +280,6 @@ _mmx_cont2:
     mov ebx, [ecx + thr_state.sflags]
 	and ebx, SFLAG_TRACE_REQ
 	jz no_trace
-    xchg bx,bx
     and ebx, ~SFLAG_TRACE_REQ
     mov dword [ecx + thr_state.sflags], ebx
     or eax, 0x100       ;; set the trap flag, so a step interrupt is executed just when we hit userspace
@@ -331,7 +296,8 @@ no_trace:
     xor eax,eax
     popf
 
-    ;; don't use any flag modifying instructions from here
+    ;; don't use any flag modifying instructions from here and don't put any instructions here either
+    ;; for the trap flag might be set
     
     retf   ;; God help us!!
 	

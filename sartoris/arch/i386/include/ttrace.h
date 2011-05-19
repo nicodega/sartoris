@@ -16,16 +16,16 @@
 #define REG_SS      0
 #define REG_DS      1
 #define REG_ES      2
-#define REG_CS      3
-#define REG_GS      4
-#define REG_FS      5
-#define REG_D0      6
-#define REG_D1      7
-#define REG_D2      8
+#define REG_GS      3
+#define REG_FS      4
+#define REG_CS      5
+#define REG_EIP     6
+#define REG_D7      7
+#define REG_D6      8
 #define REG_D3      9
-#define REG_D6      10
-#define REG_D7      11
-#define REG_EIP     12
+#define REG_D2      10
+#define REG_D1      11
+#define REG_D0      12
 #define REG_EDI     13
 #define REG_ESI     14
 #define REG_EBP     15
@@ -70,16 +70,16 @@ struct regs
 	unsigned int ss;
 	unsigned int ds;
 	unsigned int es;
-	unsigned int cs;
 	unsigned int gs;
 	unsigned int fs;
-    unsigned int d0;
-    unsigned int d1;
-    unsigned int d2;
-    unsigned int d3;
-    unsigned int d6;
-    unsigned int d7;
+	unsigned int cs;
 	unsigned int eip;
+    unsigned int d7;
+    unsigned int d6;
+    unsigned int d3;
+    unsigned int d2;
+    unsigned int d1;
+    unsigned int d0;
 	unsigned int edi;
 	unsigned int esi;
 	unsigned int ebp;
@@ -90,36 +90,6 @@ struct regs
 	unsigned int eax;
     unsigned int eflags;
 };
-
-#ifdef __KERNEL__
-struct thr_regs
-{    
-    unsigned int d0;
-    unsigned int d1;
-    unsigned int d2;
-    unsigned int d3;
-    unsigned int d4;
-    unsigned int d5;
-    unsigned int d6;
-    unsigned int d7;
-	unsigned int ss;
-	unsigned int ds;
-	unsigned int es;
-	unsigned int cs;
-	unsigned int gs;
-	unsigned int fs;
-	unsigned int eip;
-	unsigned int edi;
-	unsigned int esi;
-	unsigned int ebp;
-	unsigned int esp;
-	unsigned int ebx;
-	unsigned int edx;
-	unsigned int ecx;
-	unsigned int eax;
-    unsigned int eflags;
-};
-#endif
 
 struct fpreg
 {
