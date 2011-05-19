@@ -16,9 +16,13 @@
 //       PMAN Messages        //
 ////////////////////////////////
 
-#define PMAN_CMD_INIT  0
-#define PMAN_CMD_PERMS 1    // message used to require thread execute permissions from pman
-#define PMAN_CMD_MPERMS 2   // message used to require port permissions from pman
+#define PMAN_CMD_PORT 6
+
+#define PMAN_CMD_DEBUG 1
+#define PMAN_CMD_DEBUG_END 2
+
+
+#define PMAN_EVT_BREAK 3
 
 struct pman_msg
 {
