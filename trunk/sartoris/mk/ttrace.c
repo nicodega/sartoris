@@ -27,11 +27,11 @@ int ttrace_begin(int thr_id, int task_id)
     struct task *task;
     int ret = FAILURE;
     int x;
-
-    mk_enter(x);
+            
+    x = mk_enter();
     // thread exists
     if(TST_PTR(thr_id,thr) && TST_PTR(task_id,tsk))
-    {
+    {            
         thread = GET_PTR(thr_id, thr);
         task = GET_PTR(task_id, tsk);
 
@@ -40,12 +40,17 @@ int ttrace_begin(int thr_id, int task_id)
         {
             ret = arch_ttrace_begin(thr_id);
             if(ret == SUCCESS)
+            {
                 thread->trace_task = task_id;
+                set_error(SERR_OK);
+            }
             else
+            {
                 set_error(SERR_INVALID_THR);
+            }
         }
         else
-        {
+        {            
             if(thread->trace_task != -1)
                 set_error(SERR_ALREADY_TRACING);
             else
@@ -53,7 +58,7 @@ int ttrace_begin(int thr_id, int task_id)
         }
     }
     else
-    {
+    {               
         if(!TST_PTR(thr_id,thr))
             set_error(SERR_INVALID_THR);
         else
@@ -74,7 +79,7 @@ int ttrace_end(int thr_id, int task_id)
     int ret = FAILURE;
     int x;
 
-    mk_enter(x);
+    x = mk_enter();
     // thread exists
     if(TST_PTR(thr_id,thr))
     {
@@ -86,6 +91,7 @@ int ttrace_end(int thr_id, int task_id)
             arch_ttrace_end(thr_id);
             thread->trace_task = -1;
             ret = SUCCESS;
+            set_error(SERR_OK);
         }
         else
         {
@@ -110,14 +116,14 @@ int ttrace_reg(int thr_id, int reg, void *value, int set)
     int ret = FAILURE;
     int x, s = arch_ttrace_reg_size(reg);
     unsigned char tst;
-
+    
     if(s > 0 && VALIDATE_PTR(value) && VALIDATE_PTR((unsigned int)value + s))
     {
         // force a page fault if pages are not allocated
         tst = *((unsigned char*)value);
         tst = *((unsigned char*)((unsigned int)value + (s-1)));
 
-        mk_enter(x);
+        x = mk_enter();
         // thread exists
         if(TST_PTR(thr_id,thr))
         {
@@ -127,6 +133,7 @@ int ttrace_reg(int thr_id, int reg, void *value, int set)
             if(thread->trace_task == curr_task)
             {
                 value = MAKE_KRN_PTR(value);
+                
                 if(reg == -1)
                 {
                     if(set)
@@ -141,11 +148,17 @@ int ttrace_reg(int thr_id, int reg, void *value, int set)
                     else
                         ret = arch_ttrace_get_reg(thr_id, reg, value);
                 }
+                if(ret == SUCCESS)
+                    set_error(SERR_OK);
             }
             else
             {
                 set_error(SERR_NOT_TRACING);
             }
+        }
+        else
+        {
+            set_error(SERR_INVALID_THR);
         }
         mk_leave(x);
     }

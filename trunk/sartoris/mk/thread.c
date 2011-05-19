@@ -73,6 +73,7 @@ int create_thread(int id, struct thread *thr)
 							thread->invoke_level = cached_thr.invoke_level;
 							thread->task_num = tsk_id;
                             thread->last_error = SERR_OK;
+                            thread->trace_task = -1;
                             task->thread_count++;
 
                             init_perms(&thread->run_perms);

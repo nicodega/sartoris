@@ -38,6 +38,7 @@ void arch_init_global_tss()
 	for dummy task is not preserved!
 	*/
 	curr_state->sflags = 0;
+    curr_state->sints = 0;
 
 	/* Load global task state segment descriptor */
 	__asm__ __volatile__ (

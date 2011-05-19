@@ -20,6 +20,8 @@ global int_code_start
 global int_run
 global int_14
 
+global int_32 ;; remove!
+
 global no_copro
 		
 extern exc_error_code
@@ -363,40 +365,49 @@ extern int1handler
 ;; we will handle this interrupt here first and check 
 ;; if the processor is stepping. If it is, we will handle 
 ;; the int until we return to userland.
+;; stack: 
+;; [(ss),(esp)], eflags, (original cs), (eip for ret), eax, ebx
 debug:
-xchg bx,bx
-    pushf
     push eax
     push ebx
     mov eax, dr6
     and eax, 0x4000
     jz debug_not_stepping
     ;; are we on sartoris code??
-    ;; get the eip from the stack
-    mov eax, [esp + (12*4)]
-    cmp eax, 0x7000000
-    jb debug_sartoris                          ;; next instruction is on saroris code, continue stepping
+    ;; get cs from the stack
+    mov eax, [esp + 12]
+    cmp eax, 8
+    je debug_sartoris                          ;; next instruction is on saroris code, continue stepping
 debug_not_stepping:
+    push ds
+    mov ebx, KRN_DATA
+	mov ds, ebx
+    cmp dword [int1handler], 0
+    pop ds
     pop ebx
     pop eax
-    popf
-    cmp dword [int1handler], 0
     je debug_error
     call stack_winding_int
-    ;; call handle int 	
-	push dword 7
+    push ds
+	push es
+    mov ecx, KRN_DATA
+	mov ds, ecx
+	mov es, ecx
+    ;; call handle int
+	push dword 1
 	call handle_int
 	add esp, 4
+    pop es
+	pop ds
     call stack_unwind_int
     iret
 debug_sartoris:
     ;; set the trap flag again
-    mov eax, [esp+12]                          ;; get the flags from the stack
+    mov eax, [esp+16]                          ;; get the flags from the stack
     or eax, TRAP_FLAG
-    mov dword [esp+12], eax                    ;; popf will have the step flag
+    mov dword [esp+16], eax                    ;; popf will have the step flag
     pop ebx
     pop eax
-    popf
     iret                                       ;; next trap will be on the instruction that follows (intel docs says so)
 debug_error:
 	push dword 0    ; error is 0
