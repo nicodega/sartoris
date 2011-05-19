@@ -36,7 +36,7 @@ int printf(char *format, ...) {
 	iomsg.smo = share_mem(CONS_TASK, buf, 512, READ_PERM);
 	iomsg.attribute = 7;
 	iomsg.response_code = 0;
-	send_msg(CONS_TASK, 8+console, &iomsg);
+	send_msg(CONS_TASK, 1+console, &iomsg);
 	
 	/* wait for acknowledge */
 	while (get_msg_count(0)==0) { reschedule(); } 

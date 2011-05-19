@@ -1,6 +1,6 @@
 CPPFLAGS += -I"../../include"
 
-subdirs = idle helloworld misbehav jedi mmx prmtst
+subdirs = idle helloworld misbehav jedi mmx prmtst dbg
 
 export CC CFLAGS CPPFLAGS CXX CXXFLAGS LD AS ASFLAGS
 
@@ -19,4 +19,4 @@ clean :
 	$(MAKE) -C c++test clean
 	$(MAKE) -C jedi clean
 	$(MAKE) -C mmx clean
-	
+	$(MAKE) -C dbg clean

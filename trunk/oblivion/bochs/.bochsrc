@@ -19,7 +19,7 @@ magic_break: enabled=1
 # to emulate.  You may also pass the '-megs xyz' option to bochs
 #=======================================================================
 megs: 64
-
+port_e9_hack: enabled=1
 #=======================================================================
 # VGAROMIMAGE
 # You now need to load a VGA ROM BIOS into C0000.

@@ -1,6 +1,7 @@
 #ifndef _EXCEPT_H_
 #define _EXCEPT_H_
 
+#define DEBUG 1
 #define DIV_ZERO 0
 #define OVERFLOW 4
 #define BOUND    5

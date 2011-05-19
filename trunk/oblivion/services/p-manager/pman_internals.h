@@ -20,6 +20,7 @@
 #define RAMFS_INPUT_PORT 3
 #define TERM_REQ_PORT 4
 #define RUNNING_PORT 5
+//#define PMAN_CMD_PORT 6 defined on pman.h
 
 #define UNINITIALIZED 0
 #define PROMPT 1
@@ -37,6 +38,7 @@
 #define SARTORIS_PROC_BASE_LINEAR   MIN_TASK_OFFSET
 
 void spawn_handlers(void);
+void dbg_handler(void);
 void handler(void);
 
 void console_begin(int term);

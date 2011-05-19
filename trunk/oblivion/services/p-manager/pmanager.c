@@ -12,6 +12,7 @@
 #include <oblivion/layout.h>
 #include <services/console/console.h>
 #include <services/filesys/filesys.h>
+#include <services/p-manager/pman.h>
 #include <drivers/pit/pit.h>
 #include <lib/reboot.h>
 #include <lib/int.h>
@@ -51,11 +52,14 @@ char txt_stack_fault[] = "\nprocess manager -> fatal error: program received sta
 char txt_fp_err[] = "\nprocess manager -> fatal error: program received floating-point error exception";
 char txt_alig_chk[] = "\nprocess manager -> warning: program received alignment check exception";
 char txt_simd_fault[] = "\nprocess manager -> fatal error: program received SIMD extensions fault";
+char txt_cannot_dbg[] = "\nprocess manager -> ttrace start failed";
+char txt_cannot_dbge[] = "\nprocess manager -> ttrace end failed";
 
 char txt_input[NUM_PROC][INPUT_LENGTH];
 int input_smo[NUM_PROC];
 
 int command_smo[NUM_PROC];
+int dbg_tsk[NUM_PROC];
 char restore_cmd[NUM_PROC];
 
 char load_buffer[NUM_PROC][PAGE_SIZE] __attribute__ ((aligned(PAGE_SIZE)));
@@ -74,6 +78,8 @@ void process_manager(void)
     struct csl_signal_msg csl_sgn;
     struct csl_response_msg csl_res;
     struct fs_response fs_res;
+    struct pman_msg pman_cmd;
+    struct pman_res pman_res;
 
     int null_msg[4], csl[4];
     int id;
@@ -108,6 +114,7 @@ void process_manager(void)
     
     for (i=0; i<NUM_PROC; i++) 
     {
+        dbg_tsk[i] = -1;
         input_smo[i] = share_mem(CONS_TASK, txt_input[i], INPUT_LENGTH, WRITE_PERM);
         command_smo[i] = -1;
     }
@@ -125,6 +132,7 @@ void process_manager(void)
     open_port(RAMFS_INPUT_PORT, 0, UNRESTRICTED);
     open_port(TERM_REQ_PORT, 0, UNRESTRICTED);
     open_port(RUNNING_PORT, 0, UNRESTRICTED);
+    open_port(PMAN_CMD_PORT, 0, UNRESTRICTED);
 
     int k = 7;
     for(;;) 
@@ -185,6 +193,43 @@ void process_manager(void)
                     }
                 }
             }          
+        }
+
+        /* get pman commands */  
+        while (get_msg_count(PMAN_CMD_PORT)>0) 
+        {
+            get_msg(PMAN_CMD_PORT, &pman_cmd, &id);
+            
+            pman_res.cmd = pman_cmd.cmd;
+            pman_res.order = pman_cmd.order;
+            if(pman_cmd.cmd == PMAN_CMD_DEBUG)
+            {
+                // param 1 has the thread number (0 to consoles)
+                if(ttrace_begin(BASE_PROC_THR+pman_cmd.param1, id) == FAILURE)
+                {   
+                    pman_res.param1 = -1;
+                }
+                else
+                {
+                    dbg_tsk[pman_cmd.param1] = id;
+                    pman_res.param1 = 0;
+                }
+                send_msg(id, 0, &pman_res);
+            }
+            else if(pman_cmd.cmd == PMAN_CMD_DEBUG_END)
+            {
+                // param 1 has the thread number (0 to consoles)
+                if(ttrace_end(BASE_PROC_THR+pman_cmd.param1, id) == FAILURE)
+                {
+                    pman_res.param1 = -1;
+                }
+                else
+                {
+                    dbg_tsk[pman_cmd.param1] = -1;
+                    pman_res.param1 = 0;
+                }
+                send_msg(id, 0, &pman_res);
+            }
         }
 
         ///* get acks from console input */
@@ -600,6 +645,7 @@ void spawn_handlers(void)
 
     create_thread(EXC_HANDLER_THR, &hdl);
 
+    create_int_handler(DEBUG, EXC_HANDLER_THR, false, 0);
     create_int_handler(DIV_ZERO, EXC_HANDLER_THR, false, 0);
     create_int_handler(OVERFLOW, EXC_HANDLER_THR, false, 0);
     create_int_handler(BOUND, EXC_HANDLER_THR, false, 0);
@@ -615,79 +661,94 @@ void spawn_handlers(void)
 
 void handler(void) 
 {
-    int prog_id, j;
+    int prog_id, j, task;
     int exception;
     char done;
     char *msg;
     int errcode;
     int *ptr;
+    struct pman_res pman_res;
 
-    for(;;) {
+    for(;;) 
+    {
         exception = get_last_int(&errcode);
+        if(exception == 1)
+        {
+            task = dbg_tsk[running - BASE_PROC_THR];
 
-        if (running >= BASE_PROC_THR) 
-        {                  
-            prog_id = running - BASE_PROC_THR;
-            state[prog_id] = KILLED;
-            switch(exception) 
+            if(task != -1)
             {
-              case DIV_ZERO:
-                  msg = txt_div_zero;
-                  break;
-              case OVERFLOW:
-                  msg = txt_ovflw;
-                  break;
-              case BOUND:
-                  msg = txt_bound;
-                  break;
-              case INV_OPC:
-                  msg = txt_inv_opcode;
-                  break;
-              case DEV_NOT_AV:
-                  msg = txt_dev_not_avl;
-                  break;
-              case STACK_FAULT:
-                  msg = txt_stack_fault;
-                  break;
-              case GEN_PROT:
-                  msg = txt_gpf;
-                  break;
-              case PAGE_FAULT:
-                  msg = txt_pgf;
-                  break;
-              case FP_ERROR:
-                  msg = txt_fp_err;
-                  break;
-              case ALIG_CHK:
-                  msg = txt_alig_chk;
-                  break;
-              case SIMD_FAULT:
-                  msg = txt_simd_fault;
-                  break;
+                pman_res.cmd = PMAN_EVT_BREAK;
+                pman_res.param1 = BASE_PROC_THR;
+                send_msg(task, 0, &pman_res);
             }
-            csl_print(prog_id, msg, 0x7, strlen(msg), prog_id);
-        } 
-        else 
-        { 
-            /* a service thread crashed! */
-            txt_server_error[35] = ((running / 10) % 10) + '0';
-            txt_server_error[36] = (running % 10) + '0';       
+        }
+        else
+        {
+            if (running >= BASE_PROC_THR) 
+            {                  
+                prog_id = running - BASE_PROC_THR;
+                state[prog_id] = KILLED;
+                switch(exception) 
+                {
+                  case DIV_ZERO:
+                      msg = txt_div_zero;
+                      break;
+                  case OVERFLOW:
+                      msg = txt_ovflw;
+                      break;
+                  case BOUND:
+                      msg = txt_bound;
+                      break;
+                  case INV_OPC:
+                      msg = txt_inv_opcode;
+                      break;
+                  case DEV_NOT_AV:
+                      msg = txt_dev_not_avl;
+                      break;
+                  case STACK_FAULT:
+                      msg = txt_stack_fault;
+                      break;
+                  case GEN_PROT:
+                      msg = txt_gpf;
+                      break;
+                  case PAGE_FAULT:
+                      msg = txt_pgf;
+                      break;
+                  case FP_ERROR:
+                      msg = txt_fp_err;
+                      break;
+                  case ALIG_CHK:
+                      msg = txt_alig_chk;
+                      break;
+                  case SIMD_FAULT:
+                      msg = txt_simd_fault;
+                      break;
+                }
+                csl_print(prog_id, msg, 0x7, strlen(msg), prog_id);
+            } 
+            else 
+            { 
+                /* a service thread crashed! */
+                txt_server_error[35] = ((running / 10) % 10) + '0';
+                txt_server_error[36] = (running % 10) + '0';       
 
-            done = 0;
-            for (j=0; j<NUM_PROC; j++) 
-            {
-                csl_print(j, txt_server_error, 0x7, 80, running);
-                done = 1;
+                done = 0;
+                for (j=0; j<NUM_PROC; j++) 
+                {
+                    csl_print(j, txt_server_error, 0x7, 80, running);
+                    done = 1;
+                }
+
+                /* if nobody is logged in, assume it's an startup error */
+                /* and inform to the first console                      */
+                if (!done) 
+                {
+                    csl_print(0, txt_server_error, 0x7, 80, running);
+                }
+
+                serv_present[running] = 0;
             }
-
-            /* if nobody is logged in, assume it's an startup error */
-            /* and inform to the first console                      */
-            if (!done) 
-            {
-                csl_print(0, txt_server_error, 0x7, 80, running);
-            }
-
-            serv_present[running] = 0;
         }
         run_thread(SCHED_THR);
     }
