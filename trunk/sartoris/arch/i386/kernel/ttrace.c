@@ -105,7 +105,7 @@ int arch_ttrace_set_reg(int thr_id, int reg, void *value)
     struct thr_state *state = GET_THRSTATE_ARCH(thr_id);
     int ret = FAILURE;
 
-    if(!(state->sflags & SFLAG_TRACE_REQ))
+    if(state->stack_winding != NULL)
     {
         if(reg < MMOFFSET && (reg < REG_D0 || reg > REG_D7))
         {
@@ -171,7 +171,7 @@ int arch_ttrace_get_reg(int thr_id, int reg, void *value)
     struct thr_state *state = GET_THRSTATE_ARCH(thr_id);
     int ret = FAILURE;
 
-    if(!(state->sflags & SFLAG_TRACE_REQ))
+    if(state->stack_winding != NULL)
     {
         if(reg <= MMOFFSET && (reg < REG_D0 || reg > REG_D7))
         {
@@ -210,7 +210,7 @@ int arch_ttrace_get_regs(int thr_id, void *ptr_regs)
     struct thr_state *state = GET_THRSTATE_ARCH(thr_id);
     struct regs *regs = (struct regs*)ptr_regs;
 
-    if(!(state->sflags & SFLAG_TRACE_REQ))
+    if(state->stack_winding != NULL)
     {
         *regs = *state->stack_winding;
     }
@@ -223,7 +223,7 @@ int arch_ttrace_set_regs(int thr_id, void *ptr_regs)
     struct thr_state *state = GET_THRSTATE_ARCH(thr_id);
     struct regs *regs = (struct regs*)ptr_regs;
 
-    if(!(state->sflags & SFLAG_TRACE_REQ))
+    if(state->stack_winding != NULL)
     {
         // validate segments and eip
         if(!VALIDATE_PTR(regs->eip))
