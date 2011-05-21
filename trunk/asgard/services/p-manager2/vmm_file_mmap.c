@@ -229,13 +229,13 @@ UINT32 vmm_fmap(UINT16 task_id, UINT32 fileid, UINT16 fs_task, ADDR start, UINT3
     ma_insert(&task->vmm_info.regions, &new_mreg->tsk_node);
     rb_search(&task->vmm_info.regions_id, new_mreg->tsk_id_node.value);
 
-	/* Once takeover is OK, new_fm will be addede to the global list. 
+	/* Once takeover is OK, new_fm will be added to the global list. 
     I can't add it now, because I don't have a */
 
 	/* Tell stdfss we are taking control of the file. */
     new_fm->io_finished.params[0] = task->id;
 	new_fm->io_finished.callback  = fmap_takeover_callback;
-	io_begin_takeover(&new_fm->iosrc, fileid, new_fm, task->id);
+	io_begin_takeover(&new_fm->iosrc, fileid, new_fm, task->id, 0xFFFFFFFF);
 
 	/* Block all threads for this task, until the file is opened so we don't have page faults */
 	task->state = TSK_MMAPPING;
