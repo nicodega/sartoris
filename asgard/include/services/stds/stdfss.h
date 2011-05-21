@@ -121,110 +121,110 @@
 // Message format //
 
 struct stdfss_cmd{
-	unsigned char command;		/* Command to execute */
-	unsigned short thr_id;		// support for multithreading for iolib
-	unsigned char specific0;
-	unsigned int   specific1;
-	unsigned int   specific2;
-	unsigned short specific3;
-	unsigned short ret_port;	/* The port for the response message */
+    unsigned char command;		/* Command to execute */
+    unsigned short thr_id;		// support for multithreading for iolib
+    unsigned char specific0;
+    unsigned int   specific1;
+    unsigned int   specific2;
+    unsigned short specific3;
+    unsigned short ret_port;	/* The port for the response message */
 } PACKED_ATT;
 
 struct stdfss_res{
-	unsigned char command;		/* Command to execute */
-	unsigned short thr_id;		// support for multithreading for iolib
-	unsigned char padding0;
-	unsigned int param1;	
-	unsigned int param2;
-	unsigned short padding1;	// used when forwarding
-	unsigned short ret;     /* return value (see OFS_RET defines)*/
+    unsigned char command;		/* Command to execute */
+    unsigned short thr_id;		// support for multithreading for iolib
+    unsigned char padding0;
+    unsigned int param1;	
+    unsigned int param2;
+    unsigned short padding1;	// used when forwarding
+    unsigned short ret;     /* return value (see OFS_RET defines)*/
 } PACKED_ATT;
 
 // Takeover response
 struct stdfss_takeover_res{
-	unsigned char command;		/* Command to execute */
-	unsigned short thr_id;		// support for multithreading for iolib
-	unsigned char padding0;
-	unsigned int file_id;	// File ID assigned to the process
-	unsigned int param2;
-	unsigned short perms;	// permissions
-	unsigned short ret;     /* return value (see OFS_RET defines)*/
+    unsigned char command;		/* Command to execute */
+    unsigned short thr_id;		// support for multithreading for iolib
+    unsigned char perms;        // current file permissions
+    unsigned int file_id;	    // new File ID assigned to the process
+    unsigned int unique_id;     // a unique ID for the file on the device it belongs to.
+    unsigned short dev;         // the device the file belongs to. (together with unique_id they must provide a unique id for the file)
+    unsigned short ret;         /* return value (see OFS_RET defines) */
 } PACKED_ATT;
 
 // stdfss_ver ret message structure
 
 struct stdfss_ver_res{
-	unsigned char command;		/* Command to execute */
-	unsigned short thr_id;		// support for multithreading for iolib
-	unsigned char padding0;
-	unsigned int   padding1;
-	unsigned int   ver;
-	unsigned short padding2;	// used when forwarding
-	unsigned short ret;     /* return value (see OFS_RET defines)*/
+    unsigned char command;		/* Command to execute */
+    unsigned short thr_id;		// support for multithreading for iolib
+    unsigned char padding0;
+    unsigned int   padding1;
+    unsigned int   ver;
+    unsigned short padding2;	// used when forwarding
+    unsigned short ret;     /* return value (see OFS_RET defines)*/
 } PACKED_ATT;
 
 // stdfss_open response message
 
 struct stdfss_open_res{
-	unsigned char command;		/* Command to execute */
-	unsigned short thr_id;		// support for multithreading for iolib
-	unsigned char padding0;
-	unsigned int   padding1;
-	unsigned int   file_id;
-	unsigned short padding2;	// used when forwarding
-	unsigned short ret;     /* return value (see OFS_RET defines)*/
+    unsigned char command;		/* Command to execute */
+    unsigned short thr_id;		// support for multithreading for iolib
+    unsigned char padding0;
+    unsigned int   padding1;
+    unsigned int   file_id;
+    unsigned short padding2;	// used when forwarding
+    unsigned short ret;     /* return value (see OFS_RET defines)*/
 } PACKED_ATT;
 
 struct stdfss_tell_res{
-	unsigned char command;		/* Command to execute */
-	unsigned short thr_id;		// support for multithreading for iolib
-	unsigned char padding0;
-	unsigned long long cursor;	
-	unsigned short padding1;	// used when forwarding
-	unsigned short ret;     /* return value (see OFS_RET defines)*/
+    unsigned char command;		/* Command to execute */
+    unsigned short thr_id;		// support for multithreading for iolib
+    unsigned char padding0;
+    unsigned long long cursor;	
+    unsigned short padding1;	// used when forwarding
+    unsigned short ret;     /* return value (see OFS_RET defines)*/
 } PACKED_ATT;
 
 // stdfss_open response message	
 
 struct stdfss_exists_res{
-	unsigned char command;		/* Command to execute */
-	unsigned short thr_id;		// support for multithreading for iolib
-	unsigned char padding0;
-	unsigned int   type;
-	unsigned int   padding1;
-	unsigned short padding2;	// used when forwarding
-	unsigned short ret;     /* return value (see OFS_RET defines)*/
+    unsigned char command;		/* Command to execute */
+    unsigned short thr_id;		// support for multithreading for iolib
+    unsigned char padding0;
+    unsigned int   type;
+    unsigned int   padding1;
+    unsigned short padding2;	// used when forwarding
+    unsigned short ret;     /* return value (see OFS_RET defines)*/
 } PACKED_ATT;
 
 struct stdfss_ioctl_res{
-	unsigned char command;		/* Command to execute */
-	unsigned short thr_id;		// support for multithreading for iolib
-	unsigned char padding0;
-	unsigned int   dev_ret;
-	unsigned int   padding1;
-	unsigned short padding2;	// used when forwarding
-	unsigned short ret;     /* return value (see OFS_RET defines)*/
+    unsigned char command;		/* Command to execute */
+    unsigned short thr_id;		// support for multithreading for iolib
+    unsigned char padding0;
+    unsigned int   dev_ret;
+    unsigned int   padding1;
+    unsigned short padding2;	// used when forwarding
+    unsigned short ret;     /* return value (see OFS_RET defines)*/
 } PACKED_ATT;
 
 struct stdfss_getc_res{
-	unsigned char command;		/* Command to execute */
-	unsigned short thr_id;		// support for multithreading for iolib
-	unsigned char c;	// character read
-	unsigned int param1;	
-	unsigned int param2;
-	unsigned short padding1;	// used when forwarding
-	unsigned short ret;     /* return value (see OFS_RET defines)*/
+    unsigned char command;		/* Command to execute */
+    unsigned short thr_id;		// support for multithreading for iolib
+    unsigned char c;	// character read
+    unsigned int param1;	
+    unsigned int param2;
+    unsigned short padding1;	// used when forwarding
+    unsigned short ret;     /* return value (see OFS_RET defines)*/
 } PACKED_ATT;
 
 /* Next response will only be issued between FS services */
 struct stdfss_forward_res{
-	unsigned char command;		/* Command to execute */
-	unsigned short thr_id;		// support for multithreading for iolib
-	unsigned char padding0;
-	unsigned int param1;	
-	unsigned int param2;
-	unsigned short taskid;	// id of the task originating the call
-	unsigned short ret;     /* return value (see OFS_RET defines)*/
+    unsigned char command;		/* Command to execute */
+    unsigned short thr_id;		// support for multithreading for iolib
+    unsigned char padding0;
+    unsigned int param1;	
+    unsigned int param2;
+    unsigned short taskid;	// id of the task originating the call
+    unsigned short ret;     /* return value (see OFS_RET defines)*/
 } PACKED_ATT;
 
 /*
@@ -233,39 +233,38 @@ Custom Message Structures
 
 /* FORWARD */
 struct stdfss_forward{
-	unsigned char command;		/* Command to execute */
-	unsigned short thr_id;		// support for multithreading for iolib
-	unsigned char specific0;
-	unsigned int   specific1;
-	unsigned int   specific2;
-	unsigned short specific3;
-	unsigned short ret_port;
-		/* The port for the response message */
+    unsigned char  command;		/* Command to execute */
+    unsigned short thr_id;		// support for multithreading for iolib
+    unsigned char  specific0;
+    unsigned int   specific1;
+    unsigned int   specific2;
+    unsigned short specific3;
+    unsigned short ret_port;
+    /* The port for the response message */
 } PACKED_ATT;
 
 
 /* IOCTL */
 struct stdfss_ioctl{
-	unsigned char command;		/* Command to execute */
-	unsigned short thr_id;		// support for multithreading for iolib
-	unsigned char padding0;
-	unsigned short file_id;		// id of the file on which ioctl is to be performed
-	unsigned int request;		// the requested command for the device
-	unsigned int param;		// param could be a number or an smo, it will depend on the command
-	unsigned short ret_port;
-		/* The port for the response message */
+    unsigned char  command;      /* Command to execute */
+    unsigned short thr_id;      // support for multithreading for iolib
+    unsigned char  padding0;
+    unsigned short file_id;     // id of the file on which ioctl is to be performed
+    unsigned int   request;     // the requested command for the device
+    unsigned int   param;       // param could be a number or an smo, it will depend on the command
+    unsigned short ret_port;    // The port for the response message
 }PACKED_ATT;
 
 // EXISTS
 struct stdfss_exists{
-	unsigned char command;		/* Command to execute */
-	unsigned short thr_id;		// support for multithreading for iolib
-	unsigned char padding0;
-	unsigned int   path_smo;
-	unsigned int   padding1;
-	unsigned short padding2;
-	unsigned short ret_port;
-		/* The port for the response message */
+    unsigned char command;		/* Command to execute */
+    unsigned short thr_id;		// support for multithreading for iolib
+    unsigned char padding0;
+    unsigned int   path_smo;
+    unsigned int   padding1;
+    unsigned short padding2;
+    unsigned short ret_port;
+    /* The port for the response message */
 } PACKED_ATT;
 
 // STDFSS_MOUNT
@@ -277,67 +276,67 @@ struct stdfss_exists{
 #define STDFSS_MOUNTMODE_WRITE		0x4
 
 struct stdfss_mount{
-	unsigned char command;		/* Command to execute */
-	unsigned short thr_id;		// support for multithreading for iolib
-	unsigned char padding0;
-	unsigned int dev_path;		// smo of device file path (eg: /dev/fd0) (the device **MUST** be in the same FS)
-	unsigned int mount_path;	// smo of mount path (eg: /mnt/floppy)
-	unsigned short mode;		// mount mode as defined previously on "MOUNT MODES"
-	unsigned short ret_port;
+    unsigned char command;		/* Command to execute */
+    unsigned short thr_id;		// support for multithreading for iolib
+    unsigned char padding0;
+    unsigned int dev_path;		// smo of device file path (eg: /dev/fd0) (the device **MUST** be in the same FS)
+    unsigned int mount_path;	// smo of mount path (eg: /mnt/floppy)
+    unsigned short mode;		// mount mode as defined previously on "MOUNT MODES"
+    unsigned short ret_port;
 } PACKED_ATT;
 
 // STDFSS_UMOUNT
 
 struct stdfss_umount
 {
-	unsigned char command;		/* Command to execute */
-	unsigned short thr_id;		// support for multithreading for iolib
-	unsigned char padding0;
-	unsigned int   mount_path;	// smo of mount path to umount
-	unsigned int   padding1;
-	unsigned short padding2;
-	unsigned short ret_port;
+    unsigned char command;		/* Command to execute */
+    unsigned short thr_id;		// support for multithreading for iolib
+    unsigned char padding0;
+    unsigned int   mount_path;	// smo of mount path to umount
+    unsigned int   padding1;
+    unsigned short padding2;
+    unsigned short ret_port;
 } PACKED_ATT;
 
 // STDFSS_OPEN
 
 struct stdfss_open
 {
-	unsigned char command;		/* Command to execute */
-	unsigned short thr_id;		// support for multithreading for iolib
-	unsigned char padding0;
-	unsigned int   file_path;	// smo of file path
-	unsigned int   open_mode; // open mode string "r,w,a,x"
-	unsigned short flags;
-	unsigned short ret_port;
+    unsigned char command;		/* Command to execute */
+    unsigned short thr_id;		// support for multithreading for iolib
+    unsigned char padding0;
+    unsigned int   file_path;	// smo of file path
+    unsigned int   open_mode; // open mode string "r,w,a,x"
+    unsigned short flags;
+    unsigned short ret_port;
 } PACKED_ATT;
 
 // STDFSS_CLOSE	
 
 struct stdfss_close
 {
-	unsigned char command;		/* Command to execute */
-	unsigned short thr_id;		// support for multithreading for iolib
-	unsigned char padding0;
-	unsigned short file_id;	// file ID to close
-	unsigned short padding1;
-	unsigned int   padding2;
-	unsigned short padding3;
-	unsigned short ret_port;
+    unsigned char command;		/* Command to execute */
+    unsigned short thr_id;		// support for multithreading for iolib
+    unsigned char padding0;
+    unsigned short file_id;	// file ID to close
+    unsigned short padding1;
+    unsigned int   padding2;
+    unsigned short padding3;
+    unsigned short ret_port;
 }PACKED_ATT;
 
 // STDFSS_TELL
 
 struct stdfss_tell
 {
-	unsigned char command;		/* Command to execute */
-	unsigned short thr_id;		// support for multithreading for iolib
-	unsigned char padding0;
-	unsigned short file_id;	// file ID to close
-	unsigned short padding1;
-	unsigned int   padding2;
-	unsigned short padding3;
-	unsigned short ret_port;
+    unsigned char command;		/* Command to execute */
+    unsigned short thr_id;		// support for multithreading for iolib
+    unsigned char padding0;
+    unsigned short file_id;	// file ID to close
+    unsigned short padding1;
+    unsigned int   padding2;
+    unsigned short padding3;
+    unsigned short ret_port;
 } PACKED_ATT;
 
 // STDFSS_SEEK		
@@ -348,200 +347,200 @@ struct stdfss_tell
 
 struct stdfss_seek
 {
-	unsigned char command;		/* Command to execute */
-	unsigned short thr_id;		// support for multithreading for iolib
-	unsigned char origin;
-	unsigned short file_id;		// file ID to seek into
-	unsigned long long possition; // possition to seek on file
-	unsigned short ret_port;
+    unsigned char command;		/* Command to execute */
+    unsigned short thr_id;		// support for multithreading for iolib
+    unsigned char origin;
+    unsigned short file_id;		// file ID to seek into
+    unsigned long long possition; // possition to seek on file
+    unsigned short ret_port;
 } PACKED_ATT;
 
 // STDFSS_READ		
 
 struct stdfss_read
 {
-	unsigned char command;		/* Command to execute */
-	unsigned short thr_id;		// support for multithreading for iolib
-	unsigned char padding0;
-	unsigned short file_id;	// file ID to read
-	unsigned short count;	// bytes being read
-	unsigned int   smo;		// smo to write read data		
-	unsigned short padding1;
-	unsigned short ret_port;
+    unsigned char command;		/* Command to execute */
+    unsigned short thr_id;		// support for multithreading for iolib
+    unsigned char padding0;
+    unsigned short file_id;	// file ID to read
+    unsigned short count;	// bytes being read
+    unsigned int   smo;		// smo to write read data		
+    unsigned short padding1;
+    unsigned short ret_port;
 } PACKED_ATT;
 
 // STDFSS_GETS		
 
 struct stdfss_gets
 {
-	unsigned char command;		/* Command to execute */
-	unsigned short thr_id;		// support for multithreading for iolib
-	unsigned char padding0;
-	unsigned short file_id;	// file ID to read
-	unsigned short count;	// bytes being read
-	unsigned int   smo;		// smo to write read data		
-	unsigned short padding1;
-	unsigned short ret_port;
+    unsigned char command;		/* Command to execute */
+    unsigned short thr_id;		// support for multithreading for iolib
+    unsigned char padding0;
+    unsigned short file_id;	// file ID to read
+    unsigned short count;	// bytes being read
+    unsigned int   smo;		// smo to write read data		
+    unsigned short padding1;
+    unsigned short ret_port;
 } PACKED_ATT;
 
 // STDFSS_GETC	
 
 struct stdfss_getc
 {
-	unsigned char command;		/* Command to execute */
-	unsigned short thr_id;		// support for multithreading for iolib
-	unsigned char padding0;
-	unsigned short file_id;	// file ID to read
-	unsigned short padding1;	// bytes being read
-	unsigned int   padding2;
-	unsigned short padding3;
-	unsigned short ret_port;
+    unsigned char command;		/* Command to execute */
+    unsigned short thr_id;		// support for multithreading for iolib
+    unsigned char padding0;
+    unsigned short file_id;	// file ID to read
+    unsigned short padding1;	// bytes being read
+    unsigned int   padding2;
+    unsigned short padding3;
+    unsigned short ret_port;
 } PACKED_ATT;
 
 // STDFSS_WRITE
 
 struct stdfss_write
 {
-	unsigned char command;		/* Command to execute */
-	unsigned short thr_id;		// support for multithreading for iolib
-	unsigned char padding0;
-	unsigned short file_id;	// file ID 
-	unsigned short count;	// bytes being written
-	unsigned int   smo;		// smo containing data being written		
-	unsigned short padding1;
-	unsigned short ret_port;
+    unsigned char command;		/* Command to execute */
+    unsigned short thr_id;		// support for multithreading for iolib
+    unsigned char padding0;
+    unsigned short file_id;	// file ID 
+    unsigned short count;	// bytes being written
+    unsigned int   smo;		// smo containing data being written		
+    unsigned short padding1;
+    unsigned short ret_port;
 } PACKED_ATT;
 
 // STDFSS_PUTS
 
 struct stdfss_puts
 {
-	unsigned char command;		/* Command to execute */
-	unsigned short thr_id;		// support for multithreading for iolib
-	unsigned char padding0;
-	unsigned short file_id;	// file ID 
-	unsigned short count;	// bytes being written
-	unsigned int   smo;		// smo containing data being written		
-	unsigned short padding1;
-	unsigned short ret_port;
+    unsigned char command;		/* Command to execute */
+    unsigned short thr_id;		// support for multithreading for iolib
+    unsigned char padding0;
+    unsigned short file_id;	// file ID 
+    unsigned short count;	// bytes being written
+    unsigned int   smo;		// smo containing data being written		
+    unsigned short padding1;
+    unsigned short ret_port;
 } PACKED_ATT;
 
 // STDFSS_PUTC
 
 struct stdfss_putc
 {
-	unsigned char command;		/* Command to execute */
-	unsigned short thr_id;		// support for multithreading for iolib
-	unsigned char padding0;
-	unsigned short file_id;	// file ID 
-	unsigned short padding1;	
-	unsigned int   c;		// smo containing data being written		
-	unsigned short padding2;
-	unsigned short ret_port;
+    unsigned char command;		/* Command to execute */
+    unsigned short thr_id;		// support for multithreading for iolib
+    unsigned char padding0;
+    unsigned short file_id;	// file ID 
+    unsigned short padding1;	
+    unsigned int   c;		// smo containing data being written		
+    unsigned short padding2;
+    unsigned short ret_port;
 } PACKED_ATT;
 
 // define STDFSS_LINK
 
 struct stdfss_link
 {
-	unsigned char command;		/* Command to execute */
-	unsigned short thr_id;		// support for multithreading for iolib
-	unsigned char padding0;
-	unsigned int   smo_file;	// smo containing the path of the existing file
-	unsigned int   smo_link;	// smo containing the path of the new link file
-	unsigned short padding1;
-	unsigned short ret_port;
+    unsigned char command;		/* Command to execute */
+    unsigned short thr_id;		// support for multithreading for iolib
+    unsigned char padding0;
+    unsigned int   smo_file;	// smo containing the path of the existing file
+    unsigned int   smo_link;	// smo containing the path of the new link file
+    unsigned short padding1;
+    unsigned short ret_port;
 } PACKED_ATT;
 
 // STDFSS_MKDIR
 
 struct stdfss_mkdir
 {
-	unsigned char command;		/* Command to execute */
-	unsigned short thr_id;		// support for multithreading for iolib
-	unsigned char padding0;
-	unsigned int   dir_path;	
-	unsigned int   padding1;
-	unsigned short padding2;
-	unsigned short ret_port;
+    unsigned char command;		/* Command to execute */
+    unsigned short thr_id;		// support for multithreading for iolib
+    unsigned char padding0;
+    unsigned int   dir_path;	
+    unsigned int   padding1;
+    unsigned short padding2;
+    unsigned short ret_port;
 } PACKED_ATT;
 
 // STDFSS_FLUSH
 
 struct stdfss_flush
 {
-	unsigned char command;		/* Command to execute */
-	unsigned short thr_id;		// support for multithreading for iolib
-	unsigned char padding0;
-	unsigned short file_id;
-	unsigned int   padding1;
-	unsigned short padding2;
-	unsigned short ret_port;
+    unsigned char command;		/* Command to execute */
+    unsigned short thr_id;		// support for multithreading for iolib
+    unsigned char padding0;
+    unsigned short file_id;
+    unsigned int   padding1;
+    unsigned short padding2;
+    unsigned short ret_port;
 } PACKED_ATT;
 
 // STDFSS_CHANGEATT
 
 struct stdfss_changeatt
 {
-	unsigned char command;		/* Command to execute */
-	unsigned short thr_id;		// support for multithreading for iolib
-	unsigned char padding0;
-	unsigned int   file_path;	// smo with file path
-	unsigned int   flags;		// new flags
-	unsigned short substract;	// if 0 flags will be ored. if 1 flags will be removed.
-	unsigned short ret_port;
+    unsigned char command;		/* Command to execute */
+    unsigned short thr_id;		// support for multithreading for iolib
+    unsigned char padding0;
+    unsigned int   file_path;	// smo with file path
+    unsigned int   flags;		// new flags
+    unsigned short substract;	// if 0 flags will be ored. if 1 flags will be removed.
+    unsigned short ret_port;
 }PACKED_ATT;
 
 // STDFSS_DELETE
 
 struct stdfss_delete
 {
-	unsigned char command;		/* Command to execute */
-	unsigned short thr_id;		// support for multithreading for iolib
-	unsigned char padding0;
-	unsigned int   path_smo;	// file path
-	unsigned int   padding1;
-	unsigned short padding2;
-	unsigned short ret_port;
+    unsigned char command;		/* Command to execute */
+    unsigned short thr_id;		// support for multithreading for iolib
+    unsigned char padding0;
+    unsigned int   path_smo;	// file path
+    unsigned int   padding1;
+    unsigned short padding2;
+    unsigned short ret_port;
 } PACKED_ATT;
 
 // STDFSS_MKDEVICE
 
 struct stdfss_mkdevice
 {
-	unsigned char command;		/* Command to execute */
-	unsigned short thr_id;		// support for multithreading for iolib
-	unsigned char padding0;
-	unsigned int   path_smo;		// device file path
-	unsigned int   service_name;	// service name
-	unsigned short logic_deviceid;	// logic device id
-	unsigned short ret_port;
+    unsigned char command;		/* Command to execute */
+    unsigned short thr_id;		// support for multithreading for iolib
+    unsigned char padding0;
+    unsigned int   path_smo;		// device file path
+    unsigned int   service_name;	// service name
+    unsigned short logic_deviceid;	// logic device id
+    unsigned short ret_port;
 } PACKED_ATT;
 
 // STDFSS_FILEINFO
 
 struct stdfss_fileinfo
 {
-	unsigned char command;		/* Command to execute */
-	unsigned short thr_id;		// support for multithreading for iolib
-	unsigned char padding0;
-	unsigned int   path_smo;	// file path
-	unsigned int   file_info_id; // indicates the id desired file info format.
-	unsigned short file_info_smo; 
-	unsigned short ret_port;
+    unsigned char command;		/* Command to execute */
+    unsigned short thr_id;		// support for multithreading for iolib
+    unsigned char padding0;
+    unsigned int   path_smo;	// file path
+    unsigned int   file_info_id; // indicates the id desired file info format.
+    unsigned short file_info_smo; 
+    unsigned short ret_port;
 } PACKED_ATT;
 
 // STDFSS_INIT
 
 struct stdfss_init
 {
-	unsigned char command;		/* Command to execute */
-	unsigned short thr_id;		// support for multithreading for iolib
-	unsigned char padding0;
-	unsigned int   path_smo;	// root path to mount
-	unsigned int   deviceid;	// id of the service device driver
-	unsigned short logic_deviceid;
-	unsigned short ret_port;
+    unsigned char command;		/* Command to execute */
+    unsigned short thr_id;		// support for multithreading for iolib
+    unsigned char padding0;
+    unsigned int   path_smo;	// root path to mount
+    unsigned int   deviceid;	// id of the service device driver
+    unsigned short logic_deviceid;
+    unsigned short ret_port;
 } PACKED_ATT;
 
 // FILE INFO STRUCTURE
@@ -558,43 +557,43 @@ struct stdfss_init
 
 struct file_info0
 {
-	int file_type;
-	unsigned long long creation_date;
-	unsigned long long modification_date;
-	unsigned long long file_size;
-	int flags;
-	int dir_entries; 
-	int protection;     /* protection */
-    	int hard_links;
-	int owner_id;
-    	int owner_group_id;
+    int file_type;
+    unsigned long long creation_date;
+    unsigned long long modification_date;
+    unsigned long long file_size;
+    int flags;
+    int dir_entries; 
+    int protection;     /* protection */
+    int hard_links;
+    int owner_id;
+    int owner_group_id;
 
-	int device_service_id;
-	int logic_device_id;
+    int device_service_id;
+    int logic_device_id;
 };
 
 /* TAKEOVER */
 
 struct stdfss_takeover{
-	unsigned char command;		/* Command to execute */
-	unsigned short thr_id;		// support for multithreading for iolib
-	unsigned char padding0;
-	unsigned int   file_id;
-	unsigned int   padding1;
-	unsigned short task_id;
-	unsigned short ret_port;
-		/* The port for the response message */
+    unsigned char command;		/* Command to execute */
+    unsigned short thr_id;		// support for multithreading for iolib
+    unsigned char padding0;
+    unsigned int   file_id;
+    unsigned int   mode_mask;   // accepted open modes for the file
+    unsigned short task_id;
+    unsigned short ret_port;
+    /* The port for the response message */
 } PACKED_ATT;
 
 struct stdfss_return{
-	unsigned char command;		/* Command to execute */
-	unsigned short thr_id;		// support for multithreading for iolib
-	unsigned char padding0;
-	unsigned int   file_id;
-	unsigned int   padding1;
-	unsigned short padding2;
-	unsigned short ret_port;
-		/* The port for the response message */
+    unsigned char command;		/* Command to execute */
+    unsigned short thr_id;		// support for multithreading for iolib
+    unsigned char padding0;
+    unsigned int   file_id;
+    unsigned int   padding1;
+    unsigned short padding2;
+    unsigned short ret_port;
+    /* The port for the response message */
 } PACKED_ATT;
 
 #endif
