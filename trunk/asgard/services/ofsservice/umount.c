@@ -50,15 +50,13 @@ struct stdfss_res *umount_device(int wpid, struct working_thread *thread, struct
 		free(old_str);
 	}
 
+    // NOTE: minf will never be null
 	wait_mutex(&mounted_mutex);
 	minf = (struct smount_info *)lpt_getvalue(mounted, str);
-	leave_mutex(&mounted_mutex);
-
-	// NOTE: minf will never be null
-	
-	// remove minf from mount tree
+    // remove minf from mount tree
 	lpt_remove(&mounted, str);
-	
+	leave_mutex(&mounted_mutex);
+    
 	free(str);
 
 	// check there are no opened files on the mounted device

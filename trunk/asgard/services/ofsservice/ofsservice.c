@@ -250,7 +250,7 @@ void _start()
 
 		stddevres_count = get_msg_count(OFS_STDDEVRES_PORT);
 		
-		// process MSG thread signals
+		// process working thread MSG signals
 		while(stddevres_count != 0)
 		{
 			get_msg(OFS_STDDEVRES_PORT, &stddev_res, &senderid);
@@ -271,7 +271,6 @@ void _start()
 
 		chardev_count = get_msg_count(OFS_CHARDEV_PORT);
 		
-		// process MSG thread signals
 		while(chardev_count != 0)
 		{
 			get_msg(OFS_CHARDEV_PORT, &incoming_char, &senderid);
@@ -390,12 +389,12 @@ void _start()
 					continue; 
 				}
 
-				// get service and logic device id //
+				// get service and logic device id (and process forward/return/takeover) //
 				switch(cmd.command)
 				{
 					case STDFSS_FORWARD:
 						/* forwarding won't be supported by this service */
-						/* for it will serve ase the default fs */
+						/* for it will serve as the default fs */
 						res.command = cmd.command;
 						res.thr_id = cmd.thr_id;
 						res.ret = STDFSSERR_COMMAND_NOTSUPPORTED;
@@ -403,6 +402,68 @@ void _start()
 						send_msg(senderid, cmd.ret_port, &res);
 						stdfss_count--;
 						continue;
+                    case STDFSS_RETURN:
+                        if(senderid != PMAN_TASK)
+                        {
+                            ret = build_response_msg(cmd.command, STDFSSERR_NO_PRIVILEGES);
+					        ret->thr_id = cmd.thr_id;
+					        send_msg(senderid, ((struct stdfss_return*)&cmd)->ret_port, ret);
+					        free(ret);
+					        ret = NULL;
+					        stdfss_count--;
+					        continue; 
+                        }
+
+                        // NOTE: Just as on takeover, we will let all pending commands
+                        // finish.
+                        ret = begin_return(senderid, (struct stdfss_return*)&cmd, &deviceid, &logic_deviceid, &dinf);
+
+                        if(ret != NULL)
+                        {
+                            ret->thr_id = cmd.thr_id;
+					        send_msg(senderid, ((struct stdfss_return*)&cmd)->ret_port, ret);
+					        free(ret);
+					        ret = NULL;
+					        stdfss_count--;
+					        continue;
+                        }
+                        value = 1;
+                        break;
+                    case STDFSS_TAKEOVER:
+                        if(senderid != PMAN_TASK)
+                        {
+                            ret = build_response_msg(cmd.command, STDFSSERR_NO_PRIVILEGES);
+					        ret->thr_id = cmd.thr_id;
+					        send_msg(senderid, ((struct stdfss_takeover*)&cmd)->ret_port, ret);
+					        free(ret);
+					        ret = NULL;
+					        stdfss_count--;
+					        continue; 
+                        }
+
+                        // NOTE: When a file is taken over, we won't allow other 
+                        // commands from the original owner, but there might be
+                        // pending commands on the queue.
+                        // We will add the file to the taking over task open_files tree
+                        // and set takeover properly. On get_device_info, for file commands 
+                        // (read/write,get[s],put[s], flush, tell and close) we will check
+                        // for takeover and fail if it's set to something other than NULL.
+                        // since we want all pending operations by the current owner to
+                        // finish, we will queue the command and execute it once all device 
+                        // operations before takeover finish (i.e, takeover is not concurrent).
+                        ret = begin_takeover(senderid, (struct stdfss_takeover*)&cmd, &deviceid, &logic_deviceid, &dinf);
+
+                        if(ret != NULL)
+                        {
+                            ret->thr_id = cmd.thr_id;
+					        send_msg(senderid, ((struct stdfss_takeover*)&cmd)->ret_port, ret);
+					        free(ret);
+					        ret = NULL;
+					        stdfss_count--;
+					        continue;
+                        }
+                        value = 1;
+                        break;
 					case STDFSS_CLOSE:
 					case STDFSS_SEEK:
 					case STDFSS_READ:
@@ -414,7 +475,7 @@ void _start()
 					case STDFSS_PUTS:
 					case STDFSS_GETC:
 					case STDFSS_GETS:
-						value = get_device_info(&cmd, senderid, ((struct stdfss_fileid *)&cmd)->file_id ,&deviceid, &logic_deviceid, &dinf, &ret);
+						value = get_device_info(&cmd, senderid, ((struct stdfss_fileid *)&cmd)->file_id, &deviceid, &logic_deviceid, &dinf, &ret);
 					break;
 					default:
 						value = get_device_info(&cmd, -1, -1, &deviceid, &logic_deviceid, &dinf, &ret);
@@ -548,8 +609,4 @@ void _start()
 	
 	// send die response
 	send_msg(dieid, dieretport, &dieres);
-
-#ifdef WIN32DEBUGGER
-	return 0;
-#endif
 }

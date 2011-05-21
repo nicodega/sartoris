@@ -49,7 +49,6 @@ device_info *cache_device_info(int deviceid, int logic_deviceid, struct sdevice_
 
 	if(cached_devices_count >= OFS_MAX_CACHED_DEVICES)
 	{
-//print("removing cached device",0);
 		remove_cached_device();
 	}
 
@@ -69,7 +68,6 @@ device_info *cache_device_info(int deviceid, int logic_deviceid, struct sdevice_
 		if(dev_inf == NULL)
 		{
 			dinf = (device_info *)malloc(sizeof(device_info));
-			//init_logic_device(dinf, -1);
 		}
 		else
 		{
@@ -95,7 +93,6 @@ device_info *cache_device_info(int deviceid, int logic_deviceid, struct sdevice_
 			if(dev_inf == NULL)
 			{
 				dinf = (device_info *)malloc(sizeof(device_info));
-				//init_logic_device(dinf, -1);
 			}
 			else
 			{

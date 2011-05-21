@@ -125,17 +125,18 @@ void working_process()
 			case STDFSS_EXISTS:
 				ret = exists(myid, thread, (struct stdfss_exists *)&thread->command);
 				break;
+            case STDFSS_TAKEOVER:
+				ret = takeover(myid, thread, (struct stdfss_takeover *)&thread->command);
+				break;
+            case STDFSS_RETURN:
+				ret = do_return(myid, thread, (struct stdfss_return *)&thread->command);
+				break;
 			default:
 				ret = build_response_msg(thread->command.command, STDFSSERR_INVALID_COMMAND);
 				break;
 		}
 
 		// free thread resources
-		/*if(thread->lastdir_parsed_node != NULL)
-		{
-			nfree(thread->lastdir_parsed_node);
-			thread->lastdir_parsed_node = NULL;
-		}*/
 		thread->waiting_for_signal = 0;
 		thread->signal_type = OFS_THREADSIGNAL_NOSIGNAL; // no signal is expected
 		thread->directory_service_msg = -1;

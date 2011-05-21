@@ -54,8 +54,8 @@ int attempt_start(device_info *logic_device, CPOSITION position, int deviceid, i
 			waiting_cmd = (struct swaiting_command *)get_next(&it);
 			if(waiting_cmd->life_time != 0) waiting_cmd->life_time--;
 		}
-		leave_mutex(&logic_device->processing_mutex);
 
+		leave_mutex(&logic_device->processing_mutex);
 		return TRUE;
 	}
 	
@@ -66,20 +66,24 @@ int attempt_start(device_info *logic_device, CPOSITION position, int deviceid, i
 
 int check_concurrent(struct sdevice_info *device, CPOSITION position)
 {
-	struct swaiting_command *waiting_cmd = NULL;
+	struct swaiting_command *waiting_cmd = NULL, *wc = NULL;
+    struct stask_info *tinf;
 	CPOSITION it = NULL;
 
 	waiting_cmd = (struct swaiting_command *)get_at(position);
 
 	// UMOUNTS are NOT concurrent
-	if(waiting_cmd->command.command == STDFSS_UMOUNT) return FALSE;
+	if(waiting_cmd->command.command == STDFSS_UMOUNT 
+        || waiting_cmd->command.command == STDFSS_TAKEOVER
+        || waiting_cmd->command.command == STDFSS_RETURN) return FALSE;
 
 	// check the task is not processing something (one process running at the same time for a given task)
+    // On takeovers we must check there are no operations from the current owner.
 	if(avl_getvalue(device->procesing, waiting_cmd->sender_id) != NULL)
 	{
 		return FALSE;
 	}
-
+    
 	// check there are no commands with 0 lifetime and no umount command is waiting
 	it = get_head_position(&device->waiting);
 
@@ -144,11 +148,7 @@ int check_waiting_commands()
 	return created;
 }
 
-
-
-
-
-/* Modify this functions code to port to sartoris */
+/* Create a working thread */
 int create_working_thread(int id)
 {
 	struct pm_msg_create_thread msg_create_thr;
@@ -411,8 +411,6 @@ void init_working_threads()
 	}
 
 }
-
-
 
 void free_mountinfo_struct(struct smount_info *minf, int wpid)
 {

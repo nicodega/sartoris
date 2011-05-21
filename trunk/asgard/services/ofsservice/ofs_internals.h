@@ -306,8 +306,8 @@ struct sdevice_info
 // be executed concurrently with whatever is executing
 struct swaiting_command
 {
-	struct stdfss_cmd command;		// the pending command
-	int sender_id;				// id of the process for whose this command is pending
+	struct stdfss_cmd command;  // the pending command
+	int sender_id;              // id of the process for whose this command is pending
 	int life_time;
 };
 
@@ -320,7 +320,8 @@ struct sidle_device
 
 
 // info for mounted OFS block devices //
-struct smount_info{
+struct smount_info
+{
 		struct OFST ofst;		// ofs table info... (probably not the complete ofst)
 		unsigned int group_size;	// pre calculated group size	
 		struct GH *group_headers;
@@ -341,10 +342,7 @@ struct smount_info{
 // structure kept on tasks AVL //
 struct stask_info
 {
-	AvlTree open_files;	
-	// last_fileid was removed for the pointer of each stask_file_info structure is used instead.
-	// just in case this change was not correct, code was comented.
-	//unsigned int last_fileid; // file ids will be assigned to this var + 1
+	AvlTree open_files;
 };
 
 // task file info //
@@ -374,7 +372,10 @@ struct stask_file_info
 	int taskid;								// id of the owner task
 	int fileid;
 
+    struct stask_info *takeover;            // if the file has been taken over by a task, this will contain a stask_info structure pointer.
 };
+
+#define TAKEOVER_CLOSING (struct stask_info*)0xFFFFFFFF        // this must be an invalid task pointer!
 
 // structures defined for implementation purposes //
 struct stdfss_fileid
@@ -446,6 +447,11 @@ struct stdfss_res *tell_file(int wpid, struct working_thread *thread, struct std
 struct stdfss_res *link_file(int wpid, struct working_thread *thread, struct stdfss_link *link_cmd);
 struct stdfss_res *change_attributes(int wpid, struct working_thread *thread, struct stdfss_changeatt *changeatt_cmd);
 
+struct stdfss_res *begin_return(int task, struct stdfss_return *cmd, int *deviceid, int *logic_deviceid, struct sdevice_info **dinf);
+struct stdfss_res *do_return(int wpid, struct working_thread *thread, struct stdfss_return *cmd);
+struct stdfss_res *begin_takeover(int task, struct stdfss_takeover *cmd, int *deviceid, int *logic_deviceid, struct sdevice_info **dinf);
+struct stdfss_res *takeover(int wpid, struct working_thread *thread, struct stdfss_takeover *cmd);
+
 /* Character device commands implementation */
 struct stdfss_res *chardev_read(int wpid, struct working_thread *thread, struct stdfss_read *read_cmd, int delimited, struct stask_file_info *finf);
 struct stdfss_res *chardev_write(int wpid, struct working_thread *thread, struct stdfss_write *write_cmd, int delimited, struct stask_file_info *finf);
@@ -484,7 +490,7 @@ int read_device_file(struct gc_node *devicefile_node, struct smount_info *minf, 
 int request_device(int wpid, int deviceid, int logic_deviceid, struct sdevice_info *dinf, int request_mode, int command, struct stdfss_res **ret);
 int free_device(int wpid, int deviceid, int logic_deviceid, struct sdevice_info *dinf, int command, struct stdfss_res **ret);
 int resolve_name(char *srvname, int *deviceid, int wpid);
-int get_device_info(struct stdfss_cmd *cmd,int taskid, int fileid, int *deviceid, int *logic_deviceid, struct sdevice_info **dinf, struct stdfss_res **ret);
+int get_device_info(struct stdfss_cmd *cmd, int taskid, int fileid, int *deviceid, int *logic_deviceid, struct sdevice_info **dinf, struct stdfss_res **ret);
 void init_logic_device(device_info *logic_device, int devicefile_nodeid, int buffers);
 
 /* Buffers */

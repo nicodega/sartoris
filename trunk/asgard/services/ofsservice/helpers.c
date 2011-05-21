@@ -60,6 +60,7 @@ struct stdfss_res *check_path(char *path, int command)
 	}
 	return NULL;
 }
+
 // gets info of a device from the mount tree.
 int get_device_info(struct stdfss_cmd *cmd,int taskid, int fileid, int *deviceid, int *logic_deviceid, struct sdevice_info **dinf, struct stdfss_res **ret)
 {
@@ -148,7 +149,11 @@ int get_device_info(struct stdfss_cmd *cmd,int taskid, int fileid, int *deviceid
 			*ret = check_path(str, cmd->command);
 			if(*ret != NULL) return FALSE;
 			
-			minf = (struct smount_info *)lpt_getvalue_parcial_match(mounted, str);
+            wait_mutex(&mounted_mutex);
+	        {
+			    minf = (struct smount_info *)lpt_getvalue_parcial_match(mounted, str);
+            }
+            leave_mutex(&mounted_mutex);
 			
 			free(str);
 			
@@ -173,20 +178,39 @@ int get_device_info(struct stdfss_cmd *cmd,int taskid, int fileid, int *deviceid
 		case STDFSS_GETC:
 		case STDFSS_GETS:
 			// find the device and logic_dev using task_id and file_id //
-			if(taskid == -1 || fileid == -1) return FALSE;
+            wait_mutex(&opened_files_mutex);
+            {
+			    if(taskid == -1 || fileid == -1) return FALSE;
 			
-			tinf = (task_info *)avl_getvalue(tasks, taskid);
+			    tinf = (task_info *)avl_getvalue(tasks, taskid);
 			
-			if(tinf == NULL) return FALSE;
-			
-			tfinf = (task_file_info *)avl_getvalue(tinf->open_files, fileid);
-			
-			if(tfinf == NULL) return FALSE;			
+			    if(tinf == NULL)
+			    {
+                    leave_mutex(&opened_files_mutex);
+                    return FALSE;
+                }
 
-			*dinf = tfinf->dinf;
-			*deviceid = tfinf->deviceid;
-			*logic_deviceid = tfinf->logic_deviceid;
+			    tfinf = (task_file_info *)avl_getvalue(tinf->open_files, fileid);
 			
+			    if(tfinf == NULL)
+                {
+                    leave_mutex(&opened_files_mutex);
+                    return FALSE;
+                }
+
+                // don't let them execute operations on taken over files
+                if(tfinf->takeover != NULL && (tfinf->takeover != tinf || (cmd->command == STDFSS_CLOSE && tfinf->takeover == tinf)))
+                {
+                    leave_mutex(&opened_files_mutex);
+                    return FALSE;
+                }
+                
+			    *dinf = tfinf->dinf;
+			    *deviceid = tfinf->deviceid;
+			    *logic_deviceid = tfinf->logic_deviceid;
+			}
+            leave_mutex(&opened_files_mutex);
+
 			return TRUE;
 	}
 	
@@ -204,8 +228,8 @@ int get_device_info(struct stdfss_cmd *cmd,int taskid, int fileid, int *deviceid
 		{
 			minf = (struct smount_info *)lpt_getvalue(mounted, str);
 		}
-	}
-	leave_mutex(&mounted_mutex);
+    }
+    leave_mutex(&mounted_mutex);
 
 	free(str);
 	
@@ -217,11 +241,9 @@ int get_device_info(struct stdfss_cmd *cmd,int taskid, int fileid, int *deviceid
 	*dinf = minf->dinf;
 	*deviceid = minf->deviceid;
 	*logic_deviceid = minf->logic_deviceid;
-
+    
 	return TRUE;
 }
-
-
 
 // gets file info for a fileid of a given task
 int get_file_info(int taskid, int fileid, struct stask_file_info **out_finf, struct stask_info **out_tinf)
