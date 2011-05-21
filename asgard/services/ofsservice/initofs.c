@@ -565,8 +565,6 @@ void init_ofs(struct stdfss_init *init_cmd, struct stdfss_res **ret)
 
 	lpt_insert(&mounted, str, minf);
 
-	//free(str); // needed for path cache
-
 	*ret = build_response_msg(init_cmd->command, STDFSSERR_OK);
 
 	initialized = 1;

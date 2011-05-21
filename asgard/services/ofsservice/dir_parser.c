@@ -184,7 +184,6 @@ int parse_directory(int use_cache, struct gc_node **parsed_node, int lock_mode, 
 			{
 				if(!lock_node(dentry->nodeid, lock_mode, (parent_cachedn == NULL)? OFS_LOCKSTATUS_DENYALL : OFS_LOCKSTATUS_DENY(parent_cachedn->nodeid), wpid, command, ret))
 				{
-					//if(nodeid != 0) free_node_buffer(nodeid);
 					nfree(minf->dinf, cachedn);
 					nfree(minf->dinf, parent_cachedn);
 					nfree(minf->dinf, first_block_node);

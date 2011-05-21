@@ -30,9 +30,6 @@ struct mutex bcache_mutex;
 	File buffers have their own caching system, but this will update cached file buffers
 	on writes. As directories can't be written by tasks this is a safe, though not nice
 	policy.
-
-	NOTE: The entire caching system and buffer management should be redesigned in order to
-	make it nicer. 
 */
 int bc_read(char *buffer, unsigned int buffer_size, unsigned int lba, int command, int wpid, struct smount_info *minf, int parser, struct stdfss_res **ret )
 {

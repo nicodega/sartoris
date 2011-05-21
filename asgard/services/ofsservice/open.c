@@ -60,7 +60,6 @@ struct stdfss_res *open_file(int wpid, struct working_thread *thread, struct std
 
 	open_mode = open_cmd->open_mode;
 
-	// files oppened for append won't
 	if((open_mode & STDFSS_FILEMODE_WRITE) && (open_mode & STDFSS_FILEMODE_APPEND))
 	{
 		return build_response_msg(thread->command.command, STDFSSERR_FILE_INVALIDOPERATION);
@@ -115,6 +114,7 @@ struct stdfss_res *open_file(int wpid, struct working_thread *thread, struct std
 	finf->taskid = thread->taskid;
 	finf->file_modified = FALSE; // not modified
 	finf->buffered = ((open_cmd->flags & STDFSS_OPEN_WRITEBUFFERED)? TRUE : FALSE);
+    finf->takeover = NULL;
 	
 	// parse for file node
 	parse_ret = parse_directory(TRUE, &finf->file_base_node, OFS_NODELOCK_EXCLUSIVE | OFS_NODELOCK_BLOCKING, thread->command.command, thread, wpid, minf, str, len(strmatched), &file_flags, &nodeid, NULL, &dir_exists, &ret);
@@ -164,7 +164,6 @@ struct stdfss_res *open_file(int wpid, struct working_thread *thread, struct std
 			if(tinf == NULL)
 			{
 				tinf = (struct stask_info *)malloc(sizeof(struct stask_info));
-				//tinf->last_fileid = 0;
 				avl_init(&tinf->open_files);
 
 				avl_insert(&tasks, tinf, thread->taskid);
@@ -366,7 +365,6 @@ struct stdfss_res *open_file(int wpid, struct working_thread *thread, struct std
 				if(tinf == NULL)
 				{
 					tinf = (struct stask_info *)malloc(sizeof(struct stask_info));
-					//tinf->last_fileid = 0;
 					avl_init(&tinf->open_files);
 
 					avl_insert(&tasks, tinf, thread->taskid);
@@ -546,7 +544,6 @@ struct stdfss_res *open_file(int wpid, struct working_thread *thread, struct std
 				if(tinf == NULL)
 				{
 					tinf = (struct stask_info *)malloc(sizeof(struct stask_info));
-					//tinf->last_fileid = 0;
 					avl_init(&tinf->open_files);
 
 					avl_insert(&tasks, tinf, thread->taskid);
