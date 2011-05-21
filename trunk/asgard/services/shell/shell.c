@@ -191,7 +191,6 @@ void service_main (void)
 				}
 				else
 				{
-					__asm__ __volatile__ ("outb %1, %0" : : "dN" (0xe9), "a" (102));
 					for(;;);
 				}
 			}
