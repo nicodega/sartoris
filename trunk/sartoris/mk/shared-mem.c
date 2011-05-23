@@ -128,43 +128,50 @@ int read_mem(int smo_id, int off, int size, int *dest)
 		{			
 			my_smo = GET_PTR(smo_id,smo);
 
-			while (my_smo->target == curr_task && off + size <= my_smo->len && result != SUCCESS)
-			{                            
-                int bytes;
+            if(my_smo->owner != curr_task) // we won't let a task read or write from it's smo. (might help avoid memory protections?) 
+            {   
+			    while (my_smo->target == curr_task && off + size <= my_smo->len && result != SUCCESS)
+			    {                            
+                    int bytes;
 					
-				src = (char *) ((unsigned int)my_smo->base + off);
-				/*
-				If we are using paging and the required page is not present, this function call 
-				does not guarantee atomicity. (It might rise a page fault interrupt). That's
-				why we must validate all things again.
-				*/
-				bytes = arch_cpy_from_task(my_smo->owner, (char*)src, (char*)dest, size, x);  
+				    src = (char *) ((unsigned int)my_smo->base + off);
+				    /*
+				    If we are using paging and the required page is not present, this function call 
+				    does not guarantee atomicity. (It might rise a page fault interrupt). That's
+				    why we must validate all things again.
+				    */
+				    bytes = arch_cpy_from_task(my_smo->owner, (char*)src, (char*)dest, size, x);  
 				
-				if (!TST_PTR(smo_id,smo) || my_smo->target != curr_task )
-				{
+				    if (!TST_PTR(smo_id,smo) || my_smo->target != curr_task )
+				    {
+                        if(my_smo->target != curr_task)
+                            set_error(SERR_NOT_SMO_TARGET);
+                        else
+                            set_error(SERR_INVALID_SMO);
+					    mk_leave(x);
+					    return FAILURE;
+				    }
+			
+				    off += bytes;
+				    size -= bytes;
+
+				    if (size == 0) 
+				    {
+                        set_error(SERR_OK);
+					    result = SUCCESS; 
+				    }
+			    }
+                if(result != SUCCESS)
+                {
                     if(my_smo->target != curr_task)
                         set_error(SERR_NOT_SMO_TARGET);
                     else
-                        set_error(SERR_INVALID_SMO);
-					mk_leave(x);
-					return FAILURE;
-				}
-			
-				off += bytes;
-				size -= bytes;
-
-				if (size == 0) 
-				{
-                    set_error(SERR_OK);
-					result = SUCCESS; 
-				}
-			}
-            if(result != SUCCESS)
+                        set_error(SERR_INVALID_SIZE);
+                }
+            }
+            else
             {
-                if(my_smo->target != curr_task)
-                    set_error(SERR_NOT_SMO_TARGET);
-                else
-                    set_error(SERR_INVALID_SIZE);
+                set_error(SERR_SAME_TASK);
             }
 		}
         else
@@ -206,38 +213,45 @@ int write_mem(int smo_id, int off, int size, int *src)
 		{
 			my_smo = GET_PTR(smo_id,smo);
 
-			while (my_smo->target == curr_task && off + size <= my_smo->len && result != SUCCESS)                   
-			{                      
-                int bytes;
+            if(my_smo->owner != curr_task) // we won't let a task read or write from it's smo. (might help avoid memory protections?) 
+            {
+			    while (my_smo->target == curr_task && off + size <= my_smo->len && result != SUCCESS)                   
+			    {                      
+                    int bytes;
 
-				dest = (char *) ((unsigned int)my_smo->base + off);
-				bytes = arch_cpy_to_task(my_smo->owner, (char*)src, (char*)dest, size, x); 
+				    dest = (char *) ((unsigned int)my_smo->base + off);
+				    bytes = arch_cpy_to_task(my_smo->owner, (char*)src, (char*)dest, size, x); 
 
-				if (!TST_PTR(smo_id,smo) || my_smo->target != curr_task )
-				{
+				    if (!TST_PTR(smo_id,smo) || my_smo->target != curr_task )
+				    {
+                        if(my_smo->target != curr_task)
+                            set_error(SERR_NOT_SMO_TARGET);
+                        else
+                            set_error(SERR_INVALID_SMO);
+					    mk_leave(x);
+					    return FAILURE;
+				    }
+
+				    off += bytes;
+				    size -= bytes;
+
+				    if (size == 0) 
+				    {
+                        set_error(SERR_OK);
+					    result = SUCCESS;
+				    }
+			    }
+                if(result != SUCCESS)
+                {
                     if(my_smo->target != curr_task)
                         set_error(SERR_NOT_SMO_TARGET);
                     else
-                        set_error(SERR_INVALID_SMO);
-					mk_leave(x);
-					return FAILURE;
-				}
-
-				off += bytes;
-				size -= bytes;
-
-				if (size == 0) 
-				{
-                    set_error(SERR_OK);
-					result = SUCCESS;
-				}
-			}
-            if(result != SUCCESS)
+                        set_error(SERR_INVALID_SIZE);
+                }
+            }
+            else
             {
-                if(my_smo->target != curr_task)
-                    set_error(SERR_NOT_SMO_TARGET);
-                else
-                    set_error(SERR_INVALID_SIZE);
+                set_error(SERR_SAME_TASK);
             }
 		}
         else
