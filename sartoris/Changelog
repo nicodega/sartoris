@@ -28,9 +28,6 @@
       only threads being traced will incurr such overhead. Tracing can be started only by a 
       privilege 1 task, but register and memory operations are allowed to any privilege, because
       when sartoris is told to trace a thread, we must specify which task is allowed to do so.
-      If a debugger process tries to write on a read only page on the traced thread/task, a page
-      fault exception will be raised, and it'll be up to the OS on top to allow such an operation
-      or kill the process if it was not allowed.
       When tracing starts for a thread, it's state won't be accesible until it's executed for the first time
       after ttrace_begin invoke. A step int1 will be raised once the thread is executed after
       ttrace_begin. If the task tries to do anything while the thread is tracing but has never executed, 
