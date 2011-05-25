@@ -77,7 +77,7 @@ void console(void)
 	next_read = next_write = 0;
 	full_buf=0;
 	init_mem(mbuffer, 1024 * 5);
-
+        
 	for (i=0; i<NUM_VIRTUAL; i++) 
 	{
 		vt_reset(i);
@@ -108,6 +108,8 @@ void console(void)
 
 	create_keyb_thread();
 
+    init_mouse();
+    
 	/* ok, we spawned the thread that will handle the keyboard. */
 	/* now enter the main loop. */
 	while(!die) 
@@ -120,6 +122,8 @@ void console(void)
 
 		do_io(); 
 
+        do_mouse();
+
 		reschedule();
 	}
 
@@ -131,7 +135,7 @@ void console(void)
 
 void create_keyb_thread(void) 
 {
-	/* INT 33, nested, priority 1 */
+	/* INT 33 */
 	struct pm_msg_create_thread msg_create_thr;
 	struct pm_msg_response      msg_res;
 	int port = 3, sender_id = 0;
@@ -142,7 +146,7 @@ void create_keyb_thread(void)
 	msg_create_thr.task_id = get_current_task();
 	msg_create_thr.flags = 0;
 	msg_create_thr.entry_point = &keyb_int_thread_entry;
-	msg_create_thr.interrupt = 33;
+	msg_create_thr.interrupt = 33;  // int 1
 	msg_create_thr.int_priority = 1;
 
 	send_msg(PMAN_TASK, PMAN_COMMAND_PORT, &msg_create_thr);
@@ -506,21 +510,6 @@ void get_keystrokes(void)
 		mask = kbd_buf[next_read];
 		c = kbd_buf[next_read+1];
 		
-		/*
-		if ( mask & CTL_KEY_MASK) 
-		{
-			if (mask & CONTROL_MASK) 
-			{
-
-				// NOTE: Signal pman Ctrl + key
-				//signal.term = cur_screen;
-				//signal.key = c;
-				//signal.alt = mask & ALT_MASK;
-				//send_msg(PMAN_TASK, CSL_SGN_PORT, &signal);				
-			} 
-		}
-		else 
-		*/
 		if ( mask & ALT_MASK) 
 		{			
 			if (c == LEFT) 
@@ -642,8 +631,10 @@ void get_keystrokes(void)
 
 void vt_switch(int i) 
 {
+    mouse_restore();
 	read_screen(t[cur_screen].screen_buf);
 	write_screen(t[cur_screen=i].screen_buf);
+    mouse_print();
 
 	if (t[i].scanning) 
 	{
@@ -690,6 +681,8 @@ int vt_print(int target, int pos, char *str, int len, int att, int *nl, int deli
 	i = 0;
 	*nl=0;
 	
+    if (target==cur_screen) mouse_restore();
+
 	while (i < len && (!delimited || (delimited && str[i] != delimiter))) 
 	{
 		// print a line
@@ -738,6 +731,8 @@ int vt_print(int target, int pos, char *str, int len, int att, int *nl, int deli
 				virtual_scroll_up_one(target);			
 		}
 	}
+
+    if (target==cur_screen) mouse_print();
 
 	return pos;
 }

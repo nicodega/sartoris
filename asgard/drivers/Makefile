@@ -9,6 +9,7 @@ all :
 	$(MAKE) -C dma all
 	$(MAKE) -C rtc all
 	$(MAKE) -C floppy all
+	$(MAKE) -C mouse all
 
 .PHONY : clean
 clean : 
@@ -18,3 +19,4 @@ clean :
 	$(MAKE) -C dma clean
 	$(MAKE) -C rtc clean
 	$(MAKE) -C floppy clean
+	$(MAKE) -C mouse clean

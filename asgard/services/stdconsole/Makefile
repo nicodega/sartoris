@@ -1,15 +1,13 @@
 include ../../include/dep_rule.mk
 
 CFLAGS += -I"../../include"
-#CFLAGS =  -O0 -ffreestanding -nostdinc -nostdlib -nostartfiles 
 
-objects = console_entry.o console.o consolestddev.o $(extobjects)
+objects = console_entry.o console.o consolestddev.o mouse.o $(extobjects)
 
-extobjects = ../../klib/kserv.o ../../lib/int.o ../../drivers/keyboard/keyb.o \
-../../drivers/screen/screen.o ../../lib/structures/list.o \
+extobjects = ../../klib/kserv.o ../../lib/int.o ../../drivers/keyboard/keyb.o ../../drivers/mouse/mouse.o ../../drivers/screen/screen.o ../../lib/structures/list.o \
 ../../lib/pmalloc.o ../../lib/scheduler.o ../../lib/debug.o
 
-dependencies = console.d
+dependencies = console_entry.d console.d consolestddev.d mouse.d
 
 all : console.img 
 

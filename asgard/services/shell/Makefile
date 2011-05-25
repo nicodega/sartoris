@@ -20,5 +20,6 @@ shell.img : $(objects)
 .PHONY : clean
 clean :
 	rm -f *~ *.o *.img *.d *.map zeros
+
 include ../../include/dep_attach.mk
 

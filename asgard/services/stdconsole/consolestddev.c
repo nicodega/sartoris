@@ -22,6 +22,10 @@
 
 extern struct vterm t[NUM_VIRTUAL];
 
+int mouse_suscriptions_ports[MAX_MOUSE_SUSCRIPTIONS];
+int mouse_suscriptions[MAX_MOUSE_SUSCRIPTIONS];
+int msuscs;
+
 // this function will return non 0 if the service must die.
 int process_stdservice(void)
 {
@@ -133,7 +137,7 @@ void process_stddev(void)
 				res.logic_deviceid = ioctl->logic_deviceid;
                 
 				//if(!check_ownership(ioctl->logic_deviceid, sender_id)) break;
-				if(res.logic_deviceid < 0 || res.logic_deviceid >= NUM_VIRTUAL)
+				if(res.logic_deviceid >= NUM_VIRTUAL)
 					string_print("CONS: ASSERT 1",0,7);
 
 				((struct stddev_ioctrl_res *)&res)->dev_error = -1;
@@ -188,10 +192,17 @@ void process_stddev(void)
 						break;
 					case CSL_IO_SETSIGNALPORT:
 						s = get_suscription(sender_id, ioctl->logic_deviceid);
-						s->port = ioctl->param;
-						res.ret = STDDEV_OK;
+                        if(s)
+                        {
+						    s->port = ioctl->param;
+						    res.ret = STDDEV_OK;
+                        }
+                        else
+                        {
+                             res.ret = STDDEV_ERR;
+                        }
 						break;
-					case CSL_IO_SIGNAL:
+                    case CSL_IO_SIGNAL:
 						s = get_suscription(sender_id, ioctl->logic_deviceid);
 						if(s == NULL || s->susc != MAX_SUSCRIPTIONS)
 						{
@@ -199,22 +210,82 @@ void process_stddev(void)
 							s->keycodes[s->susc] = (char)ioctl->param;
 							s->susc++;
 						}
+                        else
+                        {
+                             res.ret = STDDEV_ERR;
+                        }
 						break;
 					case CSL_IO_USIGNAL:
 						if(remove_suscription(sender_id, ioctl->logic_deviceid))
-						{
 							res.ret = STDDEV_ERR;
-						}
 						else
-						{
 							res.ret = STDDEV_OK;
-						}
 						break;
+                    case CSL_IO_MSIGNAL:
+                        {
+                            for(i = 0; i < MAX_MOUSE_SUSCRIPTIONS; i++)
+                            {
+                                if(mouse_suscriptions[i] == -1)
+                                    break;
+                            }
+                            if(i == MAX_MOUSE_SUSCRIPTIONS)
+                            {
+                                res.ret = STDDEV_ERR;
+                            }
+                            else
+                            {
+                                mouse_suscriptions[i] = sender_id;
+                                mouse_suscriptions_ports[i] = 0;
+                                msuscs++;
+                                res.ret = STDDEV_OK;
+                            }
+                        }
+						break;
+                    case CSL_IO_UMSIGNAL:
+                        {
+                            for(i = 0; i < MAX_MOUSE_SUSCRIPTIONS; i++)
+                            {
+                                if(mouse_suscriptions[i] == sender_id)
+                                    break;
+                            }
+                            if(i == MAX_MOUSE_SUSCRIPTIONS)
+                            {
+                                res.ret = STDDEV_ERR;
+                            }
+                            else
+                            {
+                                mouse_suscriptions[i] = -1;
+                                msuscs--;
+                                res.ret = STDDEV_OK;
+                            }
+                        }
+						break;
+                    case CSL_IO_SETMSIGNALPORT:
+						{
+                            for(i = 0; i < MAX_MOUSE_SUSCRIPTIONS; i++)
+                            {
+                                if(mouse_suscriptions[i] == sender_id)
+                                    break;
+                            }
+                            if(i == MAX_MOUSE_SUSCRIPTIONS)
+                            {
+                                res.ret = STDDEV_ERR;
+                            }
+                            else
+                            {
+                                mouse_suscriptions_ports[i] = ioctl->param;
+                                res.ret = STDDEV_OK;
+                            }
+                        }
+						break;
+                    case CSL_MOUSE_ENABLE:
+                        mouse_enable(ioctl->param);
+						res.ret = STDDEV_OK;
+                        break;
 				}
 			break;
 		}
 		send_msg(sender_id, stddev_msg.ret_port, &res);
-		
 	}
 
 }

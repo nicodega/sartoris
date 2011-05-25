@@ -71,16 +71,30 @@ int dvsprintf(char *str, char *format, int *args) {
 	
 }
 
-int di2a(int x, char *s) {
-	char digits[10];
+int di2a(int x, char *s) 
+{
+	char digits[11];
 	int i=0, j=0;
 	int retval;
-	
+    int neg = 0;
+
+    if(x < 0)
+    {
+        neg = 1;
+        x = -x;
+    }
+
 	do {
 		digits[i++] = x % 10;
 		x = x / 10;
 	} while (x);
 	
+    if(neg)
+    {
+        digits[i] = '-';
+        i++;
+    }
+
 	retval = i; 	
 	
 	while (i--) {
