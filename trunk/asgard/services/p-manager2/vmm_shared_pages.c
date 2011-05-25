@@ -41,50 +41,42 @@ void vmm_shared_create_end(struct pm_task *task, struct vmm_shared_params *param
 /*******************************************************************************************************/
 
 /*
-Returns the owner of the shared page for the specified task/page combination.
+Must be invoked when a page fault on a shared region is raised.
+Return TRUE is the thread whas blocked, FALSE otherwise.
 */
-struct pm_task *vmm_shared_getowner(struct pm_task *task, ADDR proc_laddr, ADDR *owner_laddr, UINT32 *attrib)
+BOOL vmm_page_shared(struct pm_task *task, ADDR proc_laddr, struct vmm_memory_region *mreg)
 {
-	struct vmm_memory_region *mreg = NULL;
-	struct vmm_shared_descriptor *sdes = NULL;
+    struct vmm_shared_descriptor *sdes = NULL;
+	ADDR owner_laddr = NULL;
+	UINT32 attrib = 0;
+    struct pm_task *otsk;
+	struct vmm_page_table *optbl = NULL;
 
-	/* Get memory region for this address */
-    ma_node *n = ma_search_point(&task->vmm_info.regions, (UINT32)proc_laddr);
+	pman_print_dbg("PF: Page is shared \n");
 
-    if(!n) return NULL;
+    sdes = (struct vmm_shared_descriptor*)mreg->descriptor;
 
-    mreg = VMM_MEMREG_MEMA2MEMR(n);
+    attrib = vmm_region_pageperms(mreg);
+    owner_laddr = (ADDR)((UINT32)sdes->owner_region->tsk_node.low + ((UINT32)proc_laddr - (UINT32)mreg->tsk_node.low));
 
-	/* Get Sharing descriptor for this region */
-	sdes = (struct vmm_shared_descriptor*)mreg->descriptor;
+	// Page is shared, check if it's present on the owner task. //
+	otsk = tsk_get(sdes->owner_task);
 
-	if(attrib != NULL) 
-        *attrib = vmm_region_pageperms(mreg);
+	optbl = (struct vmm_page_table *)PHYSICAL2LINEAR(otsk->vmm_info.page_directory->tables[PM_LINEAR_TO_DIR(owner_laddr)].b);
+		
+	if(optbl->pages[PM_LINEAR_TO_TAB(owner_laddr)].entry.ia32entry.present == 0)
+	{
+		// We won't page out shared pages... if this happened we are screwed. //
+        pman_print_dbg("PMAN vmm_page_shared: CRITICAL: Paged out shared page! \n");
+	}
+	else
+	{
+		// Map the page //
+		pm_page_in(task->id, (ADDR)proc_laddr, (ADDR)PG_ADDRESS(optbl->pages[PM_LINEAR_TO_TAB(owner_laddr)].entry.phy_page_addr), 2, attrib);
+		return FALSE;
+	}
 
-	if(owner_laddr != NULL) 
-        *owner_laddr = (ADDR)((UINT32)sdes->owner_region->tsk_node.low + ((UINT32)proc_laddr - (UINT32)mreg->tsk_node.low));
-
-	return tsk_get(sdes->owner_task);
-}
-
-/*
-Returns TRUE if page is shared.
-*/
-BOOL vmm_is_shared(struct pm_task *task, ADDR proc_laddr)
-{
-	struct vmm_memory_region *mreg = NULL;
-
-	/* Get memory region for this address */
-	ma_node *n = ma_search_point(&task->vmm_info.regions, (UINT32)proc_laddr);
-
-    if(n == NULL) return FALSE;
-
-    mreg = VMM_MEMREG_MEMA2MEMR(n);
-
-	if(mreg->type & VMM_MEMREGION_SHARED)
-        return TRUE;
-    else
-        return FALSE;
+    return FALSE;
 }
 
 /* Removes a reference to a shared memory area. */
@@ -370,7 +362,7 @@ UINT32 vmm_share_create_step(struct pm_task *task, struct vmm_shared_params *par
 			    /* 
 			    Page is not present.
 			    If it's swapped, get it.
-			    If it has to be loaded, get it.
+			    If it has to be loaded, load it.
 			    */
 			    if(ptbl->pages[PM_LINEAR_TO_TAB(lstart)].entry.record.swapped == 1)
 			    {
@@ -402,7 +394,7 @@ UINT32 vmm_share_create_step(struct pm_task *task, struct vmm_shared_params *par
 				    task->swp_io_finished.callback = vmm_share_create_swp_callback;
 				    io_begin_task_pg_read( (ptbl->pages[PM_LINEAR_TO_TAB(lstart)].entry.record.addr << 3), (ADDR)pg_addr, task);
 			    }
-			    else if(loader_filepos(task, (ADDR)lstart, &filepos, &readsize, &perms, &page_displacement))
+			    else if(loader_filepos(task, (ADDR)lstart, &filepos, &readsize, &perms, &page_displacement, NULL))
 			    {
 				    /* Get a fresh page */
 				    pg_addr = (UINT32)vmm_get_tblpage(task->id, lstart);
@@ -864,6 +856,7 @@ UINT32 vmm_share_map_callback(struct pm_task *task, UINT32 ioret)
 
 	/* Add region to the task */
 	ma_insert(&task->vmm_info.regions, &mreg->tsk_node);
+    // FIXME: shouldn't I add it to the id tree?
 
     /* Add region to descriptor regions */
     mreg->next = desc->regions;

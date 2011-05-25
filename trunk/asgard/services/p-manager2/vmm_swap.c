@@ -195,7 +195,7 @@ void vmm_swap_empty(struct pm_task *task, BOOL iocall)
 
 	UINT32 i = ((UINT32)task->vmm_info.swap_free_addr) / 0x400000;
 
-	while((UINT32)task->vmm_info.swap_free_addr < PMAN_MAPPING_BASE && task->vmm_info.swap_page_count > 0)
+	while((UINT32)task->vmm_info.swap_free_addr < 0xFFFFFFFF && task->vmm_info.swap_page_count > 0)
 	{
 		if( pdir->tables[i].record.present == 0 && pdir->tables[i].record.swapped == 1 )
 		{

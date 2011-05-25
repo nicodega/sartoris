@@ -35,3 +35,11 @@ void map_pages(INT32 task, UINT32 linear_start, UINT32 physical_start, UINT32 co
 		physical_start += PAGE_SIZE; 
   	}
 }
+
+INT32 strcmp(char *c1, char *c2)
+{
+	INT32 i = 0;
+	while(c1[i] == c2[i] && c1[i] != '\0' && c2[i] != '\0'){ i++; }
+
+	return c1[i] == c2[i];
+}

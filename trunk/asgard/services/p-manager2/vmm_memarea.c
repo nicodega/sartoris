@@ -489,3 +489,70 @@ void ma_remove(memareas *t, ma_node *n)
             (*t)->color = BLACK;
     }
 }
+
+/* 
+See if a segment with the specified length can be inserted on the tree
+without collitions. 
+It'll return the start address available for the segment.
+This function will take O(n) time.
+*/
+/*
+unsigned int ma_alloc(memareas *t, unsigned int start, unsigned int length)
+{
+    ma_node *n = t->min;
+    BOOL fromLeft = 0;
+    unsigned int high = n->high;
+
+    if(start < n->low && n->low - start >= length) return min;
+
+    while(n)
+    {
+	    if (fromLeft || !n->link[0])
+		{
+            if((start < t->low && t->low < high && t->low - high >= length) || n == t->max )
+            {
+                while(n)
+                {
+				    if(n->link[0])
+					    n->link[0]->color &= ~3;
+				    if(n->link[1])
+					    n->link[1]->color &= ~3;
+				    n->color &= ~3;
+				    n = n->parent;
+                }
+                if(n == t->max)
+                    return t->max->low;
+                else
+                    return high;
+            }
+            if(high < n->high)
+                high = n->high;
+        }
+	    if(!(n->color & 3))
+        {
+		    n->color |= 3;
+		    if(n->link[0] && !(n->link[0]->color & 3))
+            {
+			    fromLeft = FALSE;
+			    n = n->link[0];
+			    continue;
+            }
+		    if(n->link[1] && !(n->link[1]->color & 3))
+			{
+                fromLeft = FALSE;
+			    n = n->link[1];
+			    continue;
+            }
+        }
+	    if(n->parent != NULL)
+        {
+		    fromLeft = (n->parent->link[0] == n);
+		    if( n->link[0] )
+			    n->link[0]->color &= ~3;
+		    if( n->link[1] )
+			    n->link[1]->color &= ~3;
+		    n = n->parent;
+		}
+    }
+}
+*/

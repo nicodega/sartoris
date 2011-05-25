@@ -32,7 +32,7 @@ Attempt to grow a task max_addr
 UINT32 vmm_grow_task(struct pm_task *task, UINT32 size)
 {
 	/* 
-	Max address is fixed at 1 GB for now. 
+	Max address is fixed at 3 GB for now. 
 
 	When implemented, I should do something like this:
 	
@@ -46,14 +46,12 @@ UINT32 vmm_grow_task(struct pm_task *task, UINT32 size)
 	|	0xXXXXXXXX <- End of Exec + data + bss (Maybe bounded by 1GB)
 	|
 	|		Brk Space (somewhere here will be task->vmm_info.max_addr)
-	|
-	|	0x80000000 (2GB)
+	|   --- 
+    |
+    |       Stacks
+	|	0xC0000000 (3GB)
 	|
 	|		Shared libs Space
-	|
-	|	0xE0000000 (3.5 GB)
-	|
-	|		Stack Available space (512MB)
 	|
 	|	0xFFFFFFFF
 

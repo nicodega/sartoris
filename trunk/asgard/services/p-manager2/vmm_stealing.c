@@ -145,6 +145,14 @@ void vmm_page_stealer()
 				int_set(0);		
 			}
 
+            if(candidate_points == 0xFFFFFFFF)
+            {
+                // there are no candidates here
+                int_set(0);
+                run_thread(SCHED_THR);  // run scheduler thread
+			    continue;
+            }
+
 			if(candidate_io)
 			{
 				/* Candidate must be sent to swap file! */	
@@ -230,7 +238,7 @@ void vmm_page_stealer()
 				int_clear();
 
 				/* Table could have been locked for IO because a page fault raised. */
-				if(candidate_taken->data.b_ptbl.tbl == 1 && candidate_taken->data.b_pg.eflags & TAKEN_EFLAG_PF)
+				if(candidate_taken->data.b_ptbl.tbl == 1 && candidate_taken->data.b_pg.eflags & TAKEN_EFLAG_IOLOCK)
 				{
 					int_set(0);
 					continue;
@@ -312,12 +320,18 @@ UINT32 calculate_points(struct taken_entry *entry, UINT32 pm_dir_index, UINT32 p
 		
 		ptbl = (struct vmm_page_table*)PHYSICAL2LINEAR(PG_ADDRESS(pdir->tables[entry->data.b_ptbl.dir_index].b));
 
+        struct taken_table *ttable = vmm.taken.tables[PM_LINEAR_TO_DIR(ptbl)];
+        UINT32 pmladdr;
+
 		/* Check page is free */
 		for(; i < 1024; i++)
 		{
 			d_bit |= ptbl->pages[i].entry.ia32entry.dirty;
 			if(ptbl->pages[i].entry.ia32entry.present == 1) break;
 			if(ptbl->pages[i].entry.record.swapped == 1) swapped = 1;
+
+            pmladdr = (UINT32)ptbl + i * 0x1000;
+            if(ttable->entries[PM_LINEAR_TO_TAB(pmladdr)].data.b_pg.eflags & TAKEN_EFLAG_IOLOCK) break;
 		}
 
 		if(i != 1024) return 0xFFFFFFFF;	// it has present entries

@@ -201,6 +201,8 @@ INT32 vmm_init(struct multiboot_info *multiboot, UINT32 ignore_start, UINT32 ign
     /* Initialize region trees */
     rb_init(&vmm.fmap_descriptors);
     vmm.phy_mem_areas = NULL;
+    /* Initialize libraries list */
+    vmm.slibs = NULL;
 
 	pman_print("VMM: Init Finished");
 
@@ -581,7 +583,7 @@ void vmm_claim(UINT16 task)
 	struct vmm_page_directory *dir = NULL;
 	struct vmm_page_table *table = NULL;
 	struct pm_task *tsk = tsk_get(task);
-	UINT32 tbladdr, pgaddr, table_idx, entry_idx;
+	UINT32 tbladdr, pgaddr, table_idx, entry_idx, addr;
 	
 	if(tsk == NULL) return;
 
@@ -593,6 +595,8 @@ void vmm_claim(UINT16 task)
     /* NOTE: There are kernel pages mapped on the directory
        if page address is not within our limits, we will ignore it 
     */
+    addr = SARTORIS_PROCBASE_LINEAR;
+
     for(table_idx = PM_LINEAR_TO_DIR(SARTORIS_PROCBASE_LINEAR); table_idx < 1024; table_idx++) 
 	{
 		tbladdr = PG_ADDRESS(dir->tables[table_idx].b);
@@ -607,10 +611,23 @@ void vmm_claim(UINT16 task)
                 
 				if(pgaddr >= FIRST_PAGE(PMAN_POOL_PHYS) && table->pages[entry_idx].entry.ia32entry.present == 1) 
 				{
-					vmm_put_page((ADDR)PHYSICAL2LINEAR(pgaddr));
+                    // it we are above PMAN_MAPPING_BASE we might have
+                    // to skip vmm_put_page.
+                    // NOTE: libraries will be loaded from SARTORIS_PROCBASE_LINEAR
+                    // on it's task..
+                    if((addr < PMAN_MAPPING_BASE) || 
+                        (addr >= PMAN_MAPPING_BASE && (vmm_taken_get((ADDR)LINEAR2PHYSICAL(pgaddr))->data.b_pg.flags & TAKEN_PG_FLAG_LIBEXE)))
+                    {
+                        vmm_put_page((ADDR)PHYSICAL2LINEAR(pgaddr));
+                    }
                 }
+                addr += PAGE_SIZE;
             }
             vmm_put_page((ADDR)PHYSICAL2LINEAR(PG_ADDRESS(tbladdr)));
+        }
+        else
+        {
+            addr += 0x400000;   // skip the table
         }
     }
 
@@ -690,7 +707,7 @@ BOOL vmm_can_load(struct pm_task *tsk)
 
 			tsk->command_inf.ret_value = PM_NOT_ENOUGH_MEM;
 
-			tsk->io_finished.callback = cmd_task_destroyed_callback;
+			tsk->io_finished.callback = cmd_task_fileclosed_callback;
 			io_begin_close( &tsk->io_event_src );
 		}
 		return FALSE;
@@ -720,6 +737,10 @@ void vmm_close_task(struct pm_task *task)
 		else if(mreg->type == VMM_MEMREGION_MMAP)
 		{
 			vmm_phy_umap(task, (ADDR)mreg->tsk_node.low);
+		}
+        else if(mreg->type == VMM_MEMREGION_LIB)
+		{
+			vmm_lib_unload(task, mreg);
 		}
 		else
 		{
@@ -769,4 +790,3 @@ void vmm_init_thread_info(struct pm_thread *thread)
     vmm_info->pg_node.prev = NULL;
     vmm_info->tbl_node.prev = NULL;
 }
-

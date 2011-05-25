@@ -17,27 +17,36 @@
 *
 */
 
-#include <lib/critical_section.h>
-#include <lib/structures/stdlibsim.h>
 
-#ifndef MALLOCH
-#define MALLOCH
+#include <sartoris/syscall.h>
+#include <services/stds/stdfss.h>
+#include <services/stds/stdservice.h>
+#include <lib/const.h>
+#include <services/directory/directory.h>
+#include <lib/scheduler.h>
+#include <os/pman_task.h>
 
-#ifdef __cplusplus
-extern "C" {
+#ifndef LDIOH
+#define LDIOH
+
+#define EOF -1
+#define IOPORT 2
+
+typedef struct SFILE
+{
+    int fs_serviceid;
+    int file_id;
+    int eof;
+} FILE;
+
+int fopen(char *filename, FILE *file);
+int fclose(FILE *stream);
+size_t fread(char *buffer, int bytes, FILE *stream);
+
+/* intenal */
+int resolve_fs();
+int send_fs(int task, int *msg, int *res);
+int get_response(int task, int *res);
+
 #endif
 
-void *malloc(size_t size);
-void *calloc(size_t nelem, size_t elsize);
-void free(void *ptr);
-void init_mem(void *buffer, unsigned int size);
-void close_malloc_mutex();
-unsigned int free_mem();
-
-extern void _exit(int);
-
-#ifdef __cplusplus
-}
-#endif
-
-#endif

@@ -42,10 +42,10 @@ __start:
 	sub esp, [esp]		;; position at the begining of init structure [esp] = struct size
 
 	sub esp, 4			;; leave 4 bytes to the stack
-		
-	push eax			;; push the pointer to init structure
-	call __procinit
 	
-	jmp $ ;; <-- we will never reach this point, but if we do, we cannot return
+    push eax			;; push the pointer to init structure
+	call __procinit	
 	
+    jmp $ ;; <-- we will never reach this point, but if we do, we cannot return
+
 	

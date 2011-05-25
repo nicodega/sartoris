@@ -16,6 +16,8 @@ Internals:
 - Non-Fixed Malloc              *
 - Signaled Interrupts           *
 - Init fs2 loading              * (No more layout.h, except for pman threads)
+- Dynamic loading               * (using ld service for now)
+- Debugging interface
 
 Protocols:
 
@@ -25,12 +27,4 @@ Protocols:
 
 Tested:
 	- kmalloc has no bugs
-
-
-Idea: Implement an LD service to hold libraries loaded on memory. When process manager loads a task, it maps the process to LD and it resolves PIC references.
-This wont allow privilege level switches, those kind of things must be performed with messages.
-
-
-
-
 

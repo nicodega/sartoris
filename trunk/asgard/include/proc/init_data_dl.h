@@ -30,14 +30,25 @@ process manager will leave the stack in this way:
 		|--------------------------|
 		| init struct size		   | 
 		 --------------------------
-		
+
+This data will be left only for executables requiring dynamic loading.
+
 */
-struct init_data
+
+
+struct init_data_dl
 {
-    int (*ldexit)(int ret); /* If this value is 1 then on exit the process must call this function. */
-	unsigned int bss_end;		/* This will be the virtual address where defined segments end */
+    unsigned int prg_start;     /* entry point for the task */
+    unsigned int ld_start;      /* Base address for LD */
+    unsigned int ld_size;       /* size of LD memory image (all sections) */
+    int          phsmo;         /* SMO to the program headers for the process */
+    int          phsize;        /* Program header size */
+    int          phcount;       /* Program headers count */
+    int (*ldexit)(int ret);     /* If this value is 1 then on exit the process will 
+                                call this function, which must be completed by LD. */
+    unsigned int bss_end;		/* This will be the virtual address where defined segments end */
 	unsigned int curr_limit;	/* Current segment limit */
     unsigned int creator_task;  /* This will contain the creator task */
-    unsigned int param;         /* An integer parameter sent by the creator task */
+    unsigned int param;         /* An integer parameter sent by the creator task */    
 };
 

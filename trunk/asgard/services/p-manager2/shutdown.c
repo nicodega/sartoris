@@ -129,7 +129,7 @@ BOOL cmd_shutdown_step()
 				{
 					/* Begin Unload */
 					tsk->command_inf.command_sender_id = 0;
-					tsk->io_finished.callback = cmd_task_destroyed_callback;
+					tsk->io_finished.callback = cmd_task_fileclosed_callback;
 					io_begin_close( &tsk->io_event_src );
 				}
 			}

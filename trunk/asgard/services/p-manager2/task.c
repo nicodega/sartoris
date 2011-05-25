@@ -128,10 +128,9 @@ BOOL tsk_destroy(struct pm_task *task)
 
 	if(task->state == TSK_KILLED)
 	{
-        task->first_thread = NULL;
-		task->num_threads = 0;
-        		
-		/* We cannot claim memory if we are waiting for a swap read/write */
+        if(task->loader_inf.full_path != NULL) kfree(task->loader_inf.full_path);
+	    if(task->loader_inf.elf_pheaders != NULL) kfree(task->loader_inf.elf_pheaders);
+		
 		vmm_claim(task->id);
 
         task_info[task->id] = NULL;
@@ -152,31 +151,30 @@ BOOL tsk_destroy(struct pm_task *task)
         thread = task->first_thread;
 	}
     
-    if(ret == -1) 
+    if(ret == -1 || ((task->flags & TSK_SHARED_LIB) && task->vmm_info.wait_root.root != NULL)) 
     {
+        if(destroy_task(task->id) != SUCCESS)
+        {
+            pman_print_dbg("Destroy task failed %i ", task->id);
+	        return FALSE;
+        }
+
         task->state = TSK_KILLED;
 		task->killed_threads = ret;
         return FALSE;
     }
 	
-    /* We cannot claim memory if we are waiting for a swap read/write */
-	vmm_claim(task->id);
-
     if(destroy_task(task->id) != SUCCESS)
     {
         pman_print_dbg("Destroy task failed %i ", task->id);
 	    return FALSE;
     }
+
+	vmm_claim(task->id);
     
     if(task->loader_inf.full_path != NULL) kfree(task->loader_inf.full_path);
-	task->loader_inf.full_path = NULL;
 	if(task->loader_inf.elf_pheaders != NULL) kfree(task->loader_inf.elf_pheaders);
-	task->loader_inf.elf_pheaders = NULL;
-
-	task->first_thread = NULL;
-	task->num_threads = 0;
-	io_init_source(&task->io_event_src, FILE_IO_TASK, task->id);
-    
+	    
     task_info[task->id] = NULL;
 	kfree(task);
 

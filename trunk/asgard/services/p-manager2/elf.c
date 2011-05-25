@@ -68,21 +68,27 @@ INT32 elf_readphdrs(struct pm_task *task, INT32 (*ioread)(struct fsio_event_sour
 	UINT32 size;
 
 	// seek to program headers possition
-	task->loader_inf.stage = LOADER_STAGE_ELF_PHDR;
-
 	size = task->loader_inf.elf_header.e_phentsize * task->loader_inf.elf_header.e_phnum;
 
-	task->loader_inf.elf_pheaders = (BYTE *)kmalloc(size);
+	task->loader_inf.elf_pheaders = (BYTE*)kmalloc(size);
+    if(task->loader_inf.elf_pheaders == NULL)
+    {
+        return -1;
+    }
 
-	task->io_finished.callback = elf_readph_finished_callback;
+    if(task->loader_inf.elf_pheaders == NULL)
+    {
+        return -1;
+    }
+    
+	task->io_finished.callback = elf_readh_finished_callback;
 
 	if(ioread(&task->io_event_src, size, task->loader_inf.elf_pheaders))
 	{
-		if(!elf_check(task)) return -1;
+        if(!elf_check(task)) return -1;
 
 		task->loader_inf.stage = LOADER_STAGE_LOADED;
-		
-		return 1;
+        return 1;
 	}
 
 	return 0;
@@ -91,7 +97,7 @@ INT32 elf_readphdrs(struct pm_task *task, INT32 (*ioread)(struct fsio_event_sour
 /* Check task has a valid elf file */
 INT32 elf_check_header(struct pm_task *task)
 {
-	struct Elf32_Ehdr *header = (struct Elf32_Ehdr*)&task->loader_inf.elf_header;
+	struct Elf32_Ehdr *header = &task->loader_inf.elf_header;
 
 	// check elf identifier
 	if(header->e_ident[0] != 0x7f || header->e_ident[1] != 'E' || header->e_ident[2] != 'L' || header->e_ident[3] != 'F') return 0;
@@ -106,6 +112,8 @@ INT32 elf_check_header(struct pm_task *task)
 /* Check task has a valid elf file */
 INT32 elf_check(struct pm_task *task)
 {
+    // if we hace section headers, decode them
+
 	return 1;
 }
 

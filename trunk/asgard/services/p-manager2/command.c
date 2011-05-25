@@ -30,18 +30,19 @@
 #include "layout.h"
 #include "loader.h"
 #include <proc/init_data.h>
+#include <proc/init_data_dl.h>
 
-static int tsk_lower_bound[] = { 1, 1 };
-static int tsk_upper_bound[] = { MAX_TSK, MAX_TSK };
+int tsk_lower_bound[] = { 1, 1 };
+int tsk_upper_bound[] = { MAX_TSK, MAX_TSK };
 
-static int thr_lower_bound[] = { 1, 1 };
-static int thr_upper_bound[] = { MAX_THR, MAX_THR };
+int thr_lower_bound[] = { 1, 1 };
+int thr_upper_bound[] = { MAX_THR, MAX_THR };
 
 BOOL shutting_down = FALSE;
 extern int pman_stage;
 
 /***************************** CALLBACKS ******************************************/
-INT32 cmd_task_destroyed_callback(struct fsio_event_source *iosrc, INT32 ioret);
+INT32 cmd_task_fileclosed_callback(struct fsio_event_source *iosrc, INT32 ioret);
 INT32 cmd_swap_freed_callback(struct fsio_event_source *iosrc, INT32 ioret);
 UINT32 cmd_fmap_callback(struct pm_task *task, INT32 ioret);
 INT32 cmd_fmap_finish_callback(struct pm_task *task, INT32 ioret);
@@ -93,7 +94,18 @@ void cmd_process_msg()
 		else if(get_msg(PMAN_COMMAND_PORT, &msg, &task_id) == SUCCESS) 
 		{			
 			switch(msg.pm_type) 
-			{                
+			{   
+                case PM_LOADER_READY:
+                {
+                    // destroy the SMO sent to the task for phdrs
+                    tsk = tsk_get(task_id);
+
+                    if(tsk != NULL)
+                    {
+                        loader_ready(tsk);
+                    }
+                    break;
+                }
                 case PM_PHYMEM: 
 				{
 					/* if it's a service, it's entitled to know 
@@ -116,13 +128,24 @@ void cmd_process_msg()
 					cmd_shutdown_step();
 					break;
 				}
-				case PM_CREATE_TASK: 
-				{
-					cmd_create_task((struct pm_msg_create_task *)&msg, task_id);
-					break;
-				}
+                case PM_LOAD_LIBRARY:
+                {
+                    tsk = tsk_get(task_id);
+                    if(!tsk) break;
+                    cmd_load_library((struct pm_msg_loadlib *)&msg, task_id);
+                    break;
+                }
+			    case PM_CREATE_TASK: 
+			    {
+                    tsk = tsk_get(task_id);
+
+                    if(!tsk) break;
+                    
+				    cmd_create_task((struct pm_msg_create_task *)&msg, task_id);
+				    break;
+			    }
 				case PM_CREATE_THREAD: 
-				{      
+				{
 					cmd_create_thread((struct pm_msg_create_thread*)&msg, task_id);
 					break;
 				}
@@ -171,7 +194,7 @@ void cmd_process_msg()
 						tsk->command_inf.command_ret_port = msg.response_port;
 						tsk->state = TSK_KILLING;
 						
-						tsk->io_finished.callback = cmd_task_destroyed_callback;
+						tsk->io_finished.callback = cmd_task_fileclosed_callback;
 						io_begin_close( &tsk->io_event_src );
 					}
 					else
@@ -244,7 +267,7 @@ void cmd_process_msg()
 
 						tsk->state = TSK_KILLING;
 						
-						tsk->io_finished.callback = cmd_task_destroyed_callback;
+						tsk->io_finished.callback = cmd_task_fileclosed_callback;
 						io_begin_close( &tsk->io_event_src );
 					}
                     else
@@ -276,7 +299,9 @@ void cmd_process_msg()
 		}
 	}
 
-	/* Attempt to process commands on the queue. */
+	/* 
+    Attempt to process commands on the queue. 
+    */
 	cmd = command_queue.first;
 
 	while(cmd != NULL) 
@@ -288,7 +313,7 @@ void cmd_process_msg()
 
 		switch(msg.pm_type) 
 		{
-			/* File mapping functions */
+			/* File mapping functions */            
 			case PM_FMAP: 
 			{
 				tsk = tsk_get(task_id);
@@ -523,6 +548,85 @@ void cmd_inform_result(struct pm_msg_generic *msg, UINT16 task_id, UINT16 status
 	send_msg(task_id, msg->response_port, &msg_ans);  
 }
 
+void cmd_load_library(struct pm_msg_loadlib *msg, UINT16 loader_task) 
+{
+	struct pm_task *tsk;
+	UINT32 psize;
+	char *path = NULL;
+
+	if(pman_stage == PMAN_STAGE_INITIALIZING)
+	{
+		cmd_inform_result((struct pm_msg_generic *) msg, loader_task, PM_IS_INITIALIZING, 0, 0);
+		return;
+	}
+
+    if(msg->vlow < PMAN_MAPPING_BASE || msg->vhigh < msg->vlow)
+	{
+		cmd_inform_result((struct pm_msg_generic *) msg, loader_task, PM_INVALID_BOUNDARIES, 0, 0);
+		return;
+	}
+
+    tsk = tsk_get(loader_task);
+
+    if(tsk->flags & TSK_LOADING_LIB)
+	{
+		cmd_inform_result((struct pm_msg_generic *) msg, loader_task, PM_TASK_RETRY_LATER, 0, 0);
+		return;
+	}
+
+    if(!(tsk->flags & TSK_DYNAMIC))
+	{
+		cmd_inform_result((struct pm_msg_generic *) msg, loader_task, PM_ERROR, 0, 0);
+		return;
+	}
+
+    path = NULL;
+	psize = mem_size(msg->path_smo_id);
+
+	if(psize < 1)
+	{
+		cmd_inform_result((struct pm_msg_generic *) msg, loader_task, PM_BAD_SMO, 0, 0);
+		return;
+	}
+
+	path = kmalloc(psize);
+
+	if(path == NULL)
+	{
+		cmd_inform_result((struct pm_msg_generic *) msg, loader_task, PM_NOT_ENOUGH_MEM, 0, 0);
+		return;
+	}
+	
+	/* Read Path */
+	if(read_mem(msg->path_smo_id, 0, psize, path) != SUCCESS) 
+	{
+        kfree(path);
+		cmd_inform_result((struct pm_msg_generic *) msg, loader_task, PM_BAD_SMO, 0, 0);
+		return;
+	}
+
+    tsk->command_inf.callback = cmd_finished__callback;
+	tsk->command_inf.command_ret_port = msg->response_port;
+	tsk->command_inf.command_req_id = msg->req_id;
+	tsk->command_inf.command_sender_id = loader_task;
+    tsk->flags |= TSK_LOADING_LIB;
+
+    // library is already loaded, tell vmm to add it to the lib to this
+    // task address space
+    int ret = vmm_lib_load(tsk, path, psize, msg->vlow, msg->vhigh);
+    if(!ret)
+    {
+        kfree(path);
+        cmd_inform_result((struct pm_msg_generic *)msg, loader_task, PM_ERROR, 0, 0);
+    }   
+    else if(ret == 2)
+    {
+        kfree(path);
+        cmd_inform_result((struct pm_msg_generic *)msg, loader_task, PM_OK, 0, 0);
+        return;
+    }
+}
+
 void cmd_create_task(struct pm_msg_create_task *msg, UINT16 creator_task_id) 
 {
 	struct pm_task *tsk = NULL;
@@ -534,7 +638,7 @@ void cmd_create_task(struct pm_msg_create_task *msg, UINT16 creator_task_id)
 
 	if(pman_stage == PMAN_STAGE_INITIALIZING)
 	{
-			cmd_inform_result((struct pm_msg_generic *) msg, creator_task_id, PM_INITIALIZING, 0, 0);
+			cmd_inform_result((struct pm_msg_generic *) msg, creator_task_id, PM_IS_INITIALIZING, 0, 0);
 			return;
 	}
 
@@ -614,7 +718,7 @@ void cmd_create_task(struct pm_msg_create_task *msg, UINT16 creator_task_id)
 	tsk->command_inf.command_ret_port = -1;
 	tsk->command_inf.command_req_id = -1;
 
-	ret = loader_create_task(tsk, path, psize, msg->param, type, FALSE);
+	ret = loader_create_task(tsk, path, psize, msg->param, type, LOADER_CTASK_TYPE_PRG);
 
 	if(ret != PM_OK)
 	{
@@ -634,7 +738,13 @@ void cmd_create_thread(struct pm_msg_create_thread *msg, UINT16 creator_task_id)
 	struct pm_thread *thread = NULL; 
 	ADDR pg = NULL;
 
-	if (task == NULL || task->state != TSK_NORMAL) 
+	if (task == NULL || task->state != TSK_NORMAL || (task->flags & TSK_SHARED_LIB)) 
+	{
+		cmd_inform_result((struct pm_msg_generic *) msg, creator_task_id, PM_THREAD_FAILED, 0, 0);
+		return;
+	}
+
+    if (new_thread_id != 0xFFFF && thr_get(new_thread_id)) 
 	{
 		cmd_inform_result((struct pm_msg_generic *) msg, creator_task_id, PM_THREAD_ID_INVALID, 0, 0);
 		return;
@@ -749,14 +859,34 @@ void cmd_create_thread(struct pm_msg_create_thread *msg, UINT16 creator_task_id)
 		if(pg != NULL && msg->interrupt == 0)
 		{			
 			UINT32 stackpad = (UINT32)thread->stack_addr % 0x1000;
-			struct init_data *idat = (struct init_data *)((UINT32)pg + stackpad - sizeof(struct init_data));
 			UINT32 *size = (UINT32*)((UINT32)pg + stackpad);
 
-            idat->creator_task = creator_task_id;
-            idat->param = task->loader_inf.param;
-			idat->bss_end = task->tsk_bss_end;
-			idat->curr_limit = task->vmm_info.max_addr;
-			*size = sizeof(struct init_data);			
+            if(task->flags |= TSK_DYNAMIC)
+            {
+                struct init_data_dl *idatd = (struct init_data_dl *)((UINT32)pg + stackpad - sizeof(struct init_data_dl));
+
+                idatd->ldexit = NULL;
+                idatd->creator_task = creator_task_id;
+                idatd->param = task->loader_inf.param;
+			    idatd->bss_end = task->tsk_bss_end;
+			    idatd->curr_limit = task->vmm_info.max_addr;
+                idatd->prg_start = (unsigned int)mk_thread.ep;
+                idatd->ld_start = PMAN_MAPPING_BASE;
+                idatd->ld_size = ld_size;                                       // comes from loader.h
+                idatd->phsmo = task->loader_inf.phdrs_smo;
+                idatd->phsize = task->loader_inf.elf_header.e_phentsize;
+                idatd->phcount = task->loader_inf.elf_header.e_phnum;
+            }
+            else
+            {
+                struct init_data *idat = (struct init_data *)((UINT32)pg + stackpad - sizeof(struct init_data));
+			    idat->ldexit = NULL;
+                idat->creator_task = creator_task_id;
+                idat->param = task->loader_inf.param;
+			    idat->bss_end = task->tsk_bss_end;
+			    idat->curr_limit = task->vmm_info.max_addr;
+			    *size = sizeof(struct init_data);
+            }
 		}
 		
 		/* Page out from pman address space */
@@ -799,7 +929,7 @@ void cmd_create_thread(struct pm_msg_create_thread *msg, UINT16 creator_task_id)
 This function will be called by IO subsystem when a task file was closed because of 
 termination.
 */
-INT32 cmd_task_destroyed_callback(struct fsio_event_source *iosrc, INT32 ioret) 
+INT32 cmd_task_fileclosed_callback(struct fsio_event_source *iosrc, INT32 ioret) 
 {
 	struct pm_task *task = NULL;
 

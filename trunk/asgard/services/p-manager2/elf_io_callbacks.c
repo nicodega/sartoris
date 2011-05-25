@@ -34,12 +34,14 @@ INT32 elf_read_finished_callback(struct fsio_event_source *iosrc, INT32 ioret)
 	struct pm_msg_response res_msg;
 	struct pm_task *task = NULL;
 
-	res_msg.pm_type = PM_CREATE_TASK;
+    task = tsk_get(iosrc->id);
+	
+    res_msg.pm_type = (task->flags & TSK_SHARED_LIB)? PM_LOAD_LIBRARY : PM_CREATE_TASK;
 	res_msg.status  = PM_IO_ERROR;
 	res_msg.new_id_aux = 0;
 
 	/* Reading has just finished for the ELF header. */
-	task = tsk_get(iosrc->id);
+	
 	
 	if(ioret != IO_RET_OK)
 	{
@@ -61,20 +63,26 @@ INT32 elf_read_finished_callback(struct fsio_event_source *iosrc, INT32 ioret)
 			/* Close the file */
 			io_begin_close(iosrc);
 		}
-		else
+		else if(elf_seekphdrs(task, io_begin_read, io_begin_seek) == -1)
 		{
-			elf_seekphdrs(task, io_begin_read, io_begin_seek);
-		}
+            res_msg.status  = PM_NOT_ENOUGH_MEM;
+			send_msg(task->command_inf.creator_task_id, task->command_inf.response_port, &res_msg );
+			
+            task->io_finished.callback = elf_fileclosed_callback;
+
+			/* Close the file */
+			io_begin_close(iosrc);
+        }
 	}
 	return 1;
 }
 
-INT32 elf_readph_finished_callback(struct fsio_event_source *iosrc, INT32 ioret)
+INT32 elf_readh_finished_callback(struct fsio_event_source *iosrc, INT32 ioret)
 {
 	struct pm_task *task = tsk_get(iosrc->id);
 	struct pm_msg_response res_msg;
 
-	res_msg.pm_type = PM_CREATE_TASK;
+	res_msg.pm_type = (task->flags & TSK_SHARED_LIB)? PM_LOAD_LIBRARY : PM_CREATE_TASK;
 	res_msg.status  = PM_IO_ERROR;
 	res_msg.new_id_aux = 0;
 
@@ -86,43 +94,57 @@ INT32 elf_readph_finished_callback(struct fsio_event_source *iosrc, INT32 ioret)
 		}
         tsk_destroy(task);
 	}
-	else if(task->command_inf.creator_task_id != 0xFFFF)
-	{
-		if(elf_check(task))
-		{				
-			/* Set expected_working_set with the size of ELF segments */
-			loader_calculate_working_set(task);
+	else
+	{        
+        if(elf_check(task))
+		{
+            if(task->flags & TSK_SHARED_LIB)
+            {
+                // we where loading a shared lib..
+                vmm_lib_loaded(task, TRUE);
+            }
+            else
+            {
+			    /* Does this executable contain a PT_INTERP section? */
+                int phnum = task->loader_inf.elf_header.e_phnum;
+                struct Elf32_Phdr *phdr;
+                int i;
 
-			/* Check created task fits in memory */
-			if(vmm_can_load(task))
-			{				
-				// finished loading
-				task->state = TSK_NORMAL;
-				task->loader_inf.stage = LOADER_STAGE_LOADED;
+                for(i = 0; i < phnum; i++)
+                {
+                    phdr = (struct Elf32_Phdr*)(task->loader_inf.elf_pheaders + task->loader_inf.elf_header.e_phentsize * i);
+                    if(phdr->p_type == PT_INTERP)
+                        break;
+                }
 
-				/* Task loaded successfully */
-				res_msg.status  = PM_OK;
-				res_msg.new_id = task->id;
-				send_msg(task->command_inf.creator_task_id, task->command_inf.response_port, &res_msg );
-			}
-			else
-			{
-				tsk_destroy(task);
+                /*
+                FIXME: We should get the name of the interpreter here..
+                */
+                if(!loader_task_loaded(task, (phdr->p_type == PT_INTERP)? "ld.so": NULL))
+                {
+                    task->io_finished.callback = elf_fileclosed_callback;
 
-				/* Task cannot be loaded onto memory */
-				res_msg.status  = PM_NOT_ENOUGH_MEM;
-				send_msg(task->command_inf.creator_task_id, task->command_inf.response_port, &res_msg );
-			}
+                    io_begin_close(iosrc);
+                }
+            }
 		}
 		else
 		{
-			res_msg.status  = PM_INVALID_FILEFORMAT;
-			send_msg(task->command_inf.creator_task_id, task->command_inf.response_port, &res_msg );
+            if(task->flags & TSK_SHARED_LIB)
+            {
+                // we where loading a shared lib..
+                vmm_lib_loaded(task, FALSE);
+            }
+            else
+			{
+                res_msg.status  = PM_INVALID_FILEFORMAT;
+			    send_msg(task->command_inf.creator_task_id, task->command_inf.response_port, &res_msg );
 			
-            task->io_finished.callback = elf_fileclosed_callback;
+                task->io_finished.callback = elf_fileclosed_callback;
 
-			/* Close the file */
-			io_begin_close(iosrc);
+			    /* Close the file */
+			    io_begin_close(iosrc);
+            }
 		}
 	}
 	return 1;

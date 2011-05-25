@@ -41,20 +41,10 @@ INT32 vmm_fmap_read_callback(struct fsio_event_source *iosrc, INT32 ioret);
 INT32 vmm_fmap_closed_callback(struct pm_task *task, INT32 ioret);
 
 /* Functions Implementation */
-BOOL vmm_page_filemapped(struct pm_task *task, struct pm_thread *thread, ADDR page_laddr)
+BOOL vmm_page_filemapped(struct pm_task *task, struct pm_thread *thread, ADDR page_laddr, struct vmm_memory_region *mreg)
 {
-	struct vmm_memory_region *mreg = NULL;
 	struct vmm_fmap_descriptor *fmd = NULL;
-
-	/* If a memory region with type VMM_MEMREGION_FMAP exists, return TRUE and begin IO */
-	if(task->vmm_info.regions == NULL) return FALSE;
-    
-    ma_node *n = ma_search_point(&task->vmm_info.regions, (UINT32)page_laddr);
-
-	if(n == NULL) return FALSE;
-
-    mreg = VMM_MEMREG_MEMA2MEMR(n);
-
+    	
 	fmd = (struct vmm_fmap_descriptor*)mreg->descriptor;
 
 	if(fmd->status != VMM_FMAP_ACTIVE) return FALSE;
@@ -88,7 +78,7 @@ BOOL vmm_page_filemapped(struct pm_task *task, struct pm_thread *thread, ADDR pa
 	thread->io_finished.callback = vmm_fmap_seek_callback;
 	io_begin_seek(&thread->vmm_info.fmap_iosrc, fmd->offset + (UINT32)mreg->tsk_node.low - (UINT32)page_laddr);
 
-	return TRUE;
+    return TRUE;
 }
 
 UINT32 vmm_fmap(UINT16 task_id, UINT32 fileid, UINT16 fs_task, ADDR start, UINT32 size, UINT32 perms, UINT32 offset)
@@ -119,6 +109,14 @@ UINT32 vmm_fmap(UINT16 task_id, UINT32 fileid, UINT16 fs_task, ADDR start, UINT3
     // check lstart and lend are "safe" to map
     if(loader_collides(task, start, start+size))
         return FALSE;
+
+    /* Check region does not intersect with other region on this task address space. */
+	ma_node *n = ma_collition(&task->vmm_info.regions, (UINT32)start, (UINT32)start + size);
+
+    if(n)
+    {
+		return PM_MEM_COLITION;
+    }
 
 	/* Allocate structures */
 	new_fm = kmalloc(sizeof(struct vmm_fmap_descriptor));   // descriptor
@@ -158,20 +156,9 @@ UINT32 vmm_fmap(UINT16 task_id, UINT32 fileid, UINT16 fs_task, ADDR start, UINT3
 	new_mreg->tsk_node.high = ((UINT32)start + size);
 	new_mreg->tsk_node.low = (UINT32)start;
 	new_mreg->flags = perms;
-	new_mreg->next = NULL;
 	new_mreg->type = VMM_MEMREGION_FMAP;
     new_mreg->descriptor = new_fm;
-
-	/* Check region does not intersect with other region on this task address space. */
-	ma_node *n = ma_collition(&task->vmm_info.regions, (UINT32)start, (UINT32)start + size);
-
-    if(n)
-    {
-        kfree(new_fm);
-		kfree(new_mreg);
-		return PM_MEM_COLITION;
-    }
-
+    	
 	/* 
 	Check pages are not swapped.
 	If pages are paged in, I'll page them out so an exception is raised if reading/writing.
@@ -227,7 +214,7 @@ UINT32 vmm_fmap(UINT16 task_id, UINT32 fileid, UINT16 fs_task, ADDR start, UINT3
 
     /* Add new_mreg on the task lists */
     ma_insert(&task->vmm_info.regions, &new_mreg->tsk_node);
-    rb_search(&task->vmm_info.regions_id, new_mreg->tsk_id_node.value);
+    rb_insert(&task->vmm_info.regions_id, &new_mreg->tsk_id_node, FALSE);
 
 	/* Once takeover is OK, new_fm will be added to the global list. 
     I can't add it now, because I don't have a */

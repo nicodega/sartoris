@@ -27,6 +27,7 @@
 #define MAX(a,b) ((a < b)? b : a)
 
 void map_pages(INT32 task, UINT32 linear_start, UINT32 physical_start, UINT32 count, INT32 flags, INT32 level);
+INT32 strcmp(char *c1, char *c2);
 
 #define STOP for(;;);
 

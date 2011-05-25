@@ -1,4 +1,4 @@
-subdirs = stdconsole fdc dma_man shell directory ofsservice pipes pci atac p-manager2 
+subdirs = stdconsole fdc dma_man shell directory ofsservice pipes pci atac ld p-manager2
 
 all : services
 
@@ -21,6 +21,7 @@ clean :
 	$(MAKE) -C pipes clean
 	$(MAKE) -C pci clean
 	$(MAKE) -C atac clean
+	$(MAKE) -C ld clean
 
 .PHONY : dep
 dep :
@@ -34,3 +35,4 @@ dep :
 	$(MAKE) -C pipes dep
 	$(MAKE) -C pci dep
 	$(MAKE) -C atac dep
+	$(MAKE) -C ld dep
