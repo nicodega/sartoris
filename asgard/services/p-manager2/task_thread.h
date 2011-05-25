@@ -46,6 +46,9 @@
 #define TSK_FLAG_SERVICE		8	/* this task is a service					           */
 #define TSK_FLAG_SYS_SERVICE	(TSK_FLAG_SERVICE | 16)  /* this task is a system service  */
 #define TSK_LOW_MEM             32	/* this task required low a physicall address	       */
+#define TSK_DYNAMIC             64	/* This task required loading by the dynamic linker    */
+#define TSK_SHARED_LIB          128	/* This task is for a shared lib. It won't have threads*/
+#define TSK_LOADING_LIB         256	/* This task is loading a shared lib.                  */
 
 struct pm_task 
 {

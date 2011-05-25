@@ -51,7 +51,7 @@ void fatal_exception(UINT16 task_id, INT32 ret_value)
 
         cmd_queue_remove_bytask(tsk);
 
-		tsk->io_finished.callback = cmd_task_destroyed_callback;
+		tsk->io_finished.callback = cmd_task_fileclosed_callback;
 		io_begin_close( &tsk->io_event_src );
 	}
 }

@@ -46,6 +46,8 @@
 #define PM_MMAP_REMOVE	    0x31
 #define PM_INITIALIZING	    0x32
 #define PM_PHYMEM           0x33
+#define PM_LOAD_LIBRARY     0x34
+#define PM_LOADER_READY     0x35
 #define PM_TASK_FINISHED    0xFF
 
 /* flags for task creation */
@@ -76,7 +78,9 @@
 #define PM_INVALID_PARAMS               0x0017
 #define PM_TOO_MANY_FILES_OPENED        0x0018
 #define PM_MEM_COLITION                 0x0019
-#define PM_ERROR                        0x0020
+#define PM_IS_INITIALIZING              0x001a
+#define PM_INVALID_BOUNDARIES           0x001b
+#define PM_ERROR                        0x001c
 
 
 #define PM_THREAD_OK          0x0000
@@ -91,6 +95,16 @@ struct pm_msg_generic {
   short req_id;
   short response_port;
   char padding[10];
+} PACKED_ATT;
+
+struct pm_msg_loadlib {
+  unsigned char pm_type;
+  unsigned char padding0;
+  short req_id;
+  short response_port;
+  unsigned int vlow;
+  unsigned int vhigh;
+  short path_smo_id;
 } PACKED_ATT;
 
 struct pm_msg_phymem {
@@ -172,7 +186,6 @@ struct pm_msg_unblock_thread {
 } PACKED_ATT;
 
 
-
 struct pm_msg_response {
   unsigned char pm_type;
   unsigned char padding0;
@@ -180,6 +193,16 @@ struct pm_msg_response {
   int   status;
   int   new_id;
   int   new_id_aux;
+} PACKED_ATT;
+
+/* PMAN_LOAD_LIBRARY */
+struct pm_msg_loadlib_res {
+  unsigned char pm_type;
+  unsigned char padding0;
+  short req_id;
+  int   status;
+  int   lib_base;
+  int   padding;
 } PACKED_ATT;
 
 /* PM_TASK_FINISHED */

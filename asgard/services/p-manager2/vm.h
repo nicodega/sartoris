@@ -142,6 +142,7 @@ struct vmm_memory_region
 #define VMM_MEMREGION_SHARED   1		// This region is shared with other task
 #define VMM_MEMREGION_FMAP     2		// This region is File Mapped
 #define VMM_MEMREGION_MMAP     3		// This region is Mapped to Physical Memory
+#define VMM_MEMREGION_LIB      4		// This region is Mapped to a shared library
 
 /* Memory region Flags */
 #define VMM_MEM_REGION_FLAG_NONE		0
@@ -211,6 +212,18 @@ struct vmm_phymap_descriptor
     int exclusive;                      // 1 if region is assiged exclusively.
     int references;
     ma_node area;                       // physical memory area on vmm phy_mem_areas
+} PACKED_ATT;
+
+/* Shared library descriptor */
+struct vmm_slib_descriptor
+{
+	struct vmm_memory_region *regions;  // memory regions referencing this descriptor
+    int references;                     // references to the library
+    char *path;                         // library path
+    struct vmm_slib_descriptor *next; // used on the libraries list on vmm main struct
+    struct vmm_slib_descriptor *prev;
+    int task;                           // the task for this shared library (where we will get our pages from)
+    BOOL loaded;                        
 } PACKED_ATT;
 
 struct thread_vmm_info;
@@ -308,6 +321,9 @@ struct vmm_main
     rbt      fmap_descriptors;    // each file will have a file id. This tree will contain all files taken by PMAN.
     memareas phy_mem_areas;       // a structure with physical memory areas
                                   // for telling if an area is already phy mapped.
+
+    /* libraries */
+    struct vmm_slib_descriptor *slibs;
 } vmm;
 
 void vmm_init_thread_info(struct pm_thread *thread);
@@ -422,7 +438,7 @@ void vmm_region_remove(struct pm_task *task, struct vmm_memory_region *mreg);
 
 /* FMAP */
 BOOL vmm_fmap_flush(struct pm_task *task, ADDR tsk_lstart);
-BOOL vmm_page_filemapped(struct pm_task *task, struct pm_thread *thread, ADDR page_laddr);
+BOOL vmm_page_filemapped(struct pm_task *task, struct pm_thread *thread, ADDR page_laddr, struct vmm_memory_region *mreg);
 UINT32 vmm_fmap(UINT16 task_id, UINT32 fileid, UINT16 fs_task, ADDR start, UINT32 size, UINT32 perms, UINT32 offset);
 BOOL vmm_fmap_release(struct pm_task *task, ADDR tsk_lstart);
 void vmm_fmap_close_all(struct pm_task *task);
@@ -432,12 +448,17 @@ BOOL vmm_phy_mmap(struct pm_task *task, ADDR py_start, ADDR py_end, ADDR lstart,
 void vmm_phy_umap(struct pm_task *task, ADDR lstart);
 
 /* SHARED PAGES */
-struct pm_task *vmm_shared_getowner(struct pm_task *task, ADDR proc_laddr, ADDR *owner_laddr, UINT32 *attrib);
-BOOL vmm_is_shared(struct pm_task *task, ADDR proc_laddr);
+BOOL vmm_page_shared(struct pm_task *task, ADDR proc_laddr, struct vmm_memory_region *mreg);
 void vmm_share_remove(struct pm_task *task, UINT32 lstart);
 BOOL vmm_share_create(struct pm_task *task, ADDR laddr, UINT32 length, UINT16 perms);
 BOOL vmm_share_map(UINT32 descriptor_id, struct pm_task *task, ADDR laddr, UINT32 length, UINT16 perms);
 
+/* SHARED LIBRARIES */
+int vmm_page_lib(struct pm_task *task, struct pm_thread *thread, ADDR proc_laddr, struct vmm_memory_region *mreg);
+int vmm_lib_load(struct pm_task *task, char *path, int plength, UINT32 vlow, UINT32 vhigh);
+BOOL vmm_lib_loaded(struct pm_task *libtask, BOOL ok);
+BOOL vmm_lib_unload(struct pm_task *task, struct vmm_memory_region *mreg);
+ADDR vmm_lib_get(char *path);
 
 /******************************************************************************************
 

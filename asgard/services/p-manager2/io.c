@@ -311,7 +311,7 @@ void io_process_msg()
 			if(task == NULL || task->state == TSK_NOTHING)
 			{
 				count--;
-				continue; // this was not sent by io subsystem
+				continue; // this was not sent by io subsystem or the task was destroyed (on lib unload might happen)
 			}
 
 			iosrc = &task->io_event_src; 

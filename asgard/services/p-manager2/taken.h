@@ -82,17 +82,12 @@ struct taken_directory
 	struct taken_table *tables[1024];
 };
 
-/* Taken entry defines */
-#define TAKEN_FLAG			0x1			// record is taken
-#define TAKEN_PDIR_FLAG		0x2			// record is a Page Dir Taken entry
-#define TAKEN_PTBL_FLAG		0x4			// record is a Page table Taken entry
-#define TAKEN_SWPF_FLAG		0x8		
-
 /* Flags field for PG entries */
-#define TAKEN_PG_FLAG_PHYMAP	0x1
-#define TAKEN_PG_FLAG_SHARED	0x2
-#define TAKEN_PG_FLAG_FILE		0x4
-#define TAKEN_PG_FLAG_PMAN		0x8
+#define TAKEN_PG_FLAG_PHYMAP	0x1     // physical map
+#define TAKEN_PG_FLAG_SHARED	0x2     // shared page
+#define TAKEN_PG_FLAG_FILE		0x4     // file mapping
+#define TAKEN_PG_FLAG_PMAN		0x8     // taken for pman
+#define TAKEN_PG_FLAG_LIBEXE	0x10    // taken for a library executable
 
 /* eflags */
 #define TAKEN_EFLAG_NONE		0x0

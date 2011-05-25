@@ -68,9 +68,10 @@ BOOL shuttingDown();
 BOOL cmd_shutdown_step();
 void shutdown_tsk_unloaded(UINT16);
 
+void cmd_load_library(struct pm_msg_loadlib *msg, UINT16 loader_task);
 void cmd_create_task(struct pm_msg_create_task *msg, UINT16 creator_task_id);
 void cmd_create_thread(struct pm_msg_create_thread *msg, UINT16 creator_task_id);
-INT32 cmd_task_destroyed_callback(struct fsio_event_source *iosrc, INT32 ioret);
+INT32 cmd_task_fileclosed_callback(struct fsio_event_source *iosrc, INT32 ioret);
 void cmd_inform_result(struct pm_msg_generic *msg, UINT16 task_id, UINT16 status, UINT16 new_id, UINT16 new_id_aux);
 void cmd_info_init(struct command_info *cmd_inf);
 

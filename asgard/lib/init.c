@@ -38,7 +38,7 @@ extern int io_consoleid;
 
 extern int main(int, char**); // on cpp main uses C linkage
 
-void _exit(int) __attribute__ ((noreturn));
+void _exit(int);
 
 extern unsigned int __end_dtors;
 extern unsigned int __start_dtors;
@@ -48,6 +48,7 @@ extern unsigned int __end_ctors;
 struct atexit_func atexit_funcs[_ATEXIT_MAXFUNCS];
 unsigned int atexit_count = 0;
 void *__dso_handle = 0; 
+int (*ldexit)(int ret);
 
 /*
 *
@@ -65,6 +66,8 @@ void __procinit(struct init_data *initd)
 	char **args = NULL, *ln;
 	int argc = 0, s;
 	
+    ldexit = initd->ldexit;
+
 	res.command = STDPROCESS_INIT;
 	res.ret = STDPROCESSERR_OK;
 
@@ -162,24 +165,29 @@ void _exit(int ret)
 
 	close_malloc_mutex();
 
-	finished.pm_type = PM_TASK_FINISHED;
-	finished.req_id = 0;
-	finished.ret_value = ret;
+    if(!ldexit)
+    {
+	    finished.pm_type = PM_TASK_FINISHED;
+	    finished.req_id = 0;
+	    finished.ret_value = ret;
 
-	send_msg(PMAN_TASK, PMAN_COMMAND_PORT, &finished);
+	    send_msg(PMAN_TASK, PMAN_COMMAND_PORT, &finished);
 
-	for(;;) { reschedule(); }
+	    for(;;) { reschedule(); }
+    }
+    else
+    {
+        ldexit(ret);
+    }
 }
  
 int __cxa_atexit(void (*f)(void *), void *ptr, void *dso)
 {
-    print("proc init: atexit\n");
 	if (atexit_count >= _ATEXIT_MAXFUNCS) {return -1;};
 	atexit_funcs[atexit_count].dtor = f;
 	atexit_funcs[atexit_count].ptr = ptr;
 	atexit_funcs[atexit_count].dso_handle = dso;
 	atexit_count++;
-    print("proc init: atexit ok\n");
 	return 0;
 }
  

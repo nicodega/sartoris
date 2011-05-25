@@ -43,11 +43,14 @@ UINT32 curr_cursor;
 struct ifs2srv_header *curr_header;
 
 ADDR create_service(UINT16 task, UINT16 thread, INT32 invoke_level, UINT32 size, BOOL low_mem, BOOL load_all, char *image_name);
-UINT32 put_pages(struct pm_task *task, BOOL use_fsize, BOOL low_mem);
+UINT32 put_pages(struct pm_task *task, BOOL use_fsize, BOOL low_mem, BOOL lib);
 INT32 pminit_elf_open(int imgId);
 INT32 pminit_elf_seek(struct fsio_event_source *iosrc, UINT32 offset);
 INT32 pminit_elf_read(struct fsio_event_source *iosrc, UINT32 size, ADDR pbuffer);
 INT32 get_img_header(struct ifs2srv_header **header, int imgId);
+
+extern int ld_task;
+extern int ld_size;
 
 void loader_init(ADDR init_image_laddress)
 {
@@ -57,6 +60,8 @@ void loader_init(ADDR init_image_laddress)
 	UINT16 task, thread;
 	BOOL msg, lowmem;
 	iheader = (struct ifs2_header *)init_image_laddress;
+
+    ld_task = -1;
 
 	pman_print_clr(12);
 	pman_print("InitFS2 Services: %i, Magic: %x ", iheader->entries, iheader->ifs2magic);
@@ -118,6 +123,13 @@ ADDR create_service(UINT16 task, UINT16 thread, INT32 invoke_level, UINT32 size,
 	char *path = NULL;
 	struct vmm_page_table *ptbl = NULL;
 	struct thread mk_thread;
+    BOOL isld = FALSE;
+    
+    if(strcmp(image_name,"ld"))
+    {
+        ld_task = task;
+        isld = TRUE;
+    }
 
 	while(image_name[psize] != '\0'){ psize++; }
 
@@ -134,7 +146,7 @@ ADDR create_service(UINT16 task, UINT16 thread, INT32 invoke_level, UINT32 size,
     if(ptask == NULL)
         pman_print_and_stop("Error allocating task for %s", image_name);
 
-	if(loader_create_task(ptask, path, psize, 0, 1, TRUE) != PM_OK)
+	if(loader_create_task(ptask, path, psize, 0, 1, LOADER_CTASK_TYPE_SYS) != PM_OK)
 		pman_print_and_stop("Error creating task for %s", image_name);
 	
 	/* 
@@ -157,33 +169,42 @@ ADDR create_service(UINT16 task, UINT16 thread, INT32 invoke_level, UINT32 size,
 	if(elf_begin(ptask, pminit_elf_read, pminit_elf_seek) == -1)
 		pman_print_and_stop("Elf parsing failed for %s", image_name);
 	
-	/* Setup first thread */
-	pthread = thr_create(thread, ptask);
-    	
-	pthread->state = THR_WAITING;
-		
-	/* Create microkernel thread */
-	mk_thread.task_num = task;
-	mk_thread.invoke_mode = PRIV_LEVEL_ONLY;
-	mk_thread.invoke_level = 0;
-	mk_thread.ep = (ADDR)ptask->loader_inf.elf_header.e_entry;
-	mk_thread.stack = pthread->stack_addr = (ADDR)STACK_ADDR(PMAN_THREAD_STACK_BASE);
-
-	if(create_thread(thread, &mk_thread))
-		pman_print_and_stop("Could not create thread for %s", image_name);
-
-	/* Put pages for the Service */
-	put_pages(ptask, !load_all, low_mem);
+    /* Put pages for the Service */
+	UINT32 max_addr = put_pages(ptask, !load_all, low_mem, isld);
 
 	/* Get first page */
 	ptbl = (struct vmm_page_table*)PHYSICAL2LINEAR(PG_ADDRESS(ptask->vmm_info.page_directory->tables[PM_LINEAR_TO_DIR(SARTORIS_PROCBASE_LINEAR)].b));
 	first_page = PG_ADDRESS(ptbl->pages[PM_LINEAR_TO_TAB(SARTORIS_PROCBASE_LINEAR)].entry.phy_page_addr);
 	
-	/* Schedule and activate thread */
-	sch_add(pthread);
-	sch_activate(pthread);
+    /* Setup first thread */
+	if(!isld)
+    {
+        pthread = thr_create(thread, ptask);
+    	
+	    pthread->state = THR_WAITING;
+    
+	    /* Create microkernel thread */
+	    mk_thread.task_num = task;
+	    mk_thread.invoke_mode = PRIV_LEVEL_ONLY;
+	    mk_thread.invoke_level = 0;
+	    mk_thread.ep = (ADDR)ptask->loader_inf.elf_header.e_entry;
+	    mk_thread.stack = pthread->stack_addr = (ADDR)STACK_ADDR(PMAN_THREAD_STACK_BASE);
 
-	ptask->state = TSK_NORMAL;
+	    if(create_thread(thread, &mk_thread))
+		    pman_print_and_stop("Could not create thread for %s", image_name);
+	
+	    /* Schedule and activate thread */
+	    sch_add(pthread);
+	    sch_activate(pthread);
+
+	    ptask->state = TSK_NORMAL;
+    }
+    else
+    {
+        ld_size = max_addr;
+        ptask->vmm_info.max_addr = max_addr;
+        pman_print_dbg("LD found task %i", task);
+    }
 
 	return (ADDR)first_page;
 }
@@ -191,8 +212,8 @@ ADDR create_service(UINT16 task, UINT16 thread, INT32 invoke_level, UINT32 size,
 /* This function will pm_page_in loadable segments. If use_fsize is non zero, then it'll only 
 load as much as there is on the file, else, it'll load the whole segment.
 This function will return the ammount of bytes allocated for pages (not tables). Return value
-will be a multiple of page size. */
-UINT32 put_pages(struct pm_task *task, BOOL use_fsize, BOOL low_mem)
+will be a multiple of page size and will contain the maximum address for the task. */
+UINT32 put_pages(struct pm_task *task, BOOL use_fsize, BOOL low_mem, BOOL lib)
 {
 	struct vmm_page_directory *pdir = task->vmm_info.page_directory;
 	UINT32 i = 0, j;
@@ -200,6 +221,7 @@ UINT32 put_pages(struct pm_task *task, BOOL use_fsize, BOOL low_mem)
 	struct Elf32_Phdr *prog_header = NULL;
 	UINT32 page_addr, pagecount, foffset;
 	ADDR pg_tbl, pg, pgp;
+    UINT32 max_addr = 0;
 	
 	/* Put Pages in for loadable segments */
 	while( i < task->loader_inf.elf_header.e_phnum)
@@ -208,6 +230,9 @@ UINT32 put_pages(struct pm_task *task, BOOL use_fsize, BOOL low_mem)
 
 		if(prog_header->p_type == PT_LOAD)
 		{
+            if((UINT32)prog_header->p_vaddr + (UINT32)prog_header->p_memsz > max_addr)
+                   max_addr = (UINT32)prog_header->p_vaddr + (UINT32)prog_header->p_memsz;
+
 			page_addr = (unsigned int)prog_header->p_vaddr - ((unsigned int)prog_header->p_vaddr % 0x1000);
 			pagecount = 0;
 			foffset = prog_header->p_offset;
@@ -267,15 +292,7 @@ UINT32 put_pages(struct pm_task *task, BOOL use_fsize, BOOL low_mem)
 		i++;
 	}
 	
-	return allocated;
-}
-
-INT32 strcmp(char *c1, char *c2)
-{
-	INT32 i = 0;
-	while(c1[i] == c2[i] && c1[i] != '\0' && c2[i] != '\0'){ i++; }
-
-	return c1[i] == c2[i];
+	return max_addr;
 }
 
 /* Simulated filesystem for elf loading */
