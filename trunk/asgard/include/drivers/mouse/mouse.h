@@ -1,14 +1,13 @@
-/*  
-*       Text Mode VGA driver header
+/*
 *
-*    Copyright (C) 2002, 2003, 2004, 2005
+*    Copyright (C) 2002 - 2011
 *       
 *    Santiago Bazerque     sbazerque@gmail.com            
 *    Nicolas de Galarreta    nicodega@gmail.com
 *
 *    
 *    Redistribution and use in source and binary forms, with or without 
-*    modification, are permitted provided that conditions specified on 
+*     modification, are permitted provided that conditions specified on 
 *    the License file, located at the root project directory are met.
 *
 *    You should have received a copy of the License along with the code,
@@ -18,14 +17,16 @@
 *
 */
 
-void clear_screen(void);
-void scroll_up_one();
-void scroll_up(int n);
-void char_print(char s, int pos, int att);
-void char_read(char *s, int pos, int *att);
-void string_print(char *s, int pos, int att);
-void cursor_on();
-void cursor_off();
-void set_cursor_pos(unsigned int pos);
-void read_screen(char *buf);
-void write_screen(char *buf);
+#ifndef MOUSEH
+#define MOUSEH
+
+extern char mouse_int_handler;
+extern char mouse_deltax;
+extern char mouse_deltay;
+extern char state;
+extern char estate;
+extern char mouse_changed;
+
+void mouse_init(char resolution, char scaling, char sampling_rate);
+
+#endif

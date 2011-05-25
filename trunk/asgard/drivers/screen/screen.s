@@ -37,6 +37,8 @@ global cursor_on
 global cursor_off
 global read_screen
 global write_screen
+global char_read
+global char_print
     
 section .text
 
@@ -92,7 +94,42 @@ clear_last_loop:
     jnz clear_last_loop
     
     ret
+
+;; read a charachter and it's attribute
+char_read:
+    push ebp
+    mov ebp, esp
+    push ebx
+
+    mov ecx, [ebp+8]     ; char ptr
+    mov edx, [ebp+12]    ; location
+    mov ebx, [ebp+16]    ; atribute ptr
     
+    mov ax, [fs:edx+screen_base]
+    mov [ecx], al
+    shr ax, 8
+    and eax, 0x000000FF
+    mov dword [ebx], eax
+
+    pop ebx
+    pop ebp
+    ret
+    
+;; print a character on the screen at specified position using attribute z
+char_print:
+    push ebp
+    mov ebp, esp
+    
+    mov ecx, [ebp+8]     ; source
+    mov edx, [ebp+12]    ; destination
+    mov eax, [ebp+16]    ; atribute
+    shl eax, 8
+    
+    mov al, cl
+    mov [fs:edx+screen_base], ax
+    
+    pop ebp
+    ret
     
 ;; print zero terminated string x in screen position y, using attribute z 
 ;; The function places the cursor at the end of the printed text

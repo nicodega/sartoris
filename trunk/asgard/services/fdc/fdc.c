@@ -1056,8 +1056,8 @@ void timer() {
 
 		/* send EOI to master and slave pics */
 		__asm__ __volatile__ ("movb $0x20, %%al;" 
-			              "outb %%al, $0xa0;" 
-			              "outb %%al, $0x20" : : : "eax");
+			                  "outb %%al, $0xa0;" 
+			                  "outb %%al, $0x20" : : : "eax");
 		
 		ret_from_int();
 	}

@@ -738,7 +738,9 @@ void cmd_create_thread(struct pm_msg_create_thread *msg, UINT16 creator_task_id)
 	struct pm_thread *thread = NULL; 
 	ADDR pg = NULL;
 
-	if (task == NULL || task->state != TSK_NORMAL || (task->flags & TSK_SHARED_LIB)) 
+	if (task == NULL || task->state != TSK_NORMAL || (task->flags & TSK_SHARED_LIB)
+        || (task->num_threads > 0 && creator_task_id != task->id)
+        || (task->num_threads == 0 && creator_task_id != task->command_inf.creator_task_id)) 
 	{
 		cmd_inform_result((struct pm_msg_generic *) msg, creator_task_id, PM_THREAD_FAILED, 0, 0);
 		return;

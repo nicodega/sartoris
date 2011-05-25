@@ -54,27 +54,37 @@
 
 #define CTL_KEY_MASK 0x3c
 #define CONTROL_MASK 0x0c
-#define ALT_MASK 0x30
+#define ALT_MASK     0x30
 
 #define IBUF_SIZE 256
 
 #define BACKSPACE 0x08
-#define HOME 0x02
-#define END 0x03
-#define DEL 0x7F
+#define HOME      0x02
+#define END       0x03
+#define DEL       0x7F
+#define UP     0x90
+#define DOWN   0x91
+#define LEFT   0x92
+#define RIGHT  0x93
 
-#define UP 0x90
-#define DOWN 0x91
-#define LEFT 0x92
-#define RIGHT 0x93
-
-#define MAX_OWNERS 20
-#define MAX_SUSCRIPTIONS 16
+#define MAX_OWNERS              20
+#define MAX_SUSCRIPTIONS        16
+#define MAX_MOUSE_SUSCRIPTIONS  10
 
 #define NUM_VIRTUAL 8
 #define KBD_BUF_SIZE 256  /* must match size defined in the driver */
 
 #define TAB_SIZE 1
+
+#define CONSOLE_ROWS 25
+#define CONSOLE_COLS 80
+
+#define MOUSE_PX_CHAR        4    // pixels per char for the mouse
+#define MOUSE_RESOLUTION     0x02
+#define MOUSE_SCALING        1
+#define MOUSE_SAMPLING_RATE  100
+#define MOUSE_MAXX ((CONSOLE_COLS-1)*MOUSE_PX_CHAR)
+#define MOUSE_MAXY ((CONSOLE_ROWS-1)*MOUSE_PX_CHAR)
 
 extern struct stdservice_res dieres;
 extern int dieid;
@@ -87,6 +97,10 @@ struct key_suscription
 	int port;
 	int susc;
 } PACKED_ATT;
+
+extern int mouse_suscriptions_ports[MAX_MOUSE_SUSCRIPTIONS];
+extern int mouse_suscriptions[MAX_MOUSE_SUSCRIPTIONS];
+extern int msuscs;
 
 struct vterm 
 {
@@ -150,3 +164,12 @@ struct key_suscription *get_suscription(int sender_id, int console);
 int remove_suscription(int sender_id, int console);
 void finish_read(int i);
 int check_ownership(int term, int task);
+
+/* mouse */
+void create_mouse_thread(void);
+void do_mouse();
+void mouse_restore();
+void mouse_print();
+void mouse_reset_pos();
+void mouse_enable(int enabled);
+void init_mouse();
