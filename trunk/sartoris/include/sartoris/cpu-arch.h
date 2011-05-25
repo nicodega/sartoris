@@ -83,7 +83,7 @@ unsigned int *arch_map_perms(int task, struct permissions *perms, unsigned int p
   served (i.e., it should detect it has just faulted,
   and abort informing how much it copied).
 */
-int arch_cpy_to_task(int task, char* src, char* dst, unsigned int len, int x);
+int arch_cpy_to_task(int task, char* src, char* dst, unsigned int len, int x, int trace);
 int arch_cpy_from_task(int task, char* src, char* dst, unsigned int len, int x);
 
 void arch_dump_cpu(void);

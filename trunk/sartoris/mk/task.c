@@ -198,15 +198,25 @@ int init_task(int task, int *start, unsigned int size)
         while(size > 0)
         {
             int bytes;
-		    bytes = arch_cpy_to_task(task, (char*)start, (char*)dest, size, x);
+		    bytes = arch_cpy_to_task(task, (char*)start, (char*)dest, size, x, 0);
+
+            if(bytes < 0)
+            {
+                result == FAILURE;
+                set_error(SERR_NO_PERMISSION);
+                break;
+            }
 
             start += bytes;
 			size -= bytes;
             dest += bytes;
         }
 
-        stask->state = ALIVE;
-        set_error(SERR_OK);
+        if (result == SUCCESS) 
+        {
+            stask->state = ALIVE;
+            set_error(SERR_OK);
+        }
 	}
 	
 	return result;

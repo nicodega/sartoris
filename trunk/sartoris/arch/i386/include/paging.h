@@ -40,8 +40,8 @@ struct i386_task;
 void init_paging(void);
 void start_paging(struct i386_task *tinf);
 
-int import_page(int task, void *linear);
-void *arch_translate(int task, void *address);
+int import_page(int task, void *linear, int *rw);
+void *arch_translate(int task, void *address, int *rw);
 
 int verify_present(void *address, int write);
 

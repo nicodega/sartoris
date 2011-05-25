@@ -407,14 +407,18 @@ int arch_page_out(int task, void *linear, int level)
 }
 
 /* this adjusts our one-page window to other address spaces */
-int import_page(int task, void *linear) 
+int import_page(int task, void *linear, int *rw) 
 {
 	void *linear_trans;
 	int result;
+    int w;
 
 	result = FAILURE;
 
-	linear_trans =  arch_translate(task,MAKE_KRN_SHARED_PTR(task, linear));
+	linear_trans =  arch_translate(task, MAKE_KRN_SHARED_PTR(task, linear), &w);
+
+    if(rw)
+        *rw = w;
 
 	if (linear_trans != NULL) 
 	{
@@ -429,8 +433,7 @@ int import_page(int task, void *linear)
 
 /* this should be called within a critical block,
    atomicity is required! */
-
-void *arch_translate(int task, void *address) 
+void *arch_translate(int task, void *address, int *rw) 
 {
 	pt_entry *ptab_ptr;
 	pt_entry **pdir_map = AUX_PAGE_SLOT(curr_thread);
@@ -450,6 +453,7 @@ void *arch_translate(int task, void *address)
 	    
 			if ((unsigned int) pent_map & PG_PRESENT) 
 			{
+                *rw = ((pent_map & PG_WRITABLE) == PG_WRITABLE); 
 				result = (void*)PG_ADDRESS(pent_map);		// return physical address for the page
 			}
 		}
