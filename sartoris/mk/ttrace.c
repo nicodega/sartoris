@@ -292,7 +292,7 @@ int ttrace_mem_write(int thr_id, void *src, void *dst, int size)
 				    does not guarantee atomicity. (It might rise a page fault interrupt). That's
 				    why we must validate all things again.
 				    */
-				    bytes = arch_cpy_to_task(thread->task_num, (char*)((unsigned int)src+off), (char*)((unsigned int)dst+off), size, x);  
+				    bytes = arch_cpy_to_task(thread->task_num, (char*)((unsigned int)src+off), (char*)((unsigned int)dst+off), size, x , 1);  
 				
 				    if (!TST_PTR(thr_id,thr) || thread->trace_task != curr_task )
 				    {

@@ -15,7 +15,7 @@ int arch_get_perms(int task, struct permissions *localperms, struct permissions 
         // page is present
         if(curr_task != task)
         {
-            import_page(task, localperms);
+            import_page(task, localperms, NULL);
 
             map = (struct permissions*)((unsigned int)map + ((unsigned int)localperms) % PG_SIZE);
             p->length = map->length;
@@ -62,7 +62,7 @@ unsigned int *arch_map_perms(int task, struct permissions *perms, unsigned int p
     if(verify_present(b, false) == SUCCESS)
     {
         // page is present
-        import_page(task, b);
+        import_page(task, b, NULL);
         
         return map;
     }

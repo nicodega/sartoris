@@ -24,7 +24,7 @@ extern pd_entry *tsk_pdb[MAX_TSK];
 #ifndef PAGING
 
 /* the simple version: paging is disabled */
-int arch_cpy_to_task(int task, char* src, char* dst, unsigned int len, int x) 
+int arch_cpy_to_task(int task, char* src, char* dst, unsigned int len, int x, int trace) 
 {
 	arch_mem_cpy_bytes(MAKE_KRN_PTR(src), MAKE_KRN_SHARED_PTR(task, dst), len);
   
@@ -56,12 +56,13 @@ int arch_cpy_from_task(int task, char*src, char* dst, unsigned int len, int x)
    verifications because the atomicity has been broken! */
 
 /* this is so freaking sound it makes me wanna cry! */
-int arch_cpy_to_task(int task, char* src, char* dst, unsigned int len, int x) 
+extern unsigned int exc_error_code;
+
+int arch_cpy_to_task(int task, char* src, char* dst, unsigned int len, int x, int trace) 
 {
 	char *mapped_dst;
 	unsigned int i, j;  /* i: index for curr_task, j: index for task */
-	int import_res;
-	int local_res;
+	int import_res, local_res, rw;
 		
 	src = (char*)MAKE_KRN_PTR(src);
   
@@ -75,7 +76,7 @@ int arch_cpy_to_task(int task, char* src, char* dst, unsigned int len, int x)
   
 	local_res = verify_present(src, false);
   	
-	import_res = import_page(task, dst);
+	import_res = import_page(task, dst, &rw);
 
 	for(i = 0; i < len; i++) 
 	{
@@ -87,18 +88,23 @@ int arch_cpy_to_task(int task, char* src, char* dst, unsigned int len, int x)
      
 		if (local_res == SUCCESS) 
 		{
-            if (import_res == SUCCESS) 
+            if (import_res == SUCCESS && (rw || trace)) 
 			{
 				mapped_dst[j++] = src[i];
 			} 
 			else
-			{ 
+			{
+                if(import_res == SUCCESS && !rw)
+                {
+                    i = -1;
+                    break;
+                }
 				/* issue page fault for target (imported) task */
 	 			last_page_fault.task_id = task;
 				last_page_fault.thread_id = curr_thread;
 				last_page_fault.linear = dst;
                 last_page_fault.pg_size = PG_SIZE;
-			    last_page_fault.flags = PF_FLAG_EXT;
+                last_page_fault.flags = PF_FLAG_EXT;
 #ifdef _SMP_
 				mk_leave(x);
 #endif
@@ -132,12 +138,12 @@ int arch_cpy_to_task(int task, char* src, char* dst, unsigned int len, int x)
 		if (j % PG_SIZE == 0 && i < len) 
 		{
 			dst += PG_SIZE;
-			import_res = import_page(task, dst);
+			import_res = import_page(task, dst, &rw);
        
 			j = 0;
 		}
-	} 
-  
+	}
+
 	return i;
 }
 
@@ -160,7 +166,7 @@ int arch_cpy_from_task(int task, char* src, char* dst, unsigned int len, int x)
 
 	local_res = verify_present(dst, true);
 
-	import_res = import_page(task, src); // map source page on the one-slot window
+	import_res = import_page(task, src, NULL); // map source page on the one-slot window
 
 	for(i = 0; i < len; i++) 
 	{
@@ -197,8 +203,8 @@ int arch_cpy_from_task(int task, char* src, char* dst, unsigned int len, int x)
 			}
 		}
 		else
-		{ /* issue page fault for target (current) task */
-
+		{ 
+            /* issue page fault for target (current) task */
 			last_page_fault.task_id = curr_task;
 			last_page_fault.thread_id = curr_thread;
 			last_page_fault.linear = dst;
@@ -218,7 +224,7 @@ int arch_cpy_from_task(int task, char* src, char* dst, unsigned int len, int x)
 		if (j % PG_SIZE == 0 && i < len) 
 		{
 			src += PG_SIZE;
-			import_res = import_page(task, src);
+			import_res = import_page(task, src, NULL);
 
 			j = 0;
 		}

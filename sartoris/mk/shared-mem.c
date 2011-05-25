@@ -220,11 +220,13 @@ int write_mem(int smo_id, int off, int size, int *src)
                     int bytes;
 
 				    dest = (char *) ((unsigned int)my_smo->base + off);
-				    bytes = arch_cpy_to_task(my_smo->owner, (char*)src, (char*)dest, size, x); 
+				    bytes = arch_cpy_to_task(my_smo->owner, (char*)src, (char*)dest, size, x, 0); 
 
-				    if (!TST_PTR(smo_id,smo) || my_smo->target != curr_task )
+				    if (bytes < 0 || !TST_PTR(smo_id,smo) || my_smo->target != curr_task )
 				    {
-                        if(my_smo->target != curr_task)
+                        if(bytes < 0)
+                            set_error(SERR_NO_PERMISSION);
+                        else if(my_smo->target != curr_task)
                             set_error(SERR_NOT_SMO_TARGET);
                         else
                             set_error(SERR_INVALID_SMO);
