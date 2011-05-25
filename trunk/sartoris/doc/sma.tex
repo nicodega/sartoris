@@ -237,7 +237,7 @@ Once tracing has been activated on a thread, it's registers and memory can be re
 \item[] \textsf{int ttrace\_mem\_write(int thr\_id, void *src, void *dst, int size)}: Same as \textsf{ttrace\_mem\_read}) but will write memory from \textsf{src} to \textsf{dst}.
 \end{enumerate}
 
-If the tracing task tries to write on a read only page on the traced thread task, a page fault exception will be raised, and it'll be up to the OS on top to allow such an operation or kill the process if it was not allowed.\\
+It's important to note a debugger task can write on read-only pages of the debugged process.\\
 
 \textbf{IMPORTANT:} When tracing starts for a thread, it's state won't be accesible until it's executed after \textsf{ttrace\_begin} invoke. An interrupt (int 1) will be raised once the thread is executed.\\
 
