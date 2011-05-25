@@ -40,10 +40,7 @@ void init_mouse()
 
     for(i = 0; i < NUM_VIRTUAL; i++)
         mouse_enabled[i] = 0;
-
-    // remove this... is for testing!
-    mouse_enable(1);
-    
+        
     for(i = 0; i < MAX_MOUSE_SUSCRIPTIONS; i++)
         mouse_suscriptions[i] = -1;
     msuscs = 0;
