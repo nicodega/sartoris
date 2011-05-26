@@ -80,6 +80,7 @@ UINT32 loader_create_task(struct pm_task *task, char *path, UINT32 plength, int 
 		pman_print_and_stop("Could not create task %i ", task->id);
         return PM_ERROR;
     }
+
     /* Pagein the Page directory on task address space */
     pm_page_in(task->id, 0, (ADDR)LINEAR2PHYSICAL(task->vmm_info.page_directory), 0, 0);
     
@@ -177,7 +178,7 @@ BOOL loader_filepos(struct pm_task *task, ADDR linear, UINT32 *outpos, UINT32 *o
 				else
 					*outsize = size - *page_displacement;	
 				
-                if(phdr->p_flags & PF_EXEC)
+                if((phdr->p_flags & PF_EXEC) && exec)
                     *exec = TRUE;
                 else
                     *exec = FALSE;
@@ -252,12 +253,11 @@ INT32 loader_fileopen_finished(struct fsio_event_source *iosrc, INT32 ioret)
 			if(elf_begin(task, io_begin_read, io_begin_seek) == -1)
             {
                 res_msg.pm_type = PM_CREATE_TASK;
-				res_msg.req_id  = task->command_inf.req_id;
+				res_msg.req_id  = task->command_inf.command_req_id;
 				res_msg.status  = PM_INVALID_FILEFORMAT;
 				res_msg.new_id  = task->id;
 				res_msg.new_id_aux = 0;
-
-				send_msg(task->command_inf.creator_task_id, task->command_inf.response_port, &res_msg );
+				send_msg(task->creator_task, task->creator_task_port, &res_msg );
             }
 		} 
 		else 
@@ -267,16 +267,16 @@ INT32 loader_fileopen_finished(struct fsio_event_source *iosrc, INT32 ioret)
                 // we where loading a shared lib..
                 vmm_lib_loaded(task, FALSE);
             }
-			else if(task->command_inf.creator_task_id != 0xFFFF)
+			else if(task->creator_task != 0xFFFF)
 			{
 				/* Send Failure */
 				res_msg.pm_type = PM_CREATE_TASK;
-				res_msg.req_id  = task->command_inf.req_id;
+				res_msg.req_id  = task->command_inf.command_req_id;
 				res_msg.status  = PM_IO_ERROR;
 				res_msg.new_id  = task->id;
 				res_msg.new_id_aux = 0;
 
-				send_msg(task->command_inf.creator_task_id, task->command_inf.response_port, &res_msg );
+				send_msg(task->creator_task, task->creator_task_port, &res_msg );
                 tsk_destroy(task);
 			}
 		}
@@ -328,6 +328,7 @@ BOOL loader_task_loaded(struct pm_task *task, char *interpreter)
 	res_msg.pm_type = PM_CREATE_TASK;
 	res_msg.status  = PM_IO_ERROR;
 	res_msg.new_id_aux = 0;
+    res_msg.req_id = task->command_inf.command_req_id;
 
     /* Set expected_working_set with the size of ELF segments */
 	loader_calculate_working_set(task);
@@ -349,7 +350,7 @@ BOOL loader_task_loaded(struct pm_task *task, char *interpreter)
 
                 /* Task cannot be loaded */
 		        res_msg.status  = PM_NOT_ENOUGH_MEM;
-		        send_msg(task->command_inf.creator_task_id, task->command_inf.response_port, &res_msg );
+		        send_msg(task->creator_task, task->creator_task_port, &res_msg );
                     
                 return FALSE;
             }
@@ -400,10 +401,10 @@ BOOL loader_task_loaded(struct pm_task *task, char *interpreter)
 					            if(pm_page_in(task->id, (ADDR)laddr, (ADDR)LINEAR2PHYSICAL(pg), 1, PGATT_WRITE_ENA) != SUCCESS)
                                 {
                                     /* Task cannot be loaded */
-		                            if(task->command_inf.creator_task_id != 0xFFFF)
+		                            if(task->creator_task != 0xFFFF)
                                     {
                                         res_msg.status  = PM_NOT_ENOUGH_MEM;
-		                                send_msg(task->command_inf.creator_task_id, task->command_inf.response_port, &res_msg );
+		                                send_msg(task->creator_task, task->creator_task_port, &res_msg );
                                     }
                                     return FALSE;
                                 }
@@ -468,20 +469,21 @@ BOOL loader_task_loaded(struct pm_task *task, char *interpreter)
         }
         
         /* Task loaded successfully */
-		if(task->command_inf.creator_task_id != 0xFFFF)
+		if(task->creator_task != 0xFFFF)
         {
             res_msg.status = PM_OK;
 		    res_msg.new_id = task->id;
-		    send_msg(task->command_inf.creator_task_id, task->command_inf.response_port, &res_msg );
+		    send_msg(task->creator_task, task->creator_task_port, &res_msg );
         }
+        return TRUE;
 	}
 	else
 	{
 		/* Task cannot be loaded onto memory */
-		if(task->command_inf.creator_task_id != 0xFFFF)
+		if(task->creator_task != 0xFFFF)
         {
             res_msg.status  = PM_NOT_ENOUGH_MEM;
-		    send_msg(task->command_inf.creator_task_id, task->command_inf.response_port, &res_msg );
+		    send_msg(task->creator_task, task->creator_task_port, &res_msg );
         }
         return FALSE;
 	}    

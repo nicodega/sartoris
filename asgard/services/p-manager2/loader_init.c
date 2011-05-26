@@ -160,9 +160,9 @@ ADDR create_service(UINT16 task, UINT16 thread, INT32 invoke_level, UINT32 size,
         ptask->flags |= TSK_LOW_MEM;
 
 	/* Setup the task */
-	ptask->command_inf.creator_task_id = 0xFFFF;
-	ptask->command_inf.response_port = 0xFFFF;
-	ptask->command_inf.req_id = 0;
+	ptask->creator_task = 0xFFFF;
+	ptask->creator_task_port = 0xFFFF;
+	ptask->command_inf.command_req_id = 0;
 	ptask->command_inf.command_sender_id = 0xFFFFFFFF;
 
 	/* Parse elf */
@@ -203,7 +203,6 @@ ADDR create_service(UINT16 task, UINT16 thread, INT32 invoke_level, UINT32 size,
     {
         ld_size = max_addr;
         ptask->vmm_info.max_addr = max_addr;
-        pman_print_dbg("LD found task %i", task);
     }
 
 	return (ADDR)first_page;

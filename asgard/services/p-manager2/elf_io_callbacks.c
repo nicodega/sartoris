@@ -41,37 +41,61 @@ INT32 elf_read_finished_callback(struct fsio_event_source *iosrc, INT32 ioret)
 	res_msg.new_id_aux = 0;
 
 	/* Reading has just finished for the ELF header. */
-	
-	
 	if(ioret != IO_RET_OK)
 	{
-		if(task->command_inf.creator_task_id != 0xFFFF)
+        if(task->flags & TSK_SHARED_LIB)
+        {
+            // we where loading a shared lib..
+            vmm_lib_loaded(task, FALSE);
+        }
+        else
 		{
-			send_msg(task->command_inf.creator_task_id, task->command_inf.response_port, &res_msg );
-		}
-        tsk_destroy(task);
+            if(task->creator_task != 0xFFFF)
+			    send_msg(task->creator_task, task->creator_task_port, &res_msg );
+            
+            task->io_finished.callback = elf_fileclosed_callback;
+            io_begin_close(iosrc);
+        }
 	}
 	else
 	{
 		if(!elf_check_header(task))
 		{
-			res_msg.status  = PM_INVALID_FILEFORMAT;
-			send_msg(task->command_inf.creator_task_id, task->command_inf.response_port, &res_msg );
+            if(task->flags & TSK_SHARED_LIB)
+            {
+                // we where loading a shared lib..
+                vmm_lib_loaded(task, FALSE);
+            }
+            else
+            {
+			    res_msg.status  = PM_INVALID_FILEFORMAT;
+			    if(task->creator_task != 0xFFFF)
+                    send_msg(task->creator_task, task->creator_task_port, &res_msg );
 			
-            task->io_finished.callback = elf_fileclosed_callback;
+                task->io_finished.callback = elf_fileclosed_callback;
 
-			/* Close the file */
-			io_begin_close(iosrc);
+			    /* Close the file */
+			    io_begin_close(iosrc);
+            }
 		}
 		else if(elf_seekphdrs(task, io_begin_read, io_begin_seek) == -1)
 		{
-            res_msg.status  = PM_NOT_ENOUGH_MEM;
-			send_msg(task->command_inf.creator_task_id, task->command_inf.response_port, &res_msg );
+            if(task->flags & TSK_SHARED_LIB)
+            {
+                // we where loading a shared lib..
+                vmm_lib_loaded(task, FALSE);
+            }
+            else
+            {
+                res_msg.status  = PM_NOT_ENOUGH_MEM;
+                if(task->creator_task != 0xFFFF)
+			        send_msg(task->creator_task, task->creator_task_port, &res_msg );
 			
-            task->io_finished.callback = elf_fileclosed_callback;
+                task->io_finished.callback = elf_fileclosed_callback;
 
-			/* Close the file */
-			io_begin_close(iosrc);
+			    /* Close the file */
+			    io_begin_close(iosrc);
+            }
         }
 	}
 	return 1;
@@ -88,11 +112,18 @@ INT32 elf_readh_finished_callback(struct fsio_event_source *iosrc, INT32 ioret)
 
 	if(ioret != IO_RET_OK)
 	{
-		if(task->command_inf.creator_task_id != 0xFFFF)
-		{
-			send_msg(task->command_inf.creator_task_id, task->command_inf.response_port, &res_msg );
-		}
-        tsk_destroy(task);
+        if(task->flags & TSK_SHARED_LIB)
+        {
+            // we where loading a shared lib..
+            vmm_lib_loaded(task, FALSE);
+        }
+        else
+        {
+		    if(task->creator_task != 0xFFFF)
+		        send_msg(task->creator_task, task->creator_task_port, &res_msg );
+            task->io_finished.callback = elf_fileclosed_callback;
+		    io_begin_close(iosrc);
+        }
 	}
 	else
 	{        
@@ -122,9 +153,16 @@ INT32 elf_readh_finished_callback(struct fsio_event_source *iosrc, INT32 ioret)
                 */
                 if(!loader_task_loaded(task, (phdr->p_type == PT_INTERP)? "ld.so": NULL))
                 {
-                    task->io_finished.callback = elf_fileclosed_callback;
-
-                    io_begin_close(iosrc);
+                    if(task->flags & TSK_SHARED_LIB)
+                    {
+                        // we where loading a shared lib..
+                        vmm_lib_loaded(task, FALSE);
+                    }
+                    else
+                    {
+                        task->io_finished.callback = elf_fileclosed_callback;
+                        io_begin_close(iosrc);
+                    }
                 }
             }
 		}
@@ -137,13 +175,22 @@ INT32 elf_readh_finished_callback(struct fsio_event_source *iosrc, INT32 ioret)
             }
             else
 			{
-                res_msg.status  = PM_INVALID_FILEFORMAT;
-			    send_msg(task->command_inf.creator_task_id, task->command_inf.response_port, &res_msg );
+                if(task->flags & TSK_SHARED_LIB)
+                {
+                    // we where loading a shared lib..
+                    vmm_lib_loaded(task, FALSE);
+                }
+                else
+                {
+                    res_msg.status  = PM_INVALID_FILEFORMAT;
+			        if(task->creator_task != 0xFFFF)
+                        send_msg(task->creator_task, task->creator_task_port, &res_msg );
 			
-                task->io_finished.callback = elf_fileclosed_callback;
+                    task->io_finished.callback = elf_fileclosed_callback;
 
-			    /* Close the file */
-			    io_begin_close(iosrc);
+			        /* Close the file */
+			        io_begin_close(iosrc);
+                }
             }
 		}
 	}
@@ -162,15 +209,22 @@ INT32 elf_seek_finished_callback(struct fsio_event_source *iosrc, INT32 ioret)
 	
 	if(ioret != IO_RET_OK)
 	{
-		if(task->command_inf.creator_task_id != 0xFFFF)
-		{
-			res_msg.status  = PM_IO_ERROR;
-			send_msg(task->command_inf.creator_task_id, task->command_inf.response_port, &res_msg );
+        if(task->flags & TSK_SHARED_LIB)
+        {
+            // we where loading a shared lib..
+            vmm_lib_loaded(task, FALSE);
+        }
+        else
+        {
+		    if(task->creator_task != 0xFFFF)
+		    {                
+			    res_msg.status  = PM_IO_ERROR;
+			    send_msg(task->creator_task, task->creator_task_port, &res_msg );
 
-            task->io_finished.callback = elf_fileclosed_callback;
-
-			io_begin_close(iosrc);
-		}
+                task->io_finished.callback = elf_fileclosed_callback;
+			    io_begin_close(iosrc);
+		    }
+        }
 	}
 	else
 	{

@@ -156,7 +156,7 @@ int vmm_page_lib(struct pm_task *task, struct pm_thread *thread, ADDR proc_laddr
         // if exec is not 0, we are bringing a page for
         // an executable section of a shared library.
         if(exec)
-            vmm_set_flags(ltask->id, proc_laddr, FALSE, TAKEN_PG_FLAG_LIBEXE, TRUE);
+            vmm_set_flags(ltask->id, thread->vmm_info.page_in_address, FALSE, TAKEN_PG_FLAG_LIBEXE, TRUE);
 
         /* IO Lock page */
         vmm_set_flags(task->id, thread->vmm_info.page_in_address, TRUE, TAKEN_EFLAG_IOLOCK | TAKEN_EFLAG_PF, TRUE);
@@ -310,7 +310,7 @@ BOOL vmm_lib_loaded(struct pm_task *libtask, BOOL ok)
     struct vmm_slib_descriptor *lib = (struct vmm_slib_descriptor*)task->loader_inf.param;
 
     res_msg.pm_type = PM_LOAD_LIBRARY;
-	res_msg.req_id  = task->command_inf.req_id;
+	res_msg.req_id  = task->command_inf.command_req_id;
 	res_msg.new_id  = task->id;
 	res_msg.new_id_aux = 0;
         
@@ -331,7 +331,7 @@ BOOL vmm_lib_loaded(struct pm_task *libtask, BOOL ok)
 
             /* Send success */
 			res_msg.status  = PM_OK;
-			send_msg(task->id, task->command_inf.response_port, &res_msg );
+			send_msg(task->id, task->command_inf.command_ret_port, &res_msg );
 		    
             mreg = mreg->next;
         }
@@ -350,7 +350,7 @@ BOOL vmm_lib_loaded(struct pm_task *libtask, BOOL ok)
 
             /* Send Failure */
 			res_msg.status  = PM_ERROR;			            
-			send_msg(task->id, task->command_inf.response_port, &res_msg );
+			send_msg(task->id, task->command_inf.command_ret_port, &res_msg );
 		    
             task->flags &= ~TSK_LOADING_LIB;
 

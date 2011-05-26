@@ -28,26 +28,29 @@
 
 /* message types */
 
-#define PM_CREATE_TASK      0x01
-#define PM_CREATE_THREAD    0x02
-#define PM_DESTROY_TASK     0x10
-#define PM_DESTROY_THREAD   0x11
-#define PM_BLOCK_THREAD     0x20
-#define PM_UNBLOCK_THREAD   0x21 
-#define PM_SHUTDOWN		    0x22 
-#define PM_FMAP			    0x23
-#define PM_FMAP_FINISH	    0x24
-#define PM_FMAP_FLUSH	    0x25
-#define PM_PMAP_CREATE	    0x26
-#define PM_PMAP_REMOVE	    0x27
-#define PM_SHARE_MEM	    0x28
-#define PM_UNSHARE_MEM	    0x29
-#define PM_MMAP_CREATE	    0x30
-#define PM_MMAP_REMOVE	    0x31
-#define PM_INITIALIZING	    0x32
-#define PM_PHYMEM           0x33
-#define PM_LOAD_LIBRARY     0x34
-#define PM_LOADER_READY     0x35
+#define PM_CREATE_TASK      1
+#define PM_CREATE_THREAD    2
+#define PM_DESTROY_TASK     3
+#define PM_DESTROY_THREAD   4
+#define PM_BLOCK_THREAD     5
+#define PM_UNBLOCK_THREAD   6 
+#define PM_SHUTDOWN		    7 
+#define PM_FMAP			    8
+#define PM_FMAP_FINISH	    9
+#define PM_FMAP_FLUSH	    10
+#define PM_PMAP_CREATE	    11
+#define PM_PMAP_REMOVE	    12
+#define PM_SHARE_MEM	    13
+#define PM_UNSHARE_MEM	    14
+#define PM_MMAP_CREATE	    15
+#define PM_MMAP_REMOVE	    16
+#define PM_INITIALIZING	    17
+#define PM_PHYMEM           18
+#define PM_LOAD_LIBRARY     19
+#define PM_LOADER_READY     20
+#define PM_DBG_ATTACH       21
+#define PM_DBG_END          22
+#define PM_DBG_TRESUME      23
 #define PM_TASK_FINISHED    0xFF
 
 /* flags for task creation */
@@ -81,7 +84,9 @@
 #define PM_IS_INITIALIZING              0x001a
 #define PM_INVALID_BOUNDARIES           0x001b
 #define PM_ERROR                        0x001c
-
+#define PM_ALREADY_DEBUGGING            0x001d
+#define PM_NOT_DEBUGGING                0x001e
+#define PM_NOT_BLOCKED                  0x001f
 
 #define PM_THREAD_OK          0x0000
 #define PM_THREAD_ID_INVALID  0x0001
@@ -89,12 +94,44 @@
 #define PM_THREAD_FAILED      0x0003
 #define PM_THREAD_INT_TAKEN   0x0004
 
-struct pm_msg_generic {
+struct pm_msg_generic 
+{
   unsigned char pm_type;
   unsigned char padding0;
   short req_id;
   short response_port;
   char padding[10];
+} PACKED_ATT;
+
+struct pm_msg_dbgtresume
+{
+  unsigned char pm_type;
+  unsigned char padding0;
+  short req_id;
+  short response_port;
+  short thread_id;
+  char padding[8];
+} PACKED_ATT;
+
+struct pm_msg_dbgattach 
+{
+  unsigned char pm_type;
+  unsigned char padding0;
+  short req_id;
+  short response_port;
+  short task_id;            // task to begin debugging
+  short dbg_port;           // port to where debug messages will be sent (including when a break interrupt raises)
+  char padding[8];
+} PACKED_ATT;
+
+struct pm_msg_dbgend
+{
+  unsigned char pm_type;
+  unsigned char padding0;
+  short req_id;
+  short response_port;
+  short task_id;            // task being debugged
+  char padding[8];
 } PACKED_ATT;
 
 struct pm_msg_loadlib {
@@ -350,6 +387,7 @@ struct pm_msg_mmap_remove     // PM_MMAP_REMOVE
 #define FP_ERROR_RVAL		-10
 #define ALIG_CHK_RVAL		-11
 #define SIMD_FAULT_RVAL		-12
+#define DEBUG_RVAL   		-13
 
 #define PG_IO_ERROR         -13     // Task Was terminated due to 
                                     //an IO error while trying to fetch a page from storage device

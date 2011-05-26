@@ -43,12 +43,9 @@ struct
 struct command_info
 {
 	UINT16 task_id;
-	UINT16 creator_task_id;    /* Id of the task that originated the request         */
-	UINT16 response_port;      /* Port on the requester for responses                */
-	UINT16 req_id;             /* Message Request Id                                 */
 	INT32 ret_value;           /* Return value used when closing the file, 
                                for finished msg 				                     */
-	UINT32 command_sender_id;  /* If the task is being destroyed, This will hold the 
+	UINT32 command_sender_id;  /* If the task is being destroyed this will hold the 
                                Id of the task who requested it                       */
 	UINT16 command_req_id;     /* Request Id for the last message                    */
 	UINT16 command_ret_port;   /* Return Port for the Destroy Response (Ret value 
@@ -68,11 +65,14 @@ BOOL shuttingDown();
 BOOL cmd_shutdown_step();
 void shutdown_tsk_unloaded(UINT16);
 
+void cmd_begin_debug(UINT16 dbg_task, struct pm_msg_dbgattach *msg);
+void cmd_end_debug(UINT16 dbg_task, struct pm_msg_dbgend *msg);
+void cmd_resumethr_debug(UINT16 dbg_task, struct pm_msg_dbgtresume *msg);
 void cmd_load_library(struct pm_msg_loadlib *msg, UINT16 loader_task);
-void cmd_create_task(struct pm_msg_create_task *msg, UINT16 creator_task_id);
+void cmd_create_task(struct pm_msg_create_task *msg, struct pm_task *ctask);
 void cmd_create_thread(struct pm_msg_create_thread *msg, UINT16 creator_task_id);
 INT32 cmd_task_fileclosed_callback(struct fsio_event_source *iosrc, INT32 ioret);
-void cmd_inform_result(struct pm_msg_generic *msg, UINT16 task_id, UINT16 status, UINT16 new_id, UINT16 new_id_aux);
+void cmd_inform_result(void *msg, UINT16 task_id, UINT16 status, UINT16 new_id, UINT16 new_id_aux);
 void cmd_info_init(struct command_info *cmd_inf);
 
 /* Command Queue */

@@ -121,7 +121,6 @@ BOOL vmm_handle_page_fault(UINT16 *thr_id, BOOL internal)
                         
             if(rb_insert(&task->vmm_info.wait_root, &thread->vmm_info.pg_node, TRUE) == 2)
             {
-                pman_print_dbg("PF: Other Thread was waiting \n");
                 sch_deactivate(thread);
 
                 struct pm_thread *thr = thr_get(thread->vmm_info.pg_node.prev->value2);
@@ -178,7 +177,6 @@ BOOL vmm_handle_page_fault(UINT16 *thr_id, BOOL internal)
 	if(task->vmm_info.max_addr <= (UINT32)pf.linear)
 	{
 		fatal_exception(thread->task_id, MAXADDR_ERROR);
-
 		return TRUE;
 	}
     
@@ -212,6 +210,7 @@ BOOL vmm_handle_page_fault(UINT16 *thr_id, BOOL internal)
     */
     if(task->vmm_info.regions != NULL)
     {
+        pman_print_dbg("PF: Regions!!\n");
         ma_node *n = ma_search_point(&task->vmm_info.regions, (UINT32)pf.linear);
         int libret;
 
@@ -243,7 +242,6 @@ BOOL vmm_handle_page_fault(UINT16 *thr_id, BOOL internal)
 
 		                return FALSE;
                     }
-
                 break;
             }
         }
@@ -290,7 +288,7 @@ BOOL vmm_handle_page_fault(UINT16 *thr_id, BOOL internal)
 		thread->vmm_info.page_in_address = vmm_get_page(task->id, PG_ADDRESS(pf.linear));
         
 		task->vmm_info.page_count++;
-        		
+        
         /* IO Lock page */
         vmm_set_flags(task_id, thread->vmm_info.page_in_address, TRUE, TAKEN_EFLAG_IOLOCK | TAKEN_EFLAG_PF, TRUE);
 
@@ -301,6 +299,7 @@ BOOL vmm_handle_page_fault(UINT16 *thr_id, BOOL internal)
         // we must insert the thread on the pg wait tree
         // in case another thread asks for the same page.
         rb_insert(&task->vmm_info.wait_root, &thread->vmm_info.pg_node, FALSE);
+
 		return TRUE;
 	} 
 	else 
@@ -364,7 +363,6 @@ INT32 vmm_elffile_seekend_callback(struct fsio_event_source *iosrc, INT32 ioret)
 		vmm_page_ioerror(thread, FALSE);
 		return 0;
 	}
-
     vmm_check_threads_pg(&thread, FALSE);
 
     if(!thread)
@@ -389,11 +387,10 @@ INT32 vmm_elffile_readend_callback(struct fsio_event_source *iosrc, INT32 ioret)
 
 	if(ioret != IO_RET_OK)
 	{
-        pman_print_dbg("PF: Read End IO Error \n");
 		vmm_page_ioerror(thread, FALSE);
 		return 0;
 	}
-    
+
     vmm_check_threads_pg(&thread, FALSE);
 
     if(!thread)
@@ -416,12 +413,12 @@ INT32 vmm_elffile_readend_callback(struct fsio_event_source *iosrc, INT32 ioret)
         /* Page in on process address space */
         pm_page_in(thread->vmm_info.fault_task, (ADDR)PG_ADDRESS(thread->vmm_info.fault_address), (ADDR)LINEAR2PHYSICAL(thread->vmm_info.page_in_address), 2, thread->vmm_info.page_perms);
     }
-        
+      
     /* Un set IOLCK on the page */
-    vmm_set_flags(task->id, (ADDR)thread->vmm_info.pg_node.value, TRUE, TAKEN_EFLAG_IOLOCK, FALSE);
-	
+    vmm_set_flags(task->id, (ADDR)thread->vmm_info.page_in_address, TRUE, TAKEN_EFLAG_IOLOCK, FALSE);
+  
     /* Remove page from pman address space and create assigned record. */
-    vmm_unmap_page(task->id, PG_ADDRESS(thread->vmm_info.pg_node.value));
+    vmm_unmap_page(task->id, PG_ADDRESS(thread->vmm_info.fault_address));
 
     /* Wake threads waiting for this page */
     vmm_wake_pf_threads(thread);

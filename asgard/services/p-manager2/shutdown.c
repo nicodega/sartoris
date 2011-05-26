@@ -86,17 +86,17 @@ BOOL cmd_shutdown_step()
 				else if(tsk->state == TSK_LOADING)
 				{					
 					/* Send a message to creating task so it knows task wont load */
-					if(tsk->command_inf.creator_task_id != 0xFFFF)
+					if(tsk->creator_task != 0xFFFF)
 					{
 						struct pm_msg_response msg_ans;
 	  
-						msg_ans.pm_type = PM_CREATE_TASK;
-						msg_ans.req_id  = tsk->command_inf.req_id;
+						msg_ans.pm_type = PM_TASK_FINISHED;
+						msg_ans.req_id  = 0;
 						msg_ans.status  = PM_SHUTINGDOWN;
 						msg_ans.new_id  = 0;
 						msg_ans.new_id_aux = 0;
 
-						send_msg(tsk->command_inf.creator_task_id, tsk->command_inf.response_port, &msg_ans);  
+						send_msg(tsk->creator_task, tsk->creator_task_port, &msg_ans);  
 					}
                     tsk_destroy(tsk);
 				}
@@ -163,17 +163,17 @@ BOOL cmd_shutdown_step()
 					else if(tsk->state == TSK_LOADING)
 					{
 						/* Send a message to creating task so it knows task wont load */
-						if(tsk->command_inf.creator_task_id != 0xFFFF)
+						if(tsk->creator_task != 0xFFFF)
 						{
 							struct pm_msg_response msg_ans;
 			
-							msg_ans.pm_type = PM_CREATE_TASK;
-							msg_ans.req_id  = tsk->command_inf.req_id;
+							msg_ans.pm_type = PM_TASK_FINISHED;
+							msg_ans.req_id  = 0;
 							msg_ans.status  = PM_SHUTINGDOWN;
 							msg_ans.new_id  = 0;
 							msg_ans.new_id_aux = 0;
 
-							send_msg(tsk->command_inf.creator_task_id, tsk->command_inf.response_port, &msg_ans);  
+							send_msg(tsk->creator_task, tsk->creator_task_port, &msg_ans);  
 						}
                         tsk_destroy(tsk);
 					}
