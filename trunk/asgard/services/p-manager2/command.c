@@ -31,6 +31,7 @@
 #include "loader.h"
 #include <proc/init_data.h>
 #include <proc/init_data_dl.h>
+#include <services/pmanager/debug.h>
 
 int tsk_lower_bound[] = { 1, 1 };
 int tsk_upper_bound[] = { MAX_TSK, MAX_TSK };
@@ -57,12 +58,9 @@ void cmd_init()
 
 void cmd_info_init(struct command_info *cmd_inf)
 {
-	cmd_inf->creator_task_id = 0;
 	cmd_inf->command_req_id = 0;
 	cmd_inf->command_ret_port = 0;
 	cmd_inf->command_sender_id = 0;
-	cmd_inf->req_id = 0;
-	cmd_inf->response_port = 0;
 	cmd_inf->ret_value = 0;
 	cmd_inf->callback = NULL;
 	cmd_inf->executing = NULL;
@@ -127,7 +125,22 @@ void cmd_process_msg()
 					/* Begin shutdown */
 					cmd_shutdown_step();
 					break;
-				}
+				}                
+                case PM_DBG_ATTACH:
+                {
+                    cmd_begin_debug(task_id, (struct pm_msg_dbgattach*)&msg);
+                    break;
+                }
+                case PM_DBG_END:
+                {
+                    cmd_end_debug(task_id, (struct pm_msg_dbgend*)&msg);
+                    break;
+                }
+                case PM_DBG_TRESUME:
+                {
+                    cmd_resumethr_debug(task_id, (struct pm_msg_dbgtresume*)&msg);
+                    break;
+                }
                 case PM_LOAD_LIBRARY:
                 {
                     tsk = tsk_get(task_id);
@@ -141,7 +154,7 @@ void cmd_process_msg()
 
                     if(!tsk) break;
                     
-				    cmd_create_task((struct pm_msg_create_task *)&msg, task_id);
+				    cmd_create_task((struct pm_msg_create_task *)&msg, tsk);
 				    break;
 			    }
 				case PM_CREATE_THREAD: 
@@ -166,6 +179,13 @@ void cmd_process_msg()
 					}
 
 					tsk = tsk_get(destroy_task_id);
+
+                    // if it's not the creator task, ignore it
+                    if(tsk->creator_task != task_id)
+                    {
+                        cmd_inform_result(&msg, task_id, PM_ERROR, 0, 0);
+                        break;
+                    }
 
 					if(tsk && tsk->state != TSK_KILLING && tsk->state != TSK_KILLED) 
 					{
@@ -220,18 +240,32 @@ void cmd_process_msg()
 						break;
 					}
 
-					tsk = tsk_get(destroy_task_id);
+                    /* Is it a request from a different process? */
+                    if(destroy_task_id != task_id)
+                    {
+                        cmd_inform_result(&msg, task_id, PM_ERROR, 0, 0);
+                        break;
+                    }
 
+					tsk = tsk_get(destroy_task_id);
+                    
+                    struct dbg_message dbg_msg;
+                    
 					if(tsk && tsk->state == TSK_NORMAL)
-					{
+					{                        
 						if(thr_destroy_thread(((struct pm_msg_destroy_thread*)&msg)->thread_id))
-						{
+                        {
+                            if(tsk->flags & TSK_DEBUG)
+                            {
+                                dbg_msg.task = destroy_task_id;
+                                dbg_msg.thread = thr->id;
+                                dbg_msg.command = DEBUG_THR_DESTROYED;
+                                send_msg(tsk->dbg_task, tsk->dbg_port, &dbg_msg);                                
+                            }
 							cmd_inform_result(&msg, task_id, PM_OK, 0, 0);
-						}
+                        }
 						else
-						{
 							cmd_inform_result(&msg, task_id, PM_ERROR, 0, 0);
-						}
 					}
                     else
                     {
@@ -245,7 +279,7 @@ void cmd_process_msg()
 				}
 				case PM_TASK_FINISHED: 
 				{
-					tsk = tsk_get(task_id);
+                    tsk = tsk_get(task_id);
 
 					if(tsk != NULL && tsk->state == TSK_NORMAL) 
 					{
@@ -535,17 +569,173 @@ void cmd_process_msg()
 	}
 }
 
-void cmd_inform_result(struct pm_msg_generic *msg, UINT16 task_id, UINT16 status, UINT16 new_id, UINT16 new_id_aux) 
+void cmd_inform_result(void *msg, UINT16 task_id, UINT16 status, UINT16 new_id, UINT16 new_id_aux) 
 {
 	struct pm_msg_response msg_ans;
   
-	msg_ans.pm_type = msg->pm_type;
-	msg_ans.req_id  = msg->req_id;
+	msg_ans.pm_type = ((struct pm_msg_generic*)msg)->pm_type;
+	msg_ans.req_id  = ((struct pm_msg_generic*)msg)->req_id;
 	msg_ans.status  = status;
 	msg_ans.new_id  = new_id;
 	msg_ans.new_id_aux = new_id_aux;
 	
-	send_msg(task_id, msg->response_port, &msg_ans);  
+	send_msg(task_id, ((struct pm_msg_generic*)msg)->response_port, &msg_ans);  
+}
+
+void cmd_resumethr_debug(UINT16 dbg_task, struct pm_msg_dbgtresume *msg) 
+{
+	struct pm_task *tsk;
+    struct pm_task *dbg;
+    struct pm_thread *thr;
+	
+    dbg = tsk_get(dbg_task);
+    thr = thr_get(msg->thread_id);
+
+    if(thr == NULL || thr->state != THR_DBG)
+    {
+        if(dbg) cmd_inform_result(msg, dbg_task, PM_NOT_BLOCKED, 0, 0);
+        return;
+    }
+    
+    tsk = tsk_get(thr->task_id);
+
+    if(tsk == NULL || tsk->state == TSK_KILLING 
+        || tsk->state == TSK_KILLED 
+        || dbg_task != tsk->dbg_task)
+    {
+        if(dbg) cmd_inform_result(msg, dbg_task, PM_INVALID_TASK, 0, 0);
+        return;
+    }
+
+    thr->state = THR_WAITING;
+    sch_activate(thr);
+}
+
+void cmd_begin_debug(UINT16 dbg_task, struct pm_msg_dbgattach *msg) 
+{
+	struct pm_task *tsk;
+    struct pm_task *dbg;
+	
+    dbg = tsk_get(dbg_task);
+    tsk = tsk_get(msg->task_id);
+
+    if(dbg == NULL || dbg->state == TSK_KILLING || dbg->state == TSK_KILLED)
+    {
+        // debugger task no longer exists or is being killed
+        return;
+    }
+
+    if(tsk == NULL || tsk->state == TSK_KILLING 
+        || tsk->state == TSK_KILLED 
+        || (dbg_task != tsk->creator_task && !(dbg->flags & TSK_FLAG_SERVICE)))
+    {
+        // task being debugged does not exist or is being killed, or
+        // the sender is not it's creator (and it's not a service)
+        cmd_inform_result(msg, dbg_task, PM_INVALID_TASK, 0, 0);
+        return;
+    }
+
+    // shared lib tasks cannot be debugged
+    if(!(tsk->flags & TSK_DYNAMIC))
+	{
+		cmd_inform_result(msg, dbg_task, PM_ERROR, 0, 0);
+		return;
+	}
+
+    // is it being debugged?
+    if(tsk->flags & TSK_DEBUG)
+    {
+        cmd_inform_result(msg, dbg_task, PM_ALREADY_DEBUGGING, 0, 0);
+		return;
+    }
+
+    // start tracing all threads
+    struct pm_thread *thr = tsk->first_thread;
+
+    while(thr)
+    {
+        if(ttrace_begin(thr->id, dbg_task) == FAILURE)
+        {
+            // undo the tracings
+            thr = tsk->first_thread;
+            while(thr)
+            {
+                ttrace_end(thr->id, dbg_task);
+                thr = thr->next_thread;
+            }
+            break;
+        }
+        thr = thr->next_thread;
+    }
+
+    tsk->dbg_port = msg->dbg_port;
+    tsk->flags |= TSK_DEBUG;
+
+    // add the task to the debugger dbg list
+    if(dbg->dbg_first)
+        dbg->dbg_first->dbg_prev = tsk;
+    tsk->dbg_next = dbg->dbg_first;
+    dbg->dbg_first = tsk;
+
+    cmd_inform_result(msg, dbg_task, PM_OK, 0, 0);
+}
+
+void cmd_end_debug(UINT16 dbg_task, struct pm_msg_dbgend *msg) 
+{
+	struct pm_task *tsk;
+    struct pm_task *dbg;
+	
+    tsk = tsk_get(msg->task_id);
+    dbg = tsk_get(dbg_task);
+        
+    if(tsk == NULL || tsk->state == TSK_KILLED 
+        || dbg_task != tsk->dbg_task)
+    {
+        // task being debugged does not exist or is killed
+        if(dbg) cmd_inform_result(msg, dbg_task, PM_INVALID_TASK, 0, 0);
+        return;
+    }
+
+    // shared lib tasks cannot be debugged
+    if(!(tsk->flags & TSK_DYNAMIC))
+	{
+		if(dbg) cmd_inform_result(msg, dbg_task, PM_ERROR, 0, 0);
+		return;
+	}
+
+    // is it being debugged?
+    if(!(tsk->flags & TSK_DEBUG))
+    {
+        if(dbg) cmd_inform_result(msg, dbg_task, PM_NOT_DEBUGGING, 0, 0);
+		return;
+    }
+
+    // remove the task from the dbg list
+    if(tsk->dbg_prev == NULL)
+    {
+        dbg->dbg_first = tsk->dbg_next;
+    }
+    else
+    {
+        tsk->dbg_prev->dbg_next = tsk->dbg_next;
+    }
+    if(tsk->dbg_next != NULL)
+        tsk->dbg_next->dbg_prev = tsk->dbg_prev;
+
+    // stop tracing all threads
+    struct pm_thread *thr = tsk->first_thread;
+
+    while(thr)
+    {
+        ttrace_end(thr->id, dbg_task);
+        thr = thr->next_thread;
+    }
+
+    tsk->dbg_port = -1;
+    tsk->dbg_task = 0xFFFF;
+    tsk->flags &= ~TSK_DEBUG;
+
+    cmd_inform_result(msg, dbg_task, PM_OK, 0, 0);
 }
 
 void cmd_load_library(struct pm_msg_loadlib *msg, UINT16 loader_task) 
@@ -556,13 +746,13 @@ void cmd_load_library(struct pm_msg_loadlib *msg, UINT16 loader_task)
 
 	if(pman_stage == PMAN_STAGE_INITIALIZING)
 	{
-		cmd_inform_result((struct pm_msg_generic *) msg, loader_task, PM_IS_INITIALIZING, 0, 0);
+		cmd_inform_result(msg, loader_task, PM_IS_INITIALIZING, 0, 0);
 		return;
 	}
 
     if(msg->vlow < PMAN_MAPPING_BASE || msg->vhigh < msg->vlow)
 	{
-		cmd_inform_result((struct pm_msg_generic *) msg, loader_task, PM_INVALID_BOUNDARIES, 0, 0);
+		cmd_inform_result(msg, loader_task, PM_INVALID_BOUNDARIES, 0, 0);
 		return;
 	}
 
@@ -570,13 +760,13 @@ void cmd_load_library(struct pm_msg_loadlib *msg, UINT16 loader_task)
 
     if(tsk->flags & TSK_LOADING_LIB)
 	{
-		cmd_inform_result((struct pm_msg_generic *) msg, loader_task, PM_TASK_RETRY_LATER, 0, 0);
+		cmd_inform_result(msg, loader_task, PM_TASK_RETRY_LATER, 0, 0);
 		return;
 	}
 
     if(!(tsk->flags & TSK_DYNAMIC))
 	{
-		cmd_inform_result((struct pm_msg_generic *) msg, loader_task, PM_ERROR, 0, 0);
+		cmd_inform_result(msg, loader_task, PM_ERROR, 0, 0);
 		return;
 	}
 
@@ -585,7 +775,7 @@ void cmd_load_library(struct pm_msg_loadlib *msg, UINT16 loader_task)
 
 	if(psize < 1)
 	{
-		cmd_inform_result((struct pm_msg_generic *) msg, loader_task, PM_BAD_SMO, 0, 0);
+		cmd_inform_result(msg, loader_task, PM_BAD_SMO, 0, 0);
 		return;
 	}
 
@@ -593,7 +783,7 @@ void cmd_load_library(struct pm_msg_loadlib *msg, UINT16 loader_task)
 
 	if(path == NULL)
 	{
-		cmd_inform_result((struct pm_msg_generic *) msg, loader_task, PM_NOT_ENOUGH_MEM, 0, 0);
+		cmd_inform_result(msg, loader_task, PM_NOT_ENOUGH_MEM, 0, 0);
 		return;
 	}
 	
@@ -601,7 +791,7 @@ void cmd_load_library(struct pm_msg_loadlib *msg, UINT16 loader_task)
 	if(read_mem(msg->path_smo_id, 0, psize, path) != SUCCESS) 
 	{
         kfree(path);
-		cmd_inform_result((struct pm_msg_generic *) msg, loader_task, PM_BAD_SMO, 0, 0);
+		cmd_inform_result(msg, loader_task, PM_BAD_SMO, 0, 0);
 		return;
 	}
 
@@ -617,17 +807,17 @@ void cmd_load_library(struct pm_msg_loadlib *msg, UINT16 loader_task)
     if(!ret)
     {
         kfree(path);
-        cmd_inform_result((struct pm_msg_generic *)msg, loader_task, PM_ERROR, 0, 0);
+        cmd_inform_result(msg, loader_task, PM_ERROR, 0, 0);
     }   
     else if(ret == 2)
     {
         kfree(path);
-        cmd_inform_result((struct pm_msg_generic *)msg, loader_task, PM_OK, 0, 0);
+        cmd_inform_result(msg, loader_task, PM_OK, 0, 0);
         return;
     }
 }
 
-void cmd_create_task(struct pm_msg_create_task *msg, UINT16 creator_task_id) 
+void cmd_create_task(struct pm_msg_create_task *msg, struct pm_task *ctask) 
 {
 	struct pm_task *tsk = NULL;
 	UINT16 new_task_id = msg->new_task_id;
@@ -638,7 +828,7 @@ void cmd_create_task(struct pm_msg_create_task *msg, UINT16 creator_task_id)
 
 	if(pman_stage == PMAN_STAGE_INITIALIZING)
 	{
-			cmd_inform_result((struct pm_msg_generic *) msg, creator_task_id, PM_IS_INITIALIZING, 0, 0);
+			cmd_inform_result(msg, ctask->id, PM_IS_INITIALIZING, 0, 0);
 			return;
 	}
 
@@ -651,14 +841,14 @@ void cmd_create_task(struct pm_msg_create_task *msg, UINT16 creator_task_id)
 			if(tsk != NULL) 
 			{
 				/* new_task_id is not free to be used */
-				cmd_inform_result((struct pm_msg_generic *) msg, creator_task_id, PM_TASK_ID_TAKEN, 0, 0);
+				cmd_inform_result(msg, ctask->id, PM_TASK_ID_TAKEN, 0, 0);
 				return;
 			}
 	    } 
 		else 
 		{
 			/* new_task_id is out of range */
-			cmd_inform_result((struct pm_msg_generic *) msg, creator_task_id, PM_TASK_ID_INVALID, 0, 0);
+			cmd_inform_result(msg, ctask->id, PM_TASK_ID_INVALID, 0, 0);
 			return;
 		}
 	}
@@ -669,7 +859,7 @@ void cmd_create_task(struct pm_msg_create_task *msg, UINT16 creator_task_id)
     
 		if(new_task_id == 0xFFFF) 
 		{
-			cmd_inform_result((struct pm_msg_generic *) msg, creator_task_id, PM_NO_FREE_ID, 0, 0);
+			cmd_inform_result(msg, ctask->id, PM_NO_FREE_ID, 0, 0);
 			return;
         }
 	}
@@ -677,7 +867,7 @@ void cmd_create_task(struct pm_msg_create_task *msg, UINT16 creator_task_id)
 	tsk = tsk_create(new_task_id);
     if(tsk == NULL)
     {
-        cmd_inform_result((struct pm_msg_generic *) msg, creator_task_id, PM_NOT_ENOUGH_MEM, 0, 0);
+        cmd_inform_result(msg, ctask->id, PM_NOT_ENOUGH_MEM, 0, 0);
         return;
     }
 	path = NULL;
@@ -686,7 +876,7 @@ void cmd_create_task(struct pm_msg_create_task *msg, UINT16 creator_task_id)
 	if(psize < 1)
 	{
         tsk_destroy(tsk);
-		cmd_inform_result((struct pm_msg_generic *) msg, creator_task_id, PM_BAD_SMO, 0, 0);
+		cmd_inform_result(msg, ctask->id, PM_BAD_SMO, 0, 0);
 		return;
 	}
 
@@ -695,7 +885,7 @@ void cmd_create_task(struct pm_msg_create_task *msg, UINT16 creator_task_id)
 	if(path == NULL)
 	{
         tsk_destroy(tsk);
-		cmd_inform_result((struct pm_msg_generic *) msg, creator_task_id, PM_NOT_ENOUGH_MEM, 0, 0);
+		cmd_inform_result(msg, ctask->id, PM_NOT_ENOUGH_MEM, 0, 0);
 		return;
 	}
 	
@@ -703,7 +893,7 @@ void cmd_create_task(struct pm_msg_create_task *msg, UINT16 creator_task_id)
 	if(read_mem(msg->path_smo_id, 0, psize, path) != SUCCESS) 
 	{
         tsk_destroy(tsk);
-		cmd_inform_result((struct pm_msg_generic *) msg, creator_task_id, PM_BAD_SMO, 0, 0);
+		cmd_inform_result(msg, ctask->id, PM_BAD_SMO, 0, 0);
 		return;
 	}
 
@@ -711,12 +901,12 @@ void cmd_create_task(struct pm_msg_create_task *msg, UINT16 creator_task_id)
 
 	if(path[psize-1] == '\0') psize--;
     
-	tsk->command_inf.creator_task_id = creator_task_id;
-	tsk->command_inf.req_id = msg->req_id;
-	tsk->command_inf.response_port = msg->response_port;
-	tsk->command_inf.command_sender_id = 0;
+    tsk->creator_task = ctask->id;
+	tsk->creator_task_port = msg->response_port;
+	tsk->command_inf.command_req_id = msg->req_id;
+
 	tsk->command_inf.command_ret_port = -1;
-	tsk->command_inf.command_req_id = -1;
+	tsk->command_inf.command_sender_id = -1;
 
 	ret = loader_create_task(tsk, path, psize, msg->param, type, LOADER_CTASK_TYPE_PRG);
 
@@ -724,8 +914,8 @@ void cmd_create_task(struct pm_msg_create_task *msg, UINT16 creator_task_id)
 	{
         tsk_destroy(tsk);
 		kfree(path);
-		cmd_inform_result((struct pm_msg_generic *) msg, creator_task_id, ret, 0, 0);
-	}	
+		cmd_inform_result(msg, ctask->id, ret, 0, 0);
+	}
 }
 
 void cmd_create_thread(struct pm_msg_create_thread *msg, UINT16 creator_task_id) 
@@ -737,18 +927,18 @@ void cmd_create_thread(struct pm_msg_create_thread *msg, UINT16 creator_task_id)
 	struct pm_task *task = tsk_get(msg->task_id);
 	struct pm_thread *thread = NULL; 
 	ADDR pg = NULL;
-
+    
 	if (task == NULL || task->state != TSK_NORMAL || (task->flags & TSK_SHARED_LIB)
         || (task->num_threads > 0 && creator_task_id != task->id)
-        || (task->num_threads == 0 && creator_task_id != task->command_inf.creator_task_id)) 
+        || (task->num_threads == 0 && creator_task_id != task->creator_task)) 
 	{
-		cmd_inform_result((struct pm_msg_generic *) msg, creator_task_id, PM_THREAD_FAILED, 0, 0);
+		cmd_inform_result(msg, creator_task_id, PM_THREAD_FAILED, 0, 0);
 		return;
 	}
 
     if (new_thread_id != 0xFFFF && thr_get(new_thread_id)) 
 	{
-		cmd_inform_result((struct pm_msg_generic *) msg, creator_task_id, PM_THREAD_ID_INVALID, 0, 0);
+		cmd_inform_result(msg, creator_task_id, PM_THREAD_ID_INVALID, 0, 0);
 		return;
 	}
 
@@ -756,7 +946,7 @@ void cmd_create_thread(struct pm_msg_create_thread *msg, UINT16 creator_task_id)
 	
 	if(new_thread_id == 0xFFFF) 
 	{
-		cmd_inform_result((struct pm_msg_generic *) msg, creator_task_id, PM_THREAD_NO_ROOM, 0, 0);
+		cmd_inform_result(msg, creator_task_id, PM_THREAD_NO_ROOM, 0, 0);
 		return;
 	}
 
@@ -765,7 +955,7 @@ void cmd_create_thread(struct pm_msg_create_thread *msg, UINT16 creator_task_id)
 
     if(thread == NULL) 
 	{
-		cmd_inform_result((struct pm_msg_generic *)msg, creator_task_id, PM_NOT_ENOUGH_MEM, 0, 0);
+		cmd_inform_result(msg, creator_task_id, PM_NOT_ENOUGH_MEM, 0, 0);
 		return;
 	}
 
@@ -811,7 +1001,7 @@ void cmd_create_thread(struct pm_msg_create_thread *msg, UINT16 creator_task_id)
 		{
 			thread->state = THR_KILLED;
             thr_destroy_thread(thread->id);
-			cmd_inform_result((struct pm_msg_generic *) msg, creator_task_id, PM_THREAD_INT_TAKEN, 0, 0);
+			cmd_inform_result(msg, creator_task_id, PM_THREAD_INT_TAKEN, 0, 0);
 			return;
 		}		
 	}
@@ -820,7 +1010,7 @@ void cmd_create_thread(struct pm_msg_create_thread *msg, UINT16 creator_task_id)
 	{
 		thread->state = THR_KILLED;
         thr_destroy_thread(thread->id);
-		cmd_inform_result((struct pm_msg_generic *) msg, creator_task_id, PM_THREAD_FAILED, 0, 0);
+		cmd_inform_result(msg, creator_task_id, PM_THREAD_FAILED, 0, 0);
 		return;
 	}
 	/* 
@@ -846,7 +1036,7 @@ void cmd_create_thread(struct pm_msg_create_thread *msg, UINT16 creator_task_id)
 
 		if(pg == NULL)
 		{
-			cmd_inform_result((struct pm_msg_generic *) msg, creator_task_id, PM_THREAD_FAILED, 0, 0);
+			cmd_inform_result(msg, creator_task_id, PM_THREAD_FAILED, 0, 0);
 			thr_destroy_thread(thread->id);
 			return;
 		}
@@ -863,7 +1053,7 @@ void cmd_create_thread(struct pm_msg_create_thread *msg, UINT16 creator_task_id)
 			UINT32 stackpad = (UINT32)thread->stack_addr % 0x1000;
 			UINT32 *size = (UINT32*)((UINT32)pg + stackpad);
 
-            if(task->flags |= TSK_DYNAMIC)
+            if(task->flags & TSK_DYNAMIC)
             {
                 struct init_data_dl *idatd = (struct init_data_dl *)((UINT32)pg + stackpad - sizeof(struct init_data_dl));
 
@@ -878,6 +1068,7 @@ void cmd_create_thread(struct pm_msg_create_thread *msg, UINT16 creator_task_id)
                 idatd->phsmo = task->loader_inf.phdrs_smo;
                 idatd->phsize = task->loader_inf.elf_header.e_phentsize;
                 idatd->phcount = task->loader_inf.elf_header.e_phnum;
+                *size = sizeof(struct init_data_dl);
             }
             else
             {
@@ -910,13 +1101,35 @@ void cmd_create_thread(struct pm_msg_create_thread *msg, UINT16 creator_task_id)
 		
 		if(!int_attach(thread, msg->interrupt, (0x000000FF & msg->int_priority)))
 		{
-			cmd_inform_result((struct pm_msg_generic *) msg, creator_task_id, PM_THREAD_FAILED, 0, 0);
+			cmd_inform_result(msg, creator_task_id, PM_THREAD_FAILED, 0, 0);
 			thr_destroy_thread(thread->id);
 			return;
 		}		
 	}
 	else
-	{			
+	{	
+        /* If it's task is being debugged, 
+        init trace and let the debugger know
+        a new thread was created            */
+        if(task->flags & TSK_DEBUG)
+        {
+            struct dbg_message dbg_msg;
+            dbg_msg.task = thread->task_id;
+            dbg_msg.thread = thread->id;
+            dbg_msg.command = DEBUG_THR_CREATED;
+
+            if(ttrace_begin(thread->id, task->dbg_task) == FAILURE)
+            {
+                dbg_msg.status = DEBUG_STATUS_DBG_FAILED;
+                send_msg(task->dbg_task, task->dbg_port, &dbg_msg);
+            }
+            else
+            {
+                dbg_msg.status = DEBUG_STATUS_OK;
+                send_msg(task->dbg_task, task->dbg_port, &dbg_msg);
+            }
+        }
+
 		/* Add thread to scheduler list */
 		sch_add(thread);
 
@@ -924,7 +1137,7 @@ void cmd_create_thread(struct pm_msg_create_thread *msg, UINT16 creator_task_id)
 		sch_activate(thread);
 	}
 
-	cmd_inform_result((struct pm_msg_generic *) msg, creator_task_id, PM_THREAD_OK, new_thread_id, msg->task_id);
+	cmd_inform_result(msg, creator_task_id, PM_THREAD_OK, new_thread_id, msg->task_id);
 }
 
 /* 
@@ -938,7 +1151,50 @@ INT32 cmd_task_fileclosed_callback(struct fsio_event_source *iosrc, INT32 ioret)
 	if(ioret != IO_RET_OK) return 0;
 
 	task = tsk_get(iosrc->id);
-	
+    
+    /* 
+    If there are any tasks being debugged, finish 
+    the traces.
+    */
+    while(task->dbg_first)
+    {
+        if(task->dbg_first->dbg_prev)
+        {
+            task->dbg_first->dbg_prev->dbg_next = NULL;
+            task->dbg_first->dbg_prev = NULL;
+        }
+        struct pm_thread *thr = task->dbg_first->first_thread;
+        while(thr)
+        {
+            ttrace_end(thr->id, task->id);
+            thr = thr->next_thread;
+            if(thr->state == THR_DBG)
+            {
+                thr->state = THR_WAITING;
+                sch_activate(thr);
+            }
+        }
+        task->flags &= ~TSK_DEBUG;
+        task->dbg_task = 0xFFFF;
+        task->dbg_first = task->dbg_first->dbg_next;
+    }
+
+    /* if the task is being debugged remove it from the dbg list */
+    if(task->flags & TSK_DEBUG)
+    {
+        if(task->dbg_prev == NULL)
+        {
+            struct pm_task *dtask = tsk_get(task->dbg_task);
+            dtask->dbg_first = task->dbg_next;
+        }
+        else
+        {
+            task->dbg_prev->dbg_next = task->dbg_next;
+        }
+        if(task->dbg_next != NULL)
+            task->dbg_next->dbg_prev = task->dbg_prev;
+    }
+
 	task->io_finished.callback = cmd_swap_freed_callback;
 	task->vmm_info.swap_free_addr = (ADDR)SARTORIS_PROCBASE_LINEAR;
 
@@ -967,18 +1223,30 @@ INT32 cmd_swap_freed_callback(struct fsio_event_source *iosrc, INT32 ioret)
 		send_msg(task->command_inf.command_sender_id, task->command_inf.command_ret_port, &msg_ans);
 	}
 
-	if(task->command_inf.creator_task_id != 0xFFFF)
+	if(task->creator_task != 0xFFFF)
 	{
 		// inform the creating task 
 		pm_finished.pm_type = PM_TASK_FINISHED;
-		pm_finished.req_id =  task->command_inf.command_req_id;
+		pm_finished.req_id =  0;
 		pm_finished.taskid = task->id;
 		pm_finished.ret_value = task->command_inf.ret_value;
 
-		send_msg(task->command_inf.creator_task_id, task->command_inf.response_port, &pm_finished);
+		send_msg(task->creator_task, task->creator_task_port, &pm_finished);
 	}    
 
-	task->command_inf.creator_task_id = 0xFFFF;
+    if(task->dbg_task != 0xFFFF)
+	{
+        struct dbg_message dbg_msg;
+		// inform the creating task 
+		dbg_msg.command = DEBUG_TASK_FINISHED;
+		dbg_msg.task = task->id;
+		
+		send_msg(task->dbg_task, task->dbg_port, &dbg_msg);
+	}
+
+	task->command_inf.command_sender_id = 0xFFFF;
+    task->creator_task = 0xFFFF;
+    task->dbg_task = 0xFFFF;
 	
 	if(shuttingDown())
 		shutdown_tsk_unloaded(task->id);

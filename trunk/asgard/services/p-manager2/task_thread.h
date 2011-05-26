@@ -49,6 +49,7 @@
 #define TSK_DYNAMIC             64	/* This task required loading by the dynamic linker    */
 #define TSK_SHARED_LIB          128	/* This task is for a shared lib. It won't have threads*/
 #define TSK_LOADING_LIB         256	/* This task is loading a shared lib.                  */
+#define TSK_DEBUG               512	/* This task being debugged by it's creator.           */
 
 struct pm_task 
 {
@@ -76,6 +77,15 @@ struct pm_task
 
 	UINT32 tsk_bss_end;
 	UINT16 killed_threads;
+
+    UINT16 creator_task;         // the creator task
+    UINT16 creator_task_port;    // the creator task port for finished message    
+    
+    struct pm_task *dbg_first;   // first debugged task
+    struct pm_task *dbg_next;    // next child on the debugged task list
+    struct pm_task *dbg_prev;    // prev child on the debugged task list
+    UINT16 dbg_task;             // task debugging this task
+    UINT16 dbg_port;             // debug messages will be sent to this port on the debugging task
 } PACKED_ATT; 
 
 
@@ -89,6 +99,7 @@ struct pm_task
 #define THR_EXCEPTION 6	  /* Thread was stopped because of an exception */
 #define THR_SBLOCKED 7    /* Thread is blocked (by a signal)			*/
 #define THR_INTERNAL 8	  /* This is an internal thread                 */
+#define THR_DBG      9	  /* This is blocked because of a debug exception */
 
 /* Thread flags */
 #define THR_FLAG_NONE			0

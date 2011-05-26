@@ -67,6 +67,9 @@ struct pm_task *tsk_create(UINT16 id)
 	t->flags = TSK_FLAG_NONE;
 	t->first_thread = NULL;
 	t->num_threads = 0;
+    t->dbg_first = NULL;
+    t->dbg_next = t->dbg_prev = NULL;
+    t->dbg_task = 0xFFFF;
 
 	// Exceptions send port //
 	t->exeptions.exceptions_port = 0xFFFF;

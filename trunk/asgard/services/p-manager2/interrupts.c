@@ -30,6 +30,7 @@
 #include <sartoris/syscall.h>
 #include "signals.h"
 #include "layout.h"
+#include <services/pmanager/debug.h>
 
 /* Container for signals waiting for a given interrupt. */
 struct interrupt_signals_container interrupt_signals[MAX_INTERRUPT];
@@ -107,20 +108,25 @@ void int_init()
 /* Generic Exceptions Handler */
 void gen_ex_handler()
 {
-	int prog_id, exception, rval = 0;
+	int running_thr, exception, rval = 0;
 	struct pm_thread *thr;
 	struct pm_task *tsk;
+    int error_code;
 
 	for(;;) 
 	{
+        error_code = 0;
 		/* Get last exception raised */
-        exception = get_last_int(NULL);
+        exception = get_last_int(&error_code);
 
-		/* Get running program */
-		prog_id = sch_running();
-
+		/* Get running thread */
+		running_thr = sch_running();
+        
 		switch(exception) 
 		{
+            case DEBUG:
+                rval = DEBUG_RVAL;
+                break;
 			case DIV_ZERO:
 				rval = DIV_ZERO_RVAL;			
 				break;
@@ -153,10 +159,10 @@ void gen_ex_handler()
 				break;
 		}
 
-		if(prog_id > MAX_TSK || sch_running() == 0xFFFF)
-			pman_print_and_stop("Exception on process manager, invalid running id ex=%i, id=%i", exception, prog_id);
+		if(running_thr > MAX_TSK || sch_running() == 0xFFFF)
+			pman_print_and_stop("Exception on process manager, invalid running id ex=%i, id=%i", exception, running_thr);
 		
-		thr = thr_get(prog_id);
+		thr = thr_get(running_thr);
 		tsk = tsk_get(thr->task_id);
 
 		if(tsk == NULL)
@@ -165,13 +171,27 @@ void gen_ex_handler()
 			run_thread(SCHED_THR);
 		}
 		
-		if(!(tsk->flags & TSK_FLAG_SYS_SERVICE))
+        if(tsk->flags & TSK_DEBUG)
+        {
+            // deactivate the thread
+            thr->state = THR_DBG;
+            sch_deactivate(thr);
+
+            // send a message to the debugger!
+            struct dbg_exception_message dbg_msg;
+
+            dbg_msg.command = DEBUG_EXCEPTION;
+            dbg_msg.task = thr->task_id;
+            dbg_msg.thread = running_thr;
+            dbg_msg.exception = DEBUG_MAP_EXCEPTION(exception);
+            dbg_msg.error_code = error_code;
+            send_msg(tsk->dbg_task, tsk->dbg_port, &dbg_msg);
+        }
+        else if(!(tsk->flags & TSK_FLAG_SYS_SERVICE))
 		{
 			pman_print_dbg("PROCESS EXCEPTION task %i, thread %i, exception %i \n", tsk->id, thr->id, exception);
 			
 			fatal_exception( tsk->id, rval );
-
-			run_thread(SCHED_THR);
 		}
 		else
 		{
@@ -185,9 +205,8 @@ void gen_ex_handler()
 			
             thr->state = THR_EXCEPTION;
             sch_deactivate(thr);
-
-			run_thread(SCHED_THR);
 		}
+        run_thread(SCHED_THR);
 	}
 }
   
@@ -195,7 +214,12 @@ BOOL is_int0_active()
 {
 	int res = 0;
 	// 0xB = 1011 meaning we will read the ISR (In Service Reg) from the first PIC
-	__asm__ __volatile__ ("xor %%eax,%%eax;movb $0x0B, %%al;outb %%al, $0x20;inb $0x20, %%al;andl $0x1, %%eax;movl %%eax, %0" : "=r" (res) :: "eax");
+	__asm__ __volatile__ ("xor %%eax,%%eax;"
+                          "movb $0x0B, %%al;"
+                          "outb %%al, $0x20;"
+                          "inb $0x20, %%al;"
+                          "andl $0x1, %%eax;"
+                          "movl %%eax, %0" : "=r" (res) :: "eax");
 	return res;
 }
 
@@ -262,7 +286,7 @@ void int_common_handler()
 	INT32 interrupt, i = 0;
 	struct event_cmd evt;
 	struct thr_signal *isignal = NULL, *last_isignal = NULL, *next_signal = NULL;
-
+    int last_error;
 	int_clear();
 	
 	evt.command = EVENT;
@@ -273,12 +297,13 @@ void int_common_handler()
 
 	for(;;)
 	{
-		interrupt = get_last_int(NULL);
+		interrupt = get_last_int(&last_error);
 
 		/* Find tasks waiting for an interrupt signal, and send it. */
 		if(interrupt_signals[interrupt].total != 0)
 		{
 			evt.param1 = interrupt;
+            evt.param2 = last_error;
 
 			isignal = interrupt_signals[interrupt].first;
 
