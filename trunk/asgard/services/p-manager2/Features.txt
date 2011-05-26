@@ -8,16 +8,16 @@ Internals:
 	- Shared Memory             *
 	- File Mapping              *
 	- Physical Memory Mappings  *
-- Modular Loader (supporting multiple executable formats, but only inplementing ELF)	+ (partial, not SO modular... but separated from the rest on loader section.)
+- ELF Loader 			*
 - Exception Management          *
 - Auto OFS/Swap Mount           *
 - Multiboot Aware               *
 - Priority/Signal driven Scheduler  *
 - Non-Fixed Malloc              *
 - Signaled Interrupts           *
-- Init fs2 loading              * (No more layout.h, except for pman threads)
-- Dynamic loading               * (using ld service for now)
-- Debugging interface
+- Init fs2 loading              * 
+- Dynamic loading               * (only using ld service for now)
+- Debugging interface		*
 
 Protocols:
 
