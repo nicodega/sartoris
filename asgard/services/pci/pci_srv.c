@@ -30,10 +30,13 @@
 
 char malloc_buffer[1024 * 30]; // 30 kb
 
-list pci_devices;
+struct pci_bus bus0;
+int busesc;
+struct pci_dev *devices;
+struct pci_bridge *bridges;
+int max_bridge_eid;
 
-/* Service entry point */
-void _start()
+void pci_main()
 {
 	int id;
 	struct stdservice_cmd service_cmd;
@@ -45,15 +48,15 @@ void _start()
 	struct directory_response dir_res;
 
 	init_mem(malloc_buffer, 1024 * 30);
-	init(&pci_devices);
 
     // open ports with permisions for services only (lv 0, 1, 2) //
+    open_port(1, 1, PRIV_LEVEL_ONLY);
 	open_port(STDSERVICE_PORT, 2, PRIV_LEVEL_ONLY);
     open_port(PCI_PORT, 2, PRIV_LEVEL_ONLY);
 
 	__asm__ ("sti" ::);
-
-	// register with directory
+    
+    // register with directory
 	// register service with directory //
 	reg_cmd.command = DIRECTORY_REGISTER_SERVICE;
 	reg_cmd.ret_port = 1;
@@ -66,15 +69,19 @@ void _start()
 	get_msg(1, &dir_res, &id);
 
 	claim_mem(reg_cmd.service_name_smo);
+    
+    close_port(1);
 
 	/* enumerate PCI devices on the system */
 	enum_pci();
-
+    
+    int i = 0;
 	for(;;)
-	{
+	{   
 		while(get_msg_count(PCI_PORT) == 0 && get_msg_count(STDSERVICE_PORT) == 0)
 		{ 
-			reschedule(); 
+			string_print("PCI ALIVE",7*160-18,i++);
+            reschedule(); 
 		}
 
 		// process incoming STDSERVICE messages
@@ -143,42 +150,29 @@ void process_query_interface(struct stdservice_query_interface *query_cmd, int t
 
 void process_pci_cmd(struct pci_cmd *pcmd, int task)
 {
-	struct pci_res *res = NULL;
+	struct pci_res res;
 
 	switch(pcmd->command)
 	{
-		case PCI_GETMAPPED_REGIONS:
-			res = get_mapped_regions((struct pci_getmregions*)pcmd);
+		case PCI_FIND:
+			pci_find((struct pci_finddev*)pcmd, &res);
 			break;
 		case PCI_GETCONFIG:
-			res = get_devices((struct pci_getdevices*)pcmd);
+			get_devices((struct pci_getdevices*)pcmd, &res);
 			break;
 		case PCI_CONFIGURE:
-			res = get_config((struct pci_getcfg*)pcmd);
+			get_config((struct pci_getcfg*)pcmd, &res);
 			break;
 		case PCI_GETDEVICES:
-			res = set_config((struct pci_setcfg*)pcmd);
+			set_config((struct pci_setcfg*)pcmd, &res);
 			break;
 		default:
-			res = build_response_msg(PCIERR_INVALID_COMMAND);
+            res.ret = PCIERR_INVALID_COMMAND;
 	}
 
 
-	if(res != NULL)
-	{
-		res->thr_id = pcmd->thr_id;
-		res->command = pcmd->command;
+	res.thr_id = pcmd->thr_id;
+	res.command = pcmd->command;
 
-		send_msg(task, pcmd->ret_port, res);
-
-		free(res);
-	}
+	send_msg(task, pcmd->ret_port, &res);
 }
-
-struct pci_res *build_response_msg(int ret)
-{
-	struct pci_res *res = (struct pci_res *)malloc(sizeof(struct pci_res));
-	res->ret = ret;
-	return res;
-}
-

@@ -66,7 +66,9 @@ extern int console_task;
 #define IOLIB_PORT			10
 #define DIRLIB_PORT			11
 
-#define INITOFS_PORT 		IOLIB_PORT
+#define INITOFS_PORT 		12
+
+#define INIT_PORT			13
 
 /* Console ownership defines */
 #define SHELL_CSLMODE_SHELL	1	// console is being used by the shell service

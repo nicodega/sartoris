@@ -67,11 +67,9 @@ DWORD read_pci_cnfd(unsigned int bus, unsigned int dev, unsigned int func, unsig
 	DWORD address = 0x80000000 | (((DWORD)(bus & 0xFF)) << 16) |
                       (((dev) & 0x1F) << 11) |
                       (((func) & 0x07) << 8) | (reg & 0xFC) ;
-	DWORD orig = ind(PCI_CONFADR) ;     // get current state
-    outd(PCI_CONFADR,address) ;            // set up addressing to config data
+	outd(PCI_CONFADR,address);            // set up addressing to config data
     DWORD value = ind(PCI_CONFDATA) ;  // get requested DWORD of config data
-    outd(PCI_CONFADR,orig) ;            // restore configuration control
-	return value;
+    return value;
 }
 
 WORD read_pci_cnfw(unsigned int bus, unsigned int dev, unsigned int func, unsigned int reg)
@@ -80,11 +78,9 @@ WORD read_pci_cnfw(unsigned int bus, unsigned int dev, unsigned int func, unsign
 	DWORD address = 0x80000000 | (((DWORD)(bus & 0xFF)) << 16) |
                       (((dev) & 0x1F) << 11) |
                       (((func) & 0x07) << 8) | (reg & 0xFC) ;
-	DWORD orig = ind(PCI_CONFADR) ;     // get current state
-    outd(PCI_CONFADR,address) ;            // set up addressing to config data
-    WORD value = inw(PCI_CONFDATA) ;  // get requested DWORD of config data
-    outd(PCI_CONFADR,orig) ;            // restore configuration control
-	return value;
+	outd(PCI_CONFADR,address) ;         // set up addressing to config data
+    WORD value = inw(PCI_CONFDATA) ;    // get requested DWORD of config data
+    return value;
 }
 
 BYTE read_pci_cnfb(unsigned int bus, unsigned int dev, unsigned int func, unsigned int reg)
@@ -93,10 +89,38 @@ BYTE read_pci_cnfb(unsigned int bus, unsigned int dev, unsigned int func, unsign
 	DWORD address = 0x80000000 | (((DWORD)(bus & 0xFF)) << 16) |
                       (((dev) & 0x1F) << 11) |
                       (((func) & 0x07) << 8) | (reg & 0xFC) ;
-	DWORD orig = ind(PCI_CONFADR);		// get current state
-    outd(PCI_CONFADR,address);				// set up addressing to config data
+	outd(PCI_CONFADR,address);			// set up addressing to config data
     BYTE value = inb(PCI_CONFDATA);		// get requested DWORD of config data
-    outd(PCI_CONFADR,orig);				// restore configuration control
-	return value;
+    return value;
+}
+
+void write_pci_cnfd(unsigned int bus, unsigned int dev, unsigned int func, unsigned int reg, DWORD value)
+{
+	/* 0x80000000 because the use bit is on */
+	DWORD address = 0x80000000 | (((DWORD)(bus & 0xFF)) << 16) |
+                      (((dev) & 0x1F) << 11) |
+                      (((func) & 0x07) << 8) | (reg & 0xFC) ;
+	outd(PCI_CONFADR,address) ;         // set up addressing to config data
+    outd(PCI_CONFDATA, value) ;         // set requested DWORD of config data
+}
+
+void write_pci_cnfw(unsigned int bus, unsigned int dev, unsigned int func, unsigned int reg, WORD value)
+{
+	/* 0x80000000 because the use bit is on */
+	DWORD address = 0x80000000 | (((DWORD)(bus & 0xFF)) << 16) |
+                      (((dev) & 0x1F) << 11) |
+                      (((func) & 0x07) << 8) | (reg & 0xFC) ;
+	outd(PCI_CONFADR,address) ;         // set up addressing to config data
+    outw(PCI_CONFDATA, value) ;         // set requested DWORD of config data
+}
+
+void write_pci_cnfb(unsigned int bus, unsigned int dev, unsigned int func, unsigned int reg, BYTE value)
+{
+	/* 0x80000000 because the use bit is on */
+	DWORD address = 0x80000000 | (((DWORD)(bus & 0xFF)) << 16) |
+                      (((dev) & 0x1F) << 11) |
+                      (((func) & 0x07) << 8) | (reg & 0xFC) ;
+	outd(PCI_CONFADR,address);			// set up addressing to config data
+    outb(PCI_CONFDATA, value) ;         // set requested DWORD of config data
 }
 

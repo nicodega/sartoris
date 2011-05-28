@@ -23,200 +23,303 @@
 #include <lib/malloc.h>
 #include "pci.h"
 
-extern list pci_devices;
-
-struct mem_region *get_mregion(struct pci_dev *pcidev, int addr, int *cont)
-{
-	struct mem_region *mreg = NULL;
-	DWORD baddr;
-
-	switch(addr)
-	{
-		case 0:
-			baddr = pcidev->baseaddrr0;
-			break;
-		case 1:
-			baddr = pcidev->baseaddrr1;
-			break;
-		case 2:
-			baddr = pcidev->baseaddrr2;
-			break;
-		case 3:
-			baddr = pcidev->baseaddrr3;
-			break;
-		case 4:
-			baddr = pcidev->baseaddrr4;
-			break;
-		case 5:
-			baddr = pcidev->baseaddrr5;
-			break;
-	}
-
-	*cont = 1;
-
-	if(baddr != 0 && !(baddr & 0x1))
-	{
-		mreg = (struct mem_region *)malloc(sizeof(struct mem_region));
-		mreg->size = sizeof(struct mem_region);
-		mreg->start = (baddr & ~(0x0000000F));
-		/* Now get the end */
-		DWORD oldval = *((DWORD*)mreg->start);
-		*((DWORD*)mreg->start) = 0xFFFFFFFF;
-		mreg->end = ((*((DWORD*)mreg->start)) & 0xf) + mreg->start;
-		*((DWORD*)mreg->start) = oldval;
-   	}
-	else if(baddr == 0)
-	{
-		*cont = 0;	// no more addresses
-	}
-
-	return mreg;
-}
-
-struct pci_dev *get_dev(BYTE class, WORD sclass, WORD vendorid, BYTE function)
-{
-	struct pci_dev *dv = NULL;
-	CPOSITION it;
-
-	it = get_head_position(&pci_devices);
-	while(it != NULL)
-	{ 
-		dv = (struct pci_dev *)get_next(&it);
-		if(GET_CLASS(dv->class_sclass) == class && GET_SUBCLASS(dv->class_sclass) == sclass && dv->vendorid == vendorid && dv->func == function) return dv;
-	}
-
-	return NULL;
-}
-
-struct pci_res *get_mapped_regions(struct pci_getmregions *pcmd)
+void get_devices(struct pci_getdevices *pcmd, struct pci_res *res)
 {
 	unsigned int size = mem_size(pcmd->buffer_smo);
 	unsigned int rsize = 0;
-	struct pci_res *res = NULL;
-	CPOSITION it;
 	int cont = pcmd->continuation;
+    struct pci_dev *pcidev;
+    struct pci_bridge *bridge;
+    struct pci_dev_info devinf;
+    struct pci_bus *bus;
+    	
+    bridge = bridges;
+    
+    if(cont == -1)
+    {
+        res->ret = PCIERR_ENUM_FINISHED;
+        return;
+    }
 
-	it = get_head_position(&pci_devices);
-	
 	if(cont != 0)
 	{
-		while(it != NULL && cont > 0){ get_next(&it); cont--;}
+        cont = pcmd->continuation;
+        int eid = PCI_DEVID_EID(cont);
+        int busid = PCI_DEVID_BUS(cont);
 
-		if(it == NULL)
-		{
-			/* Bad continuation */
-			res = build_response_msg(PCIERR_INVALID_CONTINUATION);
-			return res;
-		}
+        if(eid > 255)
+        {
+            // it's a bridge
+            while(bridge && bridge->eid != cont)
+            {
+                bridge = bridge->gnext;
+            }
+            bridge = bridge->gnext;
+        }
 
-		cont = pcmd->continuation;
+        if(eid < 256 || bridge == NULL)
+        {
+            pcidev = devices;
+            while(pcidev && pcidev->eid != cont)
+            {
+                pcidev = pcidev->gnext;
+            }
+            if(pcidev == NULL)
+            {
+                res->ret = PCIERR_INVALID_CONTINUATION;
+                return;
+            }
+        }
 	}
-	
-	while(size >= sizeof(struct mem_region) && it != NULL)
-	{
-		struct pci_dev *pcidev = (struct pci_dev *)get_at(it);
-		int continues = 0, addr = 0;
+	    
+    if(pcidev == NULL)
+    {
+        if(rsize == 0 && size < sizeof(struct pci_dev_info))
+        {
+            res->ret = PCIERR_SMO_TOO_SMALL;
+            return;
+        }
 
-		struct mem_region *mreg = get_mregion(pcidev, addr, &continues);
-		
-		while(size >= sizeof(struct mem_region) && continues)
-		{
-			if(mreg != NULL)
-			{
-				write_mem(pcmd->buffer_smo, rsize, sizeof(struct mem_region), (char*)mreg);
+        // continue returning bridges
+        while(size-rsize >= sizeof(struct pci_dev_info) && bridge)
+	    {
+		    devinf.class = bridge->class;
+		    devinf.sclass = bridge->sclass;
+		    devinf.vendorid = bridge->vendorid;
+		    devinf.function = 0;
+		    devinf.progif = bridge->progif;
+            devinf.dev_id = bridge->eid;
+            devinf.type = PCI_TYPE_BRIDGE;
 
-				rsize += sizeof(struct mem_region);
-				size -= sizeof(struct mem_region);
+		    if(write_mem(pcmd->buffer_smo, rsize, sizeof(struct pci_dev_info), (char*)&devinf) == FAILURE)
+            {
+                res->ret = PCIERR_SMO_WRITE_ERR;
+                return;
+            }
 
-				free(mreg);
-			}
-			addr++;
-			if(continues) mreg = get_mregion(pcidev, addr, &continues);
-		}
-		
-		cont++;
-		get_next(&it);
-	}
-	
-	res = build_response_msg(PCIERR_OK);
+		    cont = bridge->eid;
+		    rsize += sizeof(struct pci_dev_info);
+		    size -= sizeof(struct pci_dev_info);
+		    bridge = bridge->gnext;
+	    }
+
+        // if we still have size on the SMO, continue with PCI devices
+        if(size-rsize >= sizeof(struct pci_dev_info))
+            pcidev = devices;
+    }
+    
+    if(pcidev != NULL)
+    {
+        if(rsize == 0 && size < sizeof(struct pci_dev_info))
+        {
+            res->ret = PCIERR_SMO_TOO_SMALL;
+            return;
+        }
+
+        // continue returning pci devices
+        while(size-rsize >= sizeof(struct pci_dev_info) && pcidev)
+        {
+            devinf.class = pcidev->class;
+		    devinf.sclass = pcidev->sclass;
+		    devinf.vendorid = pcidev->vendorid;
+		    devinf.function = pcidev->function;
+		    devinf.progif = pcidev->progif;
+            devinf.dev_id = pcidev->eid;
+            devinf.type = PCI_TYPE_DEVICE;
+
+		    if(write_mem(pcmd->buffer_smo, rsize, sizeof(struct pci_dev_info), (char*)&devinf) == FAILURE)
+            {
+                res->ret = PCIERR_SMO_WRITE_ERR;
+                return;
+            }
+
+		    cont = pcidev->eid;
+		    rsize += sizeof(struct pci_dev_info);
+		    size -= sizeof(struct pci_dev_info);
+		    pcidev = pcidev->gnext;
+	    }
+
+        if(!pcidev)
+            cont = -1;
+    }
+        		
+	res->ret = PCIERR_OK;
 	res->specific0 = cont;
 	res->specific1 = rsize;
-	return res;
 }
 
-struct pci_res *get_devices(struct pci_getdevices *pcmd)
+void pci_find(struct pci_finddev *pcmd, struct pci_res *res)
 {
-	unsigned int size = mem_size(pcmd->buffer_smo);
-	unsigned int rsize = 0;
-	struct pci_res *res = NULL;
-	CPOSITION it;
-	int cont = pcmd->continuation;
+	struct pci_finddev_res *fres = (struct pci_finddev_res *)res;
+	struct pci_dev *pcidev = devices;
+    struct pci_bridge *bridge = bridges;
 
-	it = get_head_position(&pci_devices);
-	
-	if(cont != 0)
-	{
-		while(it != NULL && cont > 0){ get_next(&it); cont--;}
+    while(pcidev)
+    {
+        if(pcidev->class == pcmd->class 
+            && pcidev->sclass ==pcmd->sclass
+            && pcidev->vendorid == pcmd->vendorid)
+        {
+            if(((pcmd->flags & FIND_FLAG_PROGIF) && pcidev->progif != pcmd->progif)
+                || ((pcmd->flags & FIND_FLAG_FUNCTION) && pcidev->function != pcmd->function))
+            {   
+                pcidev = pcidev->gnext;
+                continue;
+            }
+            fres->ret = PCIERR_OK;
+	        fres->dev_id = pcidev->eid;
+	        fres->function = pcidev->function;
+            fres->progif = pcidev->progif;
+        }
+        pcidev = pcidev->gnext;
+    }
 
-		if(it == NULL)
-		{
-			/* Bad continuation */
-			res = build_response_msg(PCIERR_INVALID_CONTINUATION);
-			return res;
-		}
+    if(pcmd->flags & FIND_FLAG_FUNCTION)
+    {
+        fres->ret = PCIERR_NOT_FOUND;
+    }
+    else
+    {
+        while(bridge)
+        {
+            if(bridge->class == pcmd->class 
+                && bridge->sclass ==pcmd->sclass
+                && bridge->vendorid == pcmd->vendorid)
+            {
+                if((pcmd->flags & FIND_FLAG_PROGIF) && bridge->progif != pcmd->progif)
+                {   
+                    bridge = bridge->gnext;
+                    continue;
+                }
+                fres->ret = PCIERR_OK;
+	            fres->dev_id = bridge->eid;
+	            fres->function = 0;
+                fres->progif = bridge->progif;
+            }
+            bridge = bridge->gnext;
+        }
+    }
 
-		cont = pcmd->continuation;
-	}
-	
-	while(size >= sizeof(struct pci_dev_info) && it != NULL)
-	{
-		struct pci_dev *pcidev = (struct pci_dev *)get_at(it);
-		
-		struct pci_dev_info devinf;
-
-		devinf.class = GET_CLASS(pcidev->class_sclass);
-		devinf.sclass = GET_SUBCLASS(pcidev->class_sclass);
-		devinf.vendorid = pcidev->vendorid;
-		devinf.function = pcidev->func;
-		devinf.progif = pcidev->progif;
-
-		write_mem(pcmd->buffer_smo, rsize, sizeof(struct pci_dev_info), (char*)&devinf);
-
-		cont++;
-		rsize += sizeof(struct pci_dev_info);
-		size -= sizeof(struct pci_dev_info);
-		get_next(&it);
-	}
-	
-	res = build_response_msg(PCIERR_OK);
-	res->specific0 = cont;
-	res->specific1 = rsize;
-	return res;
+	fres->ret = PCIERR_NOT_FOUND;
 }
 
-struct pci_res *get_config(struct pci_getcfg *pcmd)
+void get_config(struct pci_getcfg *pcmd, struct pci_res *res)
 {
-	if(mem_size(pcmd->cfg_smo) < sizeof(struct pci_cfg))
-	{
-		return build_response_msg(PCIERR_SMO_TOO_SMALL);
-	}
+	res->ret = PCIERR_OK;
+    
+    if(PCI_DEVID_IS_BRIDGE(pcmd->dev_id))
+    {
+        struct pci_bridge *bridge = get_bridge(PCI_DEVID_BUS(pcmd->dev_id), PCI_DEVID_EID(pcmd->dev_id));
 
-	struct pci_dev *pcidev = get_dev(pcmd->class, pcmd->sclass, pcmd->vendorid, pcmd->function);
-
-	if(pcidev == NULL)
-	{
-		return build_response_msg(PCIERR_DEVICE_NOT_FOUND);
-	}
-
-	write_mem(pcmd->cfg_smo, 0, sizeof(struct pci_cfg), ((char*)pcidev) + 16);
-
-	return build_response_msg(PCIERR_OK);
+        if(bridge)
+            if(write_mem(pcmd->cfg_smo, 0, sizeof(struct pci_cfg), ((char*)bridge) + 19) == FAILURE)
+                res->ret = PCIERR_SMO_WRITE_ERR;
+        else
+            res->ret = PCIERR_INVALID_DEVID;
+    }
+    else
+    {
+	    struct pci_dev *pcidev = get_device(PCI_DEVID_BUS(pcmd->dev_id), PCI_DEVID_EID(pcmd->dev_id));
+        if(pcidev)
+            if(write_mem(pcmd->cfg_smo, 0, sizeof(struct pci_cfg), ((char*)pcidev) + 19) == FAILURE)
+                res->ret = PCIERR_SMO_WRITE_ERR;
+        else
+            res->ret = PCIERR_INVALID_DEVID;
+    }
 }
 
-struct pci_res *set_config(struct pci_setcfg *pcmd)
+void set_config(struct pci_setcfg *pcmd, struct pci_res *res)
 {
-	/* FIXME: Implement this function... it's not hard */
-	return build_response_msg(PCIERR_NOTIMPLEMENTED);
+    int bus = PCI_DEVID_BUS(pcmd->dev_id);
+	res->ret = PCIERR_OK;
+    
+    if(PCI_DEVID_IS_BRIDGE(pcmd->dev_id))
+    {
+        struct pci_bridge *bridge = get_bridge(bus, PCI_DEVID_EID(pcmd->dev_id));
+
+        if(bridge)
+        {
+            struct pci_bridge_cfg bcfg;
+            if(read_mem(pcmd->cfg_smo, 0, sizeof(struct pci_bridge_cfg), &bcfg))
+            {
+                res->ret = PCIERR_SMO_READ_ERR;
+            }
+            else
+            {
+                if(pcmd->flags & PCI_SETCFG_STATUS) write_pci_cnfw(bus, bridge->dev, 0, PCI_STATUS, bcfg.status);
+				if(pcmd->flags & PCI_SETCFG_COMMAND) write_pci_cnfw(bus, bridge->dev, 0, PCI_COMMAND, bcfg.command);
+				if(pcmd->flags & PCI_SETCFG_BIST) write_pci_cnfb(bus, bridge->dev, 0, PCI_SELFTEST, bcfg.self_test);
+				if(pcmd->flags & PCI_SETCFG_LATENCY) write_pci_cnfb(bus, bridge->dev, 0, PCI_LATENCY, bcfg.latency);
+				if(pcmd->flags & PCI_SETCFG_CACHELSIZE) write_pci_cnfb(bus, bridge->dev, 0, PCI_CACHELINE, bcfg.cache_line_size);
+                if(pcmd->flags & PCI_SETCFG_BASEADDR0) write_pci_cnfd(bus, bridge->dev, 0, PCI_BASEREG0, bcfg.baseaddrr0);
+				if(pcmd->flags & PCI_SETCFG_BASEADDR1) write_pci_cnfd(bus, bridge->dev, 0, PCI_BASEREG1, bcfg.baseaddrr1);
+                if(pcmd->flags & PCI_SETCFG_SEC_LATENCY_TMR) write_pci_cnfb(bus, bridge->dev, 0, PCI_SLT, bcfg.sec_latency_timer);
+                if(pcmd->flags & PCI_SETCFG_SUBORD_BUS) write_pci_cnfb(bus, bridge->dev, 0, PCI_SUBBN, bcfg.subordinate_bus);
+                if(pcmd->flags & PCI_SETCFG_SECONDARY_BUS) write_pci_cnfb(bus, bridge->dev, 0, PCI_SBN, bcfg.secondary_bus);
+                if(pcmd->flags & PCI_SETCFG_PRIMARY_BUS) write_pci_cnfb(bus, bridge->dev, 0, PCI_PBN, bcfg.primary_bus);
+                if(pcmd->flags & PCI_SETCFG_SECONDARY_STATUS) write_pci_cnfw(bus, bridge->dev, 0, PCI_SECSTATUS, bcfg.secondary_status);
+                if(pcmd->flags & PCI_SETCFG_IO_LIMIT) write_pci_cnfb(bus, bridge->dev, 0, PCI_IOLIMIT, bcfg.io_imit);
+                if(pcmd->flags & PCI_SETCFG_IO_BASE) write_pci_cnfb(bus, bridge->dev, 0, PCI_IOBASE, bcfg.io_base );
+                if(pcmd->flags & PCI_SETCFG_MEM_LIMIT) write_pci_cnfw(bus, bridge->dev, 0, PCI_MEMLIMIT, bcfg.memory_limit);
+                if(pcmd->flags & PCI_SETCFG_MEM_BASE) write_pci_cnfw(bus, bridge->dev, 0, PCI_MEMBASE, bcfg.memory_base);
+                if(pcmd->flags & PCI_SETCFG_PREF_MEM_LIMIT) write_pci_cnfw(bus, bridge->dev, 0, PCI_PREFMEMLIM, bcfg.prefetch_mem_limit);
+                if(pcmd->flags & PCI_SETCFG_PREF_MEM_BASE) write_pci_cnfw(bus, bridge->dev, 0, PCI_PREFMEMBASE, bcfg.prefetch_mem_base);
+                if(pcmd->flags & PCI_SETCFG_PREFETCHB_UP32) write_pci_cnfd(bus, bridge->dev, 0, PCI_PREFBASEU32, bcfg.prefetch_base_upper32);
+                if(pcmd->flags & PCI_SETCFG_PREFETCHL_UP32) write_pci_cnfd(bus, bridge->dev, 0, PCI_PREFLIMU32, bcfg.prefetch_limit_upper32);
+                if(pcmd->flags & PCI_SETCFG_IO_LIMIT_UP16) write_pci_cnfw(bus, bridge->dev, 0, PCI_IOLIMU32, bcfg.io_limit_upper16);
+                if(pcmd->flags & PCI_SETCFG_IO_BASE_UP16) write_pci_cnfw(bus, bridge->dev, 0, PCI_IOBASEU32, bcfg.io_base_upper16);
+                if(pcmd->flags & PCI_SETCFG_EXP_ROM_ADDR) write_pci_cnfd(bus, bridge->dev, 0, PCI_EXPROMBASE, bcfg.expansion_rom_base);
+                if(pcmd->flags & PCI_SETCFG_BRIDGE_CTRL) write_pci_cnfw(bus, bridge->dev, 0, PCI_BRIDGECTRL, bcfg.bridge_control);
+                if(pcmd->flags & PCI_SETCFG_INT_PIN) write_pci_cnfb(bus, bridge->dev, 0, PCI_INTPIN, bcfg.interupt_pin);
+                if(pcmd->flags & PCI_SETCFG_INT_LINE) write_pci_cnfb(bus, bridge->dev, 0, PCI_INTLINE, bcfg.irq_line);
+
+                read_bridge(bridge);
+
+                // write it back
+                if(write_mem(pcmd->cfg_smo, 0, sizeof(struct pci_cfg), ((char*)bridge) + 19) == FAILURE)
+                    res->ret = PCIERR_SMO_WRITE_ERR;
+            }
+        }
+        else
+            res->ret = PCIERR_INVALID_DEVID;
+    }
+    else
+    {
+	    struct pci_dev *pcidev = get_device(bus, PCI_DEVID_EID(pcmd->dev_id));
+        if(pcidev)
+        {
+            struct pci_cfg cfg;
+            if(read_mem(pcmd->cfg_smo, 0, sizeof(struct pci_cfg), &cfg))
+            {
+                res->ret = PCIERR_SMO_READ_ERR;
+            }
+            else
+            {
+                if(pcmd->flags & PCI_SETCFG_STATUS) write_pci_cnfw(bus, pcidev->dev, pcidev->function, PCI_STATUS, cfg.status);
+				if(pcmd->flags & PCI_SETCFG_COMMAND) write_pci_cnfw(bus, pcidev->dev, pcidev->function, PCI_COMMAND, cfg.command);
+				if(pcmd->flags & PCI_SETCFG_BIST) write_pci_cnfb(bus, pcidev->dev, pcidev->function, PCI_SELFTEST, cfg.self_test);
+				if(pcmd->flags & PCI_SETCFG_LATENCY) write_pci_cnfb(bus, pcidev->dev, pcidev->function, PCI_LATENCY, cfg.latency);
+				if(pcmd->flags & PCI_SETCFG_CACHELSIZE) write_pci_cnfb(bus, pcidev->dev, pcidev->function, PCI_CACHELINE, cfg.cache_line_size);
+				if(pcmd->flags & PCI_SETCFG_BASEADDR0) write_pci_cnfd(bus, pcidev->dev, pcidev->function, PCI_BASEREG0, cfg.baseaddrr0);
+				if(pcmd->flags & PCI_SETCFG_BASEADDR1) write_pci_cnfd(bus, pcidev->dev, pcidev->function, PCI_BASEREG1, cfg.baseaddrr1);
+				if(pcmd->flags & PCI_SETCFG_BASEADDR2) write_pci_cnfd(bus, pcidev->dev, pcidev->function, PCI_BASEREG2, cfg.baseaddrr2);
+				if(pcmd->flags & PCI_SETCFG_BASEADDR3) write_pci_cnfd(bus, pcidev->dev, pcidev->function, PCI_BASEREG3, cfg.baseaddrr3);
+				if(pcmd->flags & PCI_SETCFG_BASEADDR4) write_pci_cnfd(bus, pcidev->dev, pcidev->function, PCI_BASEREG4, cfg.baseaddrr4);
+				if(pcmd->flags & PCI_SETCFG_BASEADDR5) write_pci_cnfd(bus, pcidev->dev, pcidev->function, PCI_BASEREG5, cfg.baseaddrr5);
+				if(pcmd->flags & PCI_SETCFG_CIS_PTR) write_pci_cnfd(bus, pcidev->dev, pcidev->function, PCI_CARDBUSCIS, cfg.cardbus_CIS);
+				if(pcmd->flags & PCI_SETCFG_EXP_ROM_ADDR) write_pci_cnfd(bus, pcidev->dev, pcidev->function, PCI_EXPASIONROM, cfg.expromaddr );
+				if(pcmd->flags & PCI_SETCFG_INT_PIN) write_pci_cnfb(bus, pcidev->dev, pcidev->function, PCI_INTERRUPTPIN, cfg.interupt_pin);
+				if(pcmd->flags & PCI_SETCFG_INT_LINE) write_pci_cnfb(bus, pcidev->dev, pcidev->function, PCI_IRQLINE, cfg.irq_line);
+
+                read_device(pcidev);
+
+                if(write_mem(pcmd->cfg_smo, 0, sizeof(struct pci_cfg), ((char*)pcidev) + 19) == FAILURE)
+                    res->ret = PCIERR_SMO_WRITE_ERR;
+            }
+        }
+        else
+            res->ret = PCIERR_INVALID_DEVID;
+    }
 }
 
 
