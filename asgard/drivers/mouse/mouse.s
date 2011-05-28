@@ -271,7 +271,7 @@ detect_wheel:
     call mouse_write
     call mouse_read  ;; read ack
     call mouse_read  ;; read id
-xchg bx, bx
+
     cmp al, 3
     jne no_wheel
     cmp al, 4
