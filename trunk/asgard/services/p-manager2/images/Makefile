@@ -3,7 +3,7 @@ all : init_images.img
 testelf.img : ../../testelf/testelf.img
 	cp ../../testelf/testelf.img .
 
-init_images.img : initfs2conf atac.img console.img shell.img directory.img dma_man.img  fdc.img dma_man.img ofsservice.img pipes.img ld.img
+init_images.img : initfs2conf atac.img console.img shell.img directory.img dma_man.img  fdc.img dma_man.img ofsservice.img pipes.img ld.img pci.img
 	rm -f init_images.img
 	../../../tools/mkbinit2 init_images.img
 
@@ -35,7 +35,10 @@ pipes.img : ../../pipes/pipes.img
 	cp ../../pipes/pipes.img .  
 
 ld.img : ../../ld/ld.img
-	cp ../../ld/ld.img .  
+	cp ../../ld/ld.img . 
+    
+pci.img : ../../pci/pci.img
+	cp ../../pci/pci.img .  
 
 .PHONY : clean
 clean :

@@ -2,12 +2,12 @@ include ../../include/dep_rule.mk
 
 CFLAGS += -I"../../include" 
 
-objects = helpers.o pci_srv.o pci_commands.o pcienum.o  $(extobjects)
+objects = pci_entry.o helpers.o pci_srv.o pci_commands.o pcienum.o  $(extobjects)
 
 extobjects = ../../klib/kserv.o ../../lib/scheduler.o ../../lib/sprintf.o ../../lib/debug.o ../../drivers/screen/screen.o ../../lib/malloc.o \
 ../../lib/int.o ../../lib/critical_section.o ../../lib/structures/list.o ../../lib/structures/int64.o ../../lib/structures/stdlibsim.o 
 
-dependencies = helpers.d pci_srv.d pci_commands.d pcienum.d 
+dependencies = pci_entry.d helpers.d pci_srv.d pci_commands.d pcienum.d 
 
 all : pci.img 
 

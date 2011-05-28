@@ -199,15 +199,19 @@ void get_dma_man_task()
             reschedule(); 
         }
 
-	    while (get_msg_count(FDC_PMAN_PORT) == 0) reschedule();
+        do
+        {
+	        while (get_msg_count(FDC_PMAN_PORT) == 0) reschedule();
 
-	    get_msg(FDC_PMAN_PORT, &dir_res, &sender_id);
+	        get_msg(FDC_PMAN_PORT, &dir_res, &sender_id);
 
-	    claim_mem(resolve_cmd.service_name_smo);
+        }while(sender_id != DIRECTORY_TASK);
 
-	    if(dir_res.ret == DIRECTORYERR_OK)
-	        dma_man_task = dir_res.ret_value;
-    }while(dma_man_task == -1);
+    }while(dir_res.ret != DIRECTORYERR_OK);
+
+	claim_mem(resolve_cmd.service_name_smo);
+
+    dma_man_task = dir_res.ret_value;
 }
 
 void init_drive() 
@@ -231,6 +235,7 @@ void init_drive()
 	init_rtc(0x0c);	/* initialize RTC at 16 ints x sec */
 
     // open ports with permisions for services only (lv 0, 1, 2) //
+    open_port(FDC_PMAN_PORT, 2, PRIV_LEVEL_ONLY);
 	open_port(STDSERVICE_PORT, 2, PRIV_LEVEL_ONLY);
     open_port(STDDEV_PORT, 2, PRIV_LEVEL_ONLY);
     open_port(STDDEV_BLOCK_DEV_PORT, 2, PRIV_LEVEL_ONLY);
@@ -460,7 +465,12 @@ void init_drive()
 
 	send_msg(dma_man_task, DMA_COMMAND_PORT, &dma_msg);
 
-    	while (get_msg_count(FDC_DMA_TRANSACTIONS) == 0) { reschedule(); }
+    while (get_msg_count(FDC_DMA_TRANSACTIONS) == 0) { reschedule(); }
+
+    close_port(FDC_PMAN_PORT);
+	close_port(STDSERVICE_PORT);
+    close_port(STDDEV_PORT);
+    close_port(STDDEV_BLOCK_DEV_PORT);
 
 	/* tell the scheduler to unload us */
 	send_msg(dieid, dieretport, &dieres);

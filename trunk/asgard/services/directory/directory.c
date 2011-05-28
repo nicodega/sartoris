@@ -26,11 +26,7 @@ char dmbuffer[1024 * 10]; // 10kb for malloc
 
 char *get_string(int smo);
 
-#ifdef WIN32DEBUGGER
-DWORD WINAPI directory_main(LPVOID lpParameter)
-#else
 void directory_main()
-#endif
 {	
 	struct directory_cmd command;
 	struct servdirectory_entry *entry;
@@ -128,11 +124,10 @@ void directory_main()
                     if(name == NULL)
                     {
                         print("DIR Invalid SMO %i, task %i ", ((struct directory_register *)&command)->service_name_smo, id);
-                        for(;;);
+                        response.ret = DIRECTORYERR_INVALID_SMO;
+					    break;
                     }
-
-                   // print("DIR REGISTER %s task %i ", name, id);
-
+                    
 				    entry = (struct servdirectory_entry *)malloc(sizeof(struct servdirectory_entry));
 				    entry->service_name = name;
 				    entry->serviceid = id;
@@ -175,19 +170,16 @@ void directory_main()
                     if(resolving_service == NULL)
                     {
                         print("DIR Invalid SMO %i, task %i ", ((struct directory_register *)&command)->service_name_smo, id);
-                        for(;;);
+                        response.ret = DIRECTORYERR_INVALID_SMO;
+					    break;
                     }
 
 				    entry = (struct servdirectory_entry *)lpt_getvalue(services_by_name, resolving_service);
 	
-                    //print("DIR RESOLVE %s ", resolving_service);
-
 				    if(entry == NULL)
 				    {
 					    response.ret = DIRECTORYERR_NOTREGISTERED;
-
 					    free(resolving_service);
-
 					    break;
 				    }
 				    response.ret_value = entry->serviceid;
@@ -201,7 +193,6 @@ void directory_main()
 				    if(entry == NULL)
 				    {
 					    response.ret = DIRECTORYERR_NOTREGISTERED;
-
 					    break;
 				    }
 
@@ -215,14 +206,17 @@ void directory_main()
 				    }
 				    else
 				    {
-					    write_mem(((struct directory_resolvename *)&command)->name_smo, 0, size, entry->service_name);
+					    if(write_mem(((struct directory_resolvename *)&command)->name_smo, 0, size, entry->service_name) == FAILURE)
+                        {
+                            response.ret = DIRECTORYERR_INVALID_SMO;
+					        break;
+                        }
 				    }
 
 				    break;
 			}
 			
 			send_msg(id, command.ret_port, &response);
-
 		}
 	}
 

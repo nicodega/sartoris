@@ -72,33 +72,57 @@ void get_console_task()
 {	
 	struct directory_resolveid resolve_cmd;
 	struct directory_response dir_res;
-	int sender_id;
+	int sender_id = 0;
+	struct directory_register reg_cmd;
+    char *service_name = "os/shell";
+
+    open_port(INIT_PORT, 1, PRIV_LEVEL_ONLY);
 
 	// resolve console service //
 	resolve_cmd.command = DIRECTORY_RESOLVEID;
-	resolve_cmd.ret_port = 1;
+	resolve_cmd.ret_port = INIT_PORT;
 	resolve_cmd.service_name_smo = share_mem(DIRECTORY_TASK, tty_service_name, 12, READ_PERM);
 	resolve_cmd.thr_id = get_current_thread();
     
-    while(send_msg(DIRECTORY_TASK, DIRECTORY_PORT, &resolve_cmd) < 0)
-    { 
-        reschedule(); 
-    }
+    do
+    {
+        while(send_msg(DIRECTORY_TASK, DIRECTORY_PORT, &resolve_cmd) < 0)
+        { 
+            reschedule(); 
+        }
 
-	while (get_msg_count(1) == 0){ reschedule(); }
+        do
+        {
+	        while(get_msg_count(INIT_PORT) == 0){ reschedule(); }
     
-	get_msg(1, &dir_res, &sender_id);
+	        get_msg(INIT_PORT, &dir_res, &sender_id);
+
+        }while(sender_id != DIRECTORY_TASK);
+
+    }while(dir_res.ret != DIRECTORYERR_OK);
 
 	claim_mem(resolve_cmd.service_name_smo);
 
-	if(dir_res.ret != DIRECTORYERR_OK)
+	console_task = dir_res.ret_value;
+
+    // register with directory
+    reg_cmd.command = DIRECTORY_REGISTER_SERVICE;
+	reg_cmd.ret_port = INIT_PORT;
+	reg_cmd.service_name_smo = share_mem(DIRECTORY_TASK, service_name, 9, READ_PERM);
+
+	send_msg(DIRECTORY_TASK, DIRECTORY_PORT, &reg_cmd);
+
+    do
     {
-		console_task = -1;
-    }
-	else
-    {
-		console_task = dir_res.ret_value;	
-    }
+	    while (get_msg_count(INIT_PORT) == 0) { reschedule(); }
+
+	    get_msg(INIT_PORT, &dir_res, &sender_id);
+
+    }while(sender_id != DIRECTORY_TASK);
+
+	claim_mem(reg_cmd.service_name_smo);
+    
+    close_port(INIT_PORT);
 }
 
 /* entry point, interruptions are disabled */
