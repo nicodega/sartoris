@@ -41,13 +41,13 @@
 	
 // OFS disk layout defines //
 
-#define OFS_BLOCKDEV_BLOCKSIZE 512
+#define OFS_BLOCKDEV_BLOCKSIZE      512
 
-#define OFS_MAGIC_NUMBER 0xffdb		// the magic number :-)
+#define OFS_MAGIC_NUMBER            0xffdb      // the magic number :-)
 #define OFS_NODESPER_BLOCKDEV_BLOCK (int)(OFS_BLOCKDEV_BLOCKSIZE / sizeof(struct node))
-#define OFS_BLOCKDEVBLOCK_SIZE 8 // on BLOCKDEV units
-#define OFS_BLOCK_SIZE  4096 //OFS_BLOCKDEVBLOCK_SIZE * OFS_BLOCKDEV_BLOCKSIZE // BLOCK SIZE IN BYTES
-#define BITS_PER_DEVBLOCK OFS_BLOCKDEV_BLOCKSIZE * 8
+#define OFS_BLOCKDEVBLOCK_SIZE      8           // on BLOCKDEV units
+#define OFS_BLOCK_SIZE              4096        //OFS_BLOCKDEVBLOCK_SIZE * OFS_BLOCKDEV_BLOCKSIZE // BLOCK SIZE IN BYTES
+#define BITS_PER_DEVBLOCK           OFS_BLOCKDEV_BLOCKSIZE * 8
 
 // NOTE: OFS_BLOCK_SIZE is 4096 and not OFS_BLOCKDEVBLOCK_SIZE * OFS_BLOCKDEV_BLOCKSIZE because
 // when debugging operations of % turned out to fail calculations with unsigned long long
