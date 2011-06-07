@@ -168,9 +168,11 @@ struct cache_node *get_closest_match(struct path_cache *pc, char *path, int *out
 
 		cnlen = len(cn->path);
 
-		if(istrprefix(start, cn->path, path) && ((path[start + cnlen] == '\0') || (path[start + cnlen] == '/'))) // FIXED check for equal or containing directory
+        if(istrprefix(start, cn->path, path) 
+            && ((path[start + cnlen] == '\0') 
+                 || (path[start + cnlen] == '/'))) 
 		{
-			// current node is a prefix of the path
+            // current node is a prefix of the path
 			// hence set iterator to this node first 
 			// child and continue
 			it = get_head_position(&cn->childs);
@@ -179,7 +181,7 @@ struct cache_node *get_closest_match(struct path_cache *pc, char *path, int *out
 			cn->hits++;
 			ccn = cn;
 
-			if(start > lastbreak) break; // FIXED: Added check for search end.
+			if(start >= end) break; 
 		}
 	}		
 

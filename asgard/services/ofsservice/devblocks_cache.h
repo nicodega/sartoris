@@ -29,16 +29,16 @@
 
 struct bc_block
 {
-	char data[OFS_BLOCKDEV_BLOCKSIZE];	// block data
-	unsigned int hits;			// hits
-	unsigned int parser;			// was it cached by the parser?
+	char data[OFS_BLOCKDEV_BLOCKSIZE];  // block data
+	unsigned int hits;                  // hits
+	unsigned int parser;                // was it cached by the parser?
 	unsigned int dirty;
 	int free_next;
 };
 
 struct bc_entry
 {
-	unsigned int lba;			// block lba
+	unsigned int lba;                   // block lba
 	unsigned int index;
 	unsigned int deviceid;
 	unsigned int ldeviceid;
@@ -47,7 +47,7 @@ struct bc_entry
 struct bc_cache
 {
 	int free_first;
-	struct bc_block blocks[OFS_DEVCACHE_MAXBLOCKS];			// this list will be kept ordered
+	struct bc_block blocks[OFS_DEVCACHE_MAXBLOCKS];			// this list will be kept ordered by the order array
 	struct bc_entry order[OFS_DEVCACHE_MAXBLOCKS];			// ordered index list for blocks
 	unsigned int buffer_count;
 };

@@ -61,7 +61,7 @@ struct stdfss_res *chardev_read(int wpid, struct working_thread *thread, struct 
 			readc.dev = finf->logic_deviceid;
 			readc.msg_id = wpid;
 			readc.ret_port = OFS_CHARDEV_PORT;
-			break;
+            break;
 		case STDFSS_READ:
 			readcmd.flags = CHAR_STDDEV_READFLAG_PASSMEM | CHAR_STDDEV_READFLAG_ECHO | CHAR_STDDEV_READFLAG_BLOCKING;
 			pass_mem(read_cmd->smo, finf->deviceid);
@@ -83,8 +83,8 @@ struct stdfss_res *chardev_read(int wpid, struct working_thread *thread, struct 
 	finf->dinf->blocked_command.task = thread->taskid;
 	finf->dinf->blocked = TRUE;
 	
-	leave_mutex(&finf->dinf->blocked_mutex);
-	
+	leave_mutex(&finf->dinf->blocked_mutex);		
+			
 	// send message and continue
 	send_msg(finf->deviceid, finf->dinf->protocol_port, comm);
 		
