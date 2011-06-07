@@ -193,7 +193,7 @@ int parse_directory(int use_cache, struct gc_node **parsed_node, int lock_mode, 
 
 				nfree(minf->dinf, parent_cachedn);
 				nfree(minf->dinf, first_block_node);
-
+                
 				// ok we can safely return here ^^			
 				if(flags != NULL) *flags = cflags;
 				if(out_nodeid != NULL) *out_nodeid = cachedn->nodeid;
@@ -281,7 +281,7 @@ int parse_directory(int use_cache, struct gc_node **parsed_node, int lock_mode, 
 		}
 		locked_nodeid = 0;
 	}
-
+    
 	file_size = first_block_node->n.file_size;
 	first_block_blockdev_count = OFS_BLOCKDEVBLOCK_SIZE;
 	first_block_blockdev_total_count = OFS_BLOCKDEVBLOCK_SIZE;
@@ -289,10 +289,10 @@ int parse_directory(int use_cache, struct gc_node **parsed_node, int lock_mode, 
 	buffer_pos = 0;
 	buffer_size = MIN((unsigned int)file_size, OFS_BLOCK_SIZE);
 	total_read = MIN(file_size, OFS_BLOCK_SIZE);
-
+    
 	// start dir buffer filling on first block
 	if(!bc_read((char*)thread->directory_buffer.buffer, OFS_DIR_BUFFERSIZE, first_block_node->n.blocks[0], command, wpid, minf, TRUE, ret))
-	{
+	{			
 		if(locked_nodeid != -1)
 		{
 			unlock_node(wpid, TRUE, OFS_LOCKSTATUS_OK);
@@ -395,7 +395,7 @@ int parse_directory(int use_cache, struct gc_node **parsed_node, int lock_mode, 
 #ifdef OFS_PATHCACHE
 								char c = path[path_end+1];
 								path[path_end+1] = '\0';
-
+			
 								cache_path_node(&minf->dinf->pcache, path, dentry->nodeid, dentry->flags);
 								path[path_end+1] = c;
 #endif
@@ -431,9 +431,9 @@ int parse_directory(int use_cache, struct gc_node **parsed_node, int lock_mode, 
 											// see how many blocks of dentry are on first block
 											temp_count = (dentry_first_dev_block + 1 == first_block_blockdev_count)? 1 : count;
 											if(!bc_write((char*)(thread->directory_buffer.buffer + dentry_first_dev_block * OFS_BLOCKDEV_BLOCKSIZE), 
-											temp_count * OFS_BLOCKDEV_BLOCKSIZE, 
-											first_block_node->n.blocks[first_block] + (first_block_blockdev_total_count - first_block_blockdev_count) + dentry_first_dev_block, 
-											command, wpid, minf, TRUE, ret))
+											                    temp_count * OFS_BLOCKDEV_BLOCKSIZE, 
+											                    first_block_node->n.blocks[first_block] + (first_block_blockdev_total_count - first_block_blockdev_count) + dentry_first_dev_block, 
+											                    command, wpid, minf, TRUE, ret))
 											{
 												if(locked_nodeid != -1)
 												{

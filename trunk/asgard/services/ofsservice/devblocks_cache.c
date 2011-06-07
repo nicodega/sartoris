@@ -36,7 +36,7 @@ int bc_read(char *buffer, unsigned int buffer_size, unsigned int lba, int comman
 	struct stdblockdev_readm_cmd breadmcmd;
 	struct stdblockdev_res device_res;
 
-	// Upon reads we will do the following (items marked with [P] are only performed on parser calls):
+	// Upon reads we will do the following:
 	//	- Fill buffer with already cached info.
 	//	- Read blocks
 	//	- Update cache. 
@@ -124,8 +124,6 @@ int bc_write(char *buffer, unsigned int buffer_size, unsigned int lba, int comma
 }
 
 /* Cache implementation */
-
-
 struct bc_cache bcache;
 
 void bc_init()
@@ -155,8 +153,9 @@ int bc_compare(struct bc_entry *e1, struct bc_entry *e2)
 	return 0;
 }
 
-/* Find a block on the list. If not present will return last intended possition (i.e. where it should be inserted) */
-int bc_getindex(struct bc_entry *e)
+/* Find a block on the list. 
+If not present and intended is TRUE, it will return last intended possition (i.e. where it should be inserted) */
+int bc_getindex(struct bc_entry *e, BOOL intended)
 {
 	// Binary search
 	int low = 0, high = (int)bcache.buffer_count - 1;
@@ -193,7 +192,10 @@ int bc_getindex(struct bc_entry *e)
 		pos++;
 	}
 
-	return pos;
+    if(intended)
+	    return pos;
+    else
+        return -1;
 }
 
 /*
@@ -203,9 +205,9 @@ int bc_getindex(struct bc_entry *e)
 void bc_insert(unsigned int dev, unsigned int ldev, char *buffer, unsigned int start_lba, unsigned int count, int parser)
 {
 	// we will insert in an ordered fashion. Insert will be called upon reading.
-	// For each block we will:
+	// For each block we will do the following:
 	// 	- If the block exists we will do nothing
-	// 	- If the block does not exists 
+	// 	- If the block does not exist:
 	//		- if parser is FALSE we insert as many blocks as there is free space on the cache.
 	//		- if parser is TRUE we get enough space on the cache, and insert the blocks.
 	struct bc_entry e;
@@ -225,11 +227,14 @@ void bc_insert(unsigned int dev, unsigned int ldev, char *buffer, unsigned int s
 	{
 		e.index = -1;	
 
-		int start = bc_getindex(&e);
+		int start = bc_getindex(&e, TRUE);
 
-		if(e.index != -1)
+		if(e.index != -1 
+            && bcache.order[start].deviceid == e.deviceid
+            && bcache.order[start].ldeviceid == e.ldeviceid
+            && bcache.order[start].lba == e.lba)
 		{
-			// block exists, 
+			// block exists
 			count--;
 			off += OFS_BLOCKDEV_BLOCKSIZE;
 			e.lba++;
@@ -247,19 +252,18 @@ void bc_insert(unsigned int dev, unsigned int ldev, char *buffer, unsigned int s
 		{
 			// must deallocate first, for there is no room on cache
 			e.index = bc_makeroom(dev, ldev, start_lba, start_lba + count - 1);
-
+                        
 			// make room could have moved order up on 1
 			if(bc_compare(&e, &bcache.order[start]) < 0)
-			{
 				start--;
-			}
 		}
 		else
 		{
 			// set the index
 			e.index = bc_freeblock();
 		}
-		// insert on the order
+		
+        // insert on the order
 		bc_moveup(start); // send bigger elements one index up
 
 		bcache.order[start] = e;
@@ -335,10 +339,14 @@ int bc_makeroom(unsigned int dev, unsigned int ldev, unsigned int ignorefrom, un
 	bcache.blocks[candidate].dirty = FALSE;
 	bcache.blocks[candidate].free_next = -1;
 	bcache.free_first = candidate;
+
 	bc_movedown(candidate);
+
+    return candidate;
 }
 
-/* 	This function will update the cache with buffer blocks. 
+/* 	
+This function will update the cache with buffer blocks. 
 */
 void bc_update(struct smount_info *minf, char *buffer, unsigned int start_lba, unsigned int count, int parser)
 {
@@ -350,12 +358,15 @@ void bc_update(struct smount_info *minf, char *buffer, unsigned int start_lba, u
 
 	wait_mutex(&bcache_mutex);
 
-	int start; int end;
-	// find boundaries
+	int start, end;
+
+	// find boundaries..
+
+    // lower boundary
 	unsigned int c = count;
 	while(c > 0)
 	{
-		start = bc_getindex(&e);
+		start = bc_getindex(&e, FALSE);
 		if(e.index != -1) break;
 		e.lba++;
 		c--;		
@@ -367,13 +378,16 @@ void bc_update(struct smount_info *minf, char *buffer, unsigned int start_lba, u
 		return; // none found
 	}
 
+    // Find the upper boundary
 	e.lba = start_lba;
-
 	end = start;
 	
 	while(end < bcache.buffer_count && (end - start) < c)
 	{
-		if(bcache.order[start].deviceid != bcache.order[end].deviceid || bcache.order[start].ldeviceid != bcache.order[end].ldeviceid || bcache.order[start].lba != e.lba) break;
+		if(bcache.order[start].deviceid != bcache.order[end].deviceid 
+            || bcache.order[start].ldeviceid != bcache.order[end].ldeviceid 
+            || bcache.order[start].lba > e.lba)  // compare the lba with greater than because we might have a gap
+            break;
 		e.lba++;
 		end++;
 	}
@@ -382,14 +396,25 @@ void bc_update(struct smount_info *minf, char *buffer, unsigned int start_lba, u
 	unsigned int lastinv = 0;
 	unsigned int lba = start_lba;
 	int i = 0;
+
 	// and update buffers
 	while(start <= end)
 	{
+        // is there a gap?
+        if(bcache.order[start].lba != lba)
+        {
+            // we have a gap.. advance lba and i but not start!
+            lba++;
+            i++;
+            continue;
+        }
+
 		// update block
 		mem_copy((unsigned char*)buffer + i * OFS_BLOCKDEV_BLOCKSIZE, (unsigned char*)bcache.blocks[bcache.order[start].index].data, OFS_BLOCKDEV_BLOCKSIZE);
 
 		bcache.blocks[bcache.order[start].index].dirty = TRUE;
-		if(bcache.blocks[bcache.order[start].index].hits + 1 != (unsigned int)-1) bcache.blocks[bcache.order[start].index].hits++;
+		if(bcache.blocks[bcache.order[start].index].hits + 1 != (unsigned int)-1)
+            bcache.blocks[bcache.order[start].index].hits++;
 
 		// invalidate filebuffers if needed
 		// get OFS block for the lba
@@ -402,6 +427,7 @@ void bc_update(struct smount_info *minf, char *buffer, unsigned int start_lba, u
 		}
 		start++;
 		lba++;
+        i++;
 	}
 	leave_mutex(&bcache_mutex);
 }
@@ -412,7 +438,8 @@ unsigned int bc_getblock(struct smount_info *minf, unsigned int lba)
 	int i = 0;
 	while(i < minf->ofst.group_count)
 	{
-		if(minf->group_headers[i].blocks_offset <= lba && lba < minf->group_headers[i].blocks_offset + OFS_BLOCKDEVBLOCK_SIZE * minf->ofst.blocks_per_group)
+		if(minf->group_headers[i].blocks_offset <= lba 
+            && lba < minf->group_headers[i].blocks_offset + OFS_BLOCKDEVBLOCK_SIZE * minf->ofst.blocks_per_group)
 		{
 			return (unsigned int)((lba - minf->group_headers[i].blocks_offset) / OFS_BLOCKDEVBLOCK_SIZE) + minf->group_headers[i].blocks_offset;
 		}
@@ -438,7 +465,7 @@ void bc_invalidate_filebuffer(unsigned int dev, unsigned int ldev, unsigned int 
 	}
 
 	if(buffer == NULL) return;
-//print("Buffer will be invalidated", block_lba);
+
 	// we should invalidate a file buffer here
 	// what it will do is tell the filebuffers subsystem
 	// that buffer is out of date.
@@ -453,6 +480,7 @@ void bc_invalidate_filebuffer(unsigned int dev, unsigned int ldev, unsigned int 
 unsigned int bc_get(unsigned int dev, unsigned int ldev, char *buffer, unsigned int start_lba, unsigned int count)
 {
 	struct bc_entry e;
+
 	e.deviceid = dev;
 	e.ldeviceid = ldev; 
 	e.lba = start_lba;
@@ -460,7 +488,7 @@ unsigned int bc_get(unsigned int dev, unsigned int ldev, char *buffer, unsigned 
 
 	wait_mutex(&bcache_mutex);
 	
-	int start = bc_getindex(&e);
+	int start = bc_getindex(&e, TRUE);
 	unsigned int end = start_lba;
 
 	if(e.index != -1)
@@ -470,16 +498,21 @@ unsigned int bc_get(unsigned int dev, unsigned int ldev, char *buffer, unsigned 
 
 		while(end < bcache.buffer_count && (end - start) < count)
 		{
-			if(bcache.order[start].deviceid != bcache.order[end].deviceid || bcache.order[start].ldeviceid != bcache.order[end].ldeviceid || bcache.order[end].lba != e.lba) break;
+			if(bcache.order[start].deviceid != bcache.order[end].deviceid 
+                || bcache.order[start].ldeviceid != bcache.order[end].ldeviceid 
+                || bcache.order[end].lba != e.lba) break;
 			e.lba++;
 			end++;
 		}
+
 		unsigned int fcount = end - start;
 		int i = 0;
-		while(start < end)
+		
+        // copy the cached blocks
+        while(start < end)
 		{
 			// copy block
-			mem_copy((unsigned char*)bcache.blocks[bcache.order[start].index].data, (unsigned char*)buffer + i*OFS_BLOCKDEV_BLOCKSIZE, OFS_BLOCKDEV_BLOCKSIZE);
+			mem_copy((unsigned char*)bcache.blocks[bcache.order[start].index].data, (unsigned char*)buffer + i * OFS_BLOCKDEV_BLOCKSIZE, OFS_BLOCKDEV_BLOCKSIZE);
 	
 			start++;
 			i++;

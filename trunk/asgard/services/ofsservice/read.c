@@ -207,7 +207,7 @@ struct stdfss_res *read_file(int wpid, struct working_thread *thread, struct std
 		// reading from a device
 		if(finf->dinf->dev_type == DEVTYPE_CHAR)
 		{
-			// its a char device
+            // its a char device
 			
 			// ok... this has a big difference with block devices, because 
 			// read could block until there's some input. We will send the msg and

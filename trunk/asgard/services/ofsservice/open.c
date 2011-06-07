@@ -43,7 +43,7 @@ struct stdfss_res *open_file(int wpid, struct working_thread *thread, struct std
 	list mount_structures;
 	CPOSITION it;
 
-	// check max opened files
+    // check max opened files
 	if(thread->taskid != PMAN_TASK)
 	{
 		wait_mutex(&opened_files_mutex);
@@ -392,8 +392,8 @@ struct stdfss_res *open_file(int wpid, struct working_thread *thread, struct std
 		else
 		{
 			// it's a device file
-
-			// see if the device file is already opened by a task
+            
+            // see if the device file is already opened by a task
 			wait_mutex(&opened_files_mutex);
 			{
 				it = get_head_position(&opened_files);
