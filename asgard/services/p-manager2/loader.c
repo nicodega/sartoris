@@ -356,11 +356,15 @@ BOOL loader_task_loaded(struct pm_task *task, char *interpreter)
             }
             else
             {
+                pman_print_dbg("LOADER: mapping ld \n");
+
                 // now tell vmm to create the library memory region
                 if(!vmm_ld_mapped(task, PMAN_MAPPING_BASE, PMAN_MAPPING_BASE+ld_size))
                     return FALSE;
 
                 ldtsk = tsk_get(ld_task);
+
+                pman_print_dbg("LOADER: ld region created \n");
 
                 /* 
                 We need to map LD onto the task address space.
@@ -393,6 +397,7 @@ BOOL loader_task_loaded(struct pm_task *task, char *interpreter)
                         {
                             // do we need a page table?
                             ldtbl = (struct vmm_page_table*)PHYSICAL2LINEAR(PG_ADDRESS(lddir->tables[PM_LINEAR_TO_DIR(laddr_ld)].b));
+
                             if(dir->tables[PM_LINEAR_TO_DIR(laddr)].ia32entry.present == 0)
                             {
                                 // get a page for the table
@@ -428,7 +433,7 @@ BOOL loader_task_loaded(struct pm_task *task, char *interpreter)
 
                             // if it's a data segment, we need to give the program it's
                             // own copy of it
-                            if(phdr->p_flags == PF_EXEC)
+                            if(phdr->p_flags & PF_EXEC)
                             {
                                 pm_page_in(task->id, (ADDR)laddr, (ADDR)PG_ADDRESS(ldtbl->pages[PM_LINEAR_TO_TAB(laddr_ld)].entry.phy_page_addr), 1, att);
                             }
@@ -464,18 +469,22 @@ BOOL loader_task_loaded(struct pm_task *task, char *interpreter)
 
                 task->loader_inf.phdrs_smo = share_mem(task->id, task->loader_inf.elf_pheaders, task->loader_inf.elf_header.e_phnum * task->loader_inf.elf_header.e_phentsize, READ_PERM);
 
+                pman_print_dbg("LOADER: LD Mapped! \n");
+
                 return TRUE;
             }
         }
-        
-        /* Task loaded successfully */
-		if(task->creator_task != 0xFFFF)
+        else
         {
-            res_msg.status = PM_OK;
-		    res_msg.new_id = task->id;
-		    send_msg(task->creator_task, task->creator_task_port, &res_msg );
+            /* Task loaded successfully */
+		    if(task->creator_task != 0xFFFF)
+            {
+                res_msg.status = PM_OK;
+		        res_msg.new_id = task->id;
+		        send_msg(task->creator_task, task->creator_task_port, &res_msg );
+            }
+            return TRUE;
         }
-        return TRUE;
 	}
 	else
 	{

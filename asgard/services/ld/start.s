@@ -38,6 +38,7 @@ bits 32
 
 ;; . <-- this is LDs entry point!
 _ldstart:
+xchg bx,bx
 	mov eax, esp
     mov ebx, esp
 	sub eax, [esp]		  ;; substract size bytes from esp possition
