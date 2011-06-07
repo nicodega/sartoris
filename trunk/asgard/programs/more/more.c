@@ -27,7 +27,7 @@ char *invalid_params = "Invalid parameters.\n\0\0";
 #define MIN(a,b) ((a < b)? a : b)
 
 char buffer[81];
-char hbuffer[81];
+char hbuffer[80];
 char hdigits[10];
 
 // gets input from stdin and puts it on stdout
@@ -110,6 +110,8 @@ int main(int argc, char **args)
         i++;
     }
 
+    //printf("Reading: %s\n", path);
+
     if(path == NULL && feof(&stdin))
 	{
 		printf(invalid_params, 12);
@@ -131,7 +133,7 @@ int main(int argc, char **args)
 	    if(finf->file_type == IOLIB_FILETYPE_DIRECTORY)
 	    {
 		    free(path);
-		    printf("Cannot cat directories.\n");
+		    printf("Cannot more directories.\n");
 		    return;
 	    }
 
@@ -163,50 +165,77 @@ int main(int argc, char **args)
         count = 0;
         do
         {
-		    if((fgets(buffer, (hex? 16 : 80), f)) != buffer)
-		    {        
-                if(!feof(f) || ioerror() != IOLIBERR_OK)
+            if(hex)
+            {
+                read = fread(buffer, 1, 16, f);
+                if(read != 16)
                 {
-			        if(f != &stdin) fclose(f);
-                    else fclose(console);
-			        free(path);
-			        printf(mapioerr(ioerror()));
-			        printf("\n");
-			        return;
+                    if(!feof(f) || ioerror() != IOLIBERR_OK)
+                    {
+			            if(f != &stdin) fclose(f);
+                        else fclose(console);
+			            printf(mapioerr(ioerror()));
+			            printf("\n");
+			            return;
+                    }
+                    else if(!exit)
+                    {
+                        break;
+                    }
+                    else
+                    {
+                        if(f != &stdin) fclose(f);
+                        else fclose(console);
+                        return;
+                    }
                 }
-                else if(!exit)
-                {
-                    break;
-                }
-                else
-                {   
-			        if(f != &stdin) fclose(f);
-                    else fclose(console);
-                    printf("\n");
-                    return;
-                }
-		    }
-        
-            read = strlen(buffer);
-
+            }
+            else
+            {
+                if(fgets(buffer, 80, f) != buffer)
+		        {        
+                    if(!feof(f) || ioerror() != IOLIBERR_OK)
+                    {
+			            if(f != &stdin) fclose(f);
+                        else fclose(console);
+			            printf(mapioerr(ioerror()));
+			            printf("\n");
+			            return;
+                    }
+                    else if(!exit)
+                    {
+                        break;
+                    }
+                    else
+                    {
+                        if(f != &stdin) fclose(f);
+                        else fclose(console);
+                        return;
+                    }
+		        }
+                read = strlen(buffer);
+            }		          
+                        
             if(total >= start)
             {
                 if(hex)
                 {   
-                    int j;
+                    int j, l, p;
 
                     for(j = 0; j < 81; j++)
                         hbuffer[j] = ' ';
 
-                    sprintf(hbuffer, "%x ", count * 16);
-                    hbuffer[9] = ':';
+                    l = sprintf(hbuffer, "%x ", count * 16);
+                    hbuffer[l] = ' ';
                     
                     for(j = 0; j < read; j++)
                     {
-                        padding(&hbuffer[j*3 + 10], hdigits, i2ax((int)buffer[i], hdigits, 0, 0), PRINTF_FLAG_0, 2, PADDING_HEX);
-                        hbuffer[j*3 + 9] = ' ';
+                        p = j*3 + 10;
+                        l = sprintf(&hbuffer[p], "%02x", (0x000000FF & (int)buffer[j]));
+                        hbuffer[p + l] = ' ';
                     }
-                    hbuffer[81] = '\0';
+                    hbuffer[9] = ':';
+                    hbuffer[80] = '\0';
                     printf(hbuffer);
                 }
                 else
@@ -224,7 +253,7 @@ int main(int argc, char **args)
         do
         {
             if(f != &stdin)
-	            cmd = fgetc(&stdin);
+                cmd = fgetc(&stdin);
             else
                 cmd = fgetc(console);
          
@@ -235,7 +264,7 @@ int main(int argc, char **args)
                     cont = 1;
                     break;
                 case ' ':
-                    // advance al whole screen
+                    // advance a whole screen
                     clines = lines;
                     cont = 1;
                     break;
