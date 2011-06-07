@@ -282,7 +282,8 @@ struct console_proc_info *execute(int running_term, int console, char *command_p
 
     claim_mem(path_smo_id); 
 
-	if (msg_res.status != PM_OK) {
+	if (msg_res.status != PM_OK)
+    {
 		term_print(running_term, "task creation failed\n");
 		if(stdinfn != NULL) free(stdinfn);
 		if(stdoutfn != NULL) free(stdoutfn);
@@ -367,7 +368,7 @@ struct console_proc_info *execute(int running_term, int console, char *command_p
 		free_console(pinf->console);
 
 		// set this terminal as being used by other process
-		cslown[pinf->console].mode = SHELL_CSLMODE_PROC; // console is taken by the shell
+		cslown[pinf->console].mode = SHELL_CSLMODE_PROC; // console is taken by a proc
 		cslown[pinf->console].process = pinf->task;
 	}
 	pinf->param_smo = share_mem(pinf->task, params, len(params)+1, READ_PERM);
@@ -382,7 +383,6 @@ struct console_proc_info *execute(int running_term, int console, char *command_p
 	// insert pinf onto running list
 	add_tail(&running, pinf);
 
-	// send process initialization message
 	if(pinf->maps.mapstdout || pinf->maps.mapstdin || pinf->maps.mapstderr)
 		pinf->map_smo = share_mem(pinf->task, &pinf->maps, sizeof(struct map_params), READ_PERM);
 	else

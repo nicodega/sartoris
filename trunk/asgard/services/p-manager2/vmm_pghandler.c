@@ -404,9 +404,15 @@ INT32 vmm_elffile_readend_callback(struct fsio_event_source *iosrc, INT32 ioret)
     {
         /* Page in on process address space */
         pm_page_in(thread->task_id, (ADDR)PG_ADDRESS(thread->vmm_info.fault_address), (ADDR)LINEAR2PHYSICAL(thread->vmm_info.page_in_address), 2, thread->vmm_info.page_perms);
-    
-        /* Page in on library address space */
-        pm_page_in(thread->vmm_info.fault_task, (ADDR)PG_ADDRESS(thread->vmm_info.pg_node.value), (ADDR)LINEAR2PHYSICAL(thread->vmm_info.page_in_address), 2, thread->vmm_info.page_perms);
+        
+        // see if it's an executable section of the library
+        struct taken_entry *tentry = vmm_taken_get(thread->vmm_info.page_in_address);
+
+        if(tentry->data.b_pdir.eflags & TAKEN_PG_FLAG_LIBEXE)
+        {
+            /* Page in on library address space */
+            pm_page_in(thread->vmm_info.fault_task, (ADDR)PG_ADDRESS(thread->vmm_info.pg_node.value), (ADDR)LINEAR2PHYSICAL(thread->vmm_info.page_in_address), 2, thread->vmm_info.page_perms);
+        }        
     }
     else
     {

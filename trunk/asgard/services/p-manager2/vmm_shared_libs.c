@@ -72,13 +72,15 @@ int vmm_page_lib(struct pm_task *task, struct pm_thread *thread, ADDR proc_laddr
     ADDR page_addr;
     struct vmm_page_table *tbl;
 
-    /* See if it's a code page, if not, skip this */
+    pman_print_dbg("PF: Page lib \n");
+
+    /* See if it's a loadable page, if not, skip this */
     if(loader_filepos(ltask, (ADDR)ld_addr, &filepos, &readsize, &perms, &page_displacement, &exec))
     {
         // FIXME: we should check the page is not on swap.
 
-        /* See if the page is present on the lib task */  
-        if(!exec)
+        /* See if the page is present on the lib task (only executable pages) */  
+        if(exec)
         {
             if(ltask->vmm_info.page_directory->tables[PM_LINEAR_TO_DIR(ld_addr)].ia32entry.present == 0)
 	        {
@@ -113,7 +115,7 @@ int vmm_page_lib(struct pm_task *task, struct pm_thread *thread, ADDR proc_laddr
                         
         if(rb_insert(&ltask->vmm_info.wait_root, &thread->vmm_info.pg_node, TRUE) == 2)
         {
-            pman_print_dbg("PF: Other Thread was waiting \n");
+            pman_print_dbg("PF: Other Thread was waiting (lib) \n");
             sch_deactivate(thread);
             
 			/* Page was being retrieved already for other thread! Block the thread.	*/
@@ -168,7 +170,6 @@ int vmm_page_lib(struct pm_task *task, struct pm_thread *thread, ADDR proc_laddr
         // we must insert the thread on the pg wait tree
         // in case another thread asks for the same page.
         rb_insert(&ltask->vmm_info.wait_root, &thread->vmm_info.pg_node, FALSE);
-        rb_insert(&ltask->vmm_info.tbl_wait_root, &thread->vmm_info.tbl_node, FALSE);
         rb_insert(&ltask->vmm_info.tbl_wait_root, &thread->vmm_info.tbl_node, FALSE);
         
         return 2;
