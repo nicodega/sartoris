@@ -98,7 +98,7 @@ int vsprintf(char *str, char *format, int *args) {
                         expand++;
                         break;
                     case '0':
-                        if(precision == -1 && !isnumericpf(&format[expand+1], i-expand-1))
+                        if(precision == -1 && !isnumericpf(&format[expand+2], i-expand-1))
                         {
                             flags |= PRINTF_FLAG_0;
                             expand++;
