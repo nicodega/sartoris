@@ -168,8 +168,10 @@ int vsprintf(char *str, char *format, int *args) {
                         {
                             if(!isnumericpf(&format[expand+1], i-expand-1))
                                 return -1;
-                            if(precision != -1)
+                            if(precision == -1)
                                 width = atoll(&format[expand+1], i-expand-1);
+                            else
+                                return -1; // defining precision on an integral type
                         }
                         j += padding(&str[j], digits, i2a(args[(param == -1)? a++ : param], digits, flags), flags, width, PADDING_DEC);
                         state = VERBATIM;
@@ -179,8 +181,10 @@ int vsprintf(char *str, char *format, int *args) {
                         {
                             if(!isnumericpf(&format[expand+1], i-expand-1))
                                 return -1;
-                            if(precision != -1)
+                            if(precision == -1)
                                 width = atoll(&format[expand+1], i-expand-1);
+                            else
+                                return -1; // defining precision on an integral type
                         }
 				        j += padding(&str[j], digits, i2u(args[(param == -1)? a++ : param], digits, flags), flags, width, PADDING_DEC);
                         state = VERBATIM;
@@ -190,8 +194,10 @@ int vsprintf(char *str, char *format, int *args) {
                         {
                             if(!isnumericpf(&format[expand+1], i-expand-1))
                                 return -1;
-                            if(precision != -1)
+                            if(precision == -1)
                                 width = atoll(&format[expand+1], i-expand-1);
+                            else
+                                return -1; // defining precision on an integral type
                         }
 				        j += padding(&str[j], digits, i2ax(args[(param == -1)? a++ : param], digits, flags, (c == 'X')), flags, width, PADDING_HEX);
                         state = VERBATIM;
@@ -201,8 +207,10 @@ int vsprintf(char *str, char *format, int *args) {
                         {
                             if(!isnumericpf(&format[expand+1], i-expand-1))
                                 return -1;
-                            if(precision != -1)
+                            if(precision == -1)
                                 width = atoll(&format[expand+1], i-expand-1);
+                            else
+                                return -1; // defining precision on an integral type
                         }
 				        j += padding(&str[j], digits, i2ao(args[(param == -1)? a++ : param], digits, flags), flags, width, PADDING_OCT);
                         state = VERBATIM;

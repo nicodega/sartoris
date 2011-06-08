@@ -75,7 +75,7 @@ pipes_main()
 		int service_count = get_msg_count(STDSERVICE_PORT);
 			
 		while(service_count != 0)
-		{
+		{   
 			get_msg(STDSERVICE_PORT, &service_cmd, &id);
 
 			servres.ret = STDSERVICE_RESPONSE_OK;
@@ -86,8 +86,7 @@ pipes_main()
 				// FIXME: return failure to al pending commands and die 
 				dieres.ret = STDSERVICE_RESPONSE_OK;
 				dieres.command = service_cmd.command;
-				send_msg(id, service_cmd.ret_port, &dieres);  			
-				for(;;);
+				send_msg(id, service_cmd.ret_port, &dieres);
 			}
 			else if(service_cmd.command == STDSERVICE_QUERYINTERFACE)
 			{
@@ -104,7 +103,7 @@ pipes_main()
 			
 		while(pipes_count != 0)
 		{
-			get_msg(PIPES_PORT, &pcmd, &id);
+            get_msg(PIPES_PORT, &pcmd, &id);
 			process_pipes_cmd(&pcmd, id);
 			pipes_count--;
 		}
@@ -142,8 +141,8 @@ void process_pipes_cmd(struct pipes_cmd *pcmd, int task)
 
 	// check for open
 	if(pcmd->command == PIPES_OPENSHARED)
-	{
-		// create a new shared pipe 
+	{	
+        // create a new shared pipe 
 		struct pipe *p = (struct pipe*)malloc(sizeof(struct pipe));
 
 		p->id = get_new_pipeid();
@@ -152,11 +151,12 @@ void process_pipes_cmd(struct pipes_cmd *pcmd, int task)
 		p->taskid2 = ((struct pipes_openshared*)pcmd)->task2;
 		p->pf = NULL;
 		p->creating_task = task;
-		p->buffer = (struct pipe_buffer*)malloc(sizeof(struct pipe_buffer));
-		p->buffer->rcursor = p->buffer->wcursor = p->buffer->size = 0;
 		p->pending = 0;
 		p->task1_closed = 0;
 		p->task2_closed = 0;
+
+		p->buffer = (struct pipe_buffer*)malloc(sizeof(struct pipe_buffer));
+		p->buffer->rcursor = p->buffer->wcursor = p->buffer->size = 0;
 		init(&p->buffer->blocks);
 
 		avl_insert(&pipes, p, p->id);
@@ -166,7 +166,7 @@ void process_pipes_cmd(struct pipes_cmd *pcmd, int task)
 	}
 	else if(pcmd->command == PIPES_OPENFILE)
 	{
-		// create a new file pipe 
+	    // create a new file pipe 
 		struct pipe *p = (struct pipe*)malloc(sizeof(struct pipe));
 
 		char *filepath = get_string(((struct pipes_openfile*)pcmd)->path_smo);
@@ -195,7 +195,7 @@ void process_pipes_cmd(struct pipes_cmd *pcmd, int task)
 		free(filepath);
 	}
 	else
-	{
+	{	
 		p = (struct pipe*)avl_getvalue(pipes, ((struct pipes_close*)pcmd)->pipeid);
 
 		if(p != NULL)
@@ -309,15 +309,24 @@ void process_pipes_cmd(struct pipes_cmd *pcmd, int task)
 
 		send_msg(task, pcmd->ret_port, res);
 
-		// check pending read
-		if(p != NULL && p->pending && (pcmd->command == PIPES_WRITE || pcmd->command == PIPES_PUTS || pcmd->command == PIPES_PUTC))
+        if(res != NULL) free(res);
+	}
+    else
+    {
+        // check pending read
+		if(p != NULL && p->pending && (pcmd->command == PIPES_WRITE 
+            || (pcmd->command == PIPES_SEEK && task == p->taskid2)
+            || pcmd->command == PIPES_READ 
+            || pcmd->command == PIPES_PUTS 
+            || pcmd->command == PIPES_PUTC))
 		{
 			// process the pending message
 			process_pending(p);
 		}
-	}
 
-	if(res != NULL) free(res);
+        send_msg(task, pcmd->ret_port, res);
+	    if(res != NULL) free(res);
+    }
 }
 
 struct pipes_res *build_response_msg(int ret)

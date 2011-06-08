@@ -83,7 +83,6 @@ struct pipes_res * preadgen(struct pipes_read *cmd, int delimited, struct pipe *
 	}
 	else
 	{
-
 		// if reading nothing return ok
 		if(cmd->count == 0)
 		{
@@ -107,7 +106,8 @@ struct pipes_res * preadgen(struct pipes_read *cmd, int delimited, struct pipe *
 		// well.... let's do it!
 		unsigned int bn = (int)(p->buffer->rcursor / PIPES_BUFFER_SIZE)+1;
 		struct pipe_buffer_block *b = NULL;
-		unsigned long offset = 0, left = MIN ( cmd->count,  p->buffer->size - p->buffer->rcursor);
+		unsigned long offset = 0, 
+                      left = MIN(cmd->count,  p->buffer->size - p->buffer->rcursor);
 		int left_to_read = 0, read = 0, ret_read = 0;
 		char *bcheck, character;
 
@@ -170,15 +170,9 @@ struct pipes_res * preadgen(struct pipes_read *cmd, int delimited, struct pipe *
 			}
 		}
 
-/*		if(p->task1_closed && p->buffer->rcursor == p->buffer->size)
-		{
-			res = build_response_msg(PIPESERR_OK);
-		}
-		else*/
-		{
-			res = build_response_msg(PIPESERR_OK);
-		}
-		res->param1 = ret_read;
+        res = build_response_msg(PIPESERR_OK);
+		
+        res->param1 = ret_read;
 		res->param2 = (p->buffer->rcursor == p->buffer->size);
 
 		// if reading was delimited, append \0 to the end of the buffer

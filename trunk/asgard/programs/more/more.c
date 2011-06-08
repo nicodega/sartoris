@@ -109,9 +109,7 @@ int main(int argc, char **args)
         }
         i++;
     }
-
-    //printf("Reading: %s\n", path);
-
+    
     if(path == NULL && feof(&stdin))
 	{
 		printf(invalid_params, 12);
@@ -159,7 +157,8 @@ int main(int argc, char **args)
         console = fopen(ctermid(NULL), "r");
     }
 
-    int count, total = 0, read, clines = lines, cont = 0;
+    int count = 0, total = 0, read, clines = lines, cont = 0;
+
 	while(!feof(f))
 	{
         count = 0;
@@ -168,7 +167,7 @@ int main(int argc, char **args)
             if(hex)
             {
                 read = fread(buffer, 1, 16, f);
-                if(read != 16)
+                if(read == 0)
                 {
                     if(!feof(f) || ioerror() != IOLIBERR_OK)
                     {
@@ -216,34 +215,33 @@ int main(int argc, char **args)
                 read = strlen(buffer);
             }		          
                         
-            if(total >= start)
-            {
-                if(hex)
-                {   
-                    int j, l, p;
+            if(hex)
+            {   
+                int j, l, p;
 
-                    for(j = 0; j < 81; j++)
-                        hbuffer[j] = ' ';
+                for(j = 0; j < 81; j++)
+                    hbuffer[j] = ' ';
 
-                    l = sprintf(hbuffer, "%x ", count * 16);
-                    hbuffer[l] = ' ';
+                l = sprintf(hbuffer, "%x ", total * 16);
+                hbuffer[l] = ' ';
                     
-                    for(j = 0; j < read; j++)
-                    {
-                        p = j*3 + 10;
-                        l = sprintf(&hbuffer[p], "%02x", (0x000000FF & (int)buffer[j]));
-                        hbuffer[p + l] = ' ';
-                    }
-                    hbuffer[9] = ':';
-                    hbuffer[80] = '\0';
-                    printf(hbuffer);
-                }
-                else
+                for(j = 0; j < read; j++)
                 {
-		            printf(buffer);
+                    p = j*3 + 10;
+                    l = sprintf(&hbuffer[p], "%02x", (0x000000FF & (int)buffer[j]));
+                    hbuffer[p + l] = ' ';
                 }
+                hbuffer[9] = ':';
+                hbuffer[80] = '\0';
+                printf(hbuffer);
             }
+            else
+            {
+		        printf(buffer);
+            }
+            
             count++;
+            total++;
         }while(count < clines);
 
         // wait for input
