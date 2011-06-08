@@ -198,7 +198,8 @@ int get_device_info(struct stdfss_cmd *cmd,int taskid, int fileid, int *deviceid
                     return FALSE;
                 }
 
-                // don't let them execute operations on taken over files
+                // - Don't let them execute operations on taken over files
+                // - Don't let the taking over task close the file.
                 if(tfinf->takeover != NULL && (tfinf->takeover != tinf || (cmd->command == STDFSS_CLOSE && tfinf->takeover == tinf)))
                 {
                     leave_mutex(&opened_files_mutex);
