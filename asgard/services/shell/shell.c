@@ -307,69 +307,69 @@ void service_main (void)
  */
 int run_command(int term, char* cmd)
 { 
-  // support for ; separators (batching)
-  char *cmd_line = cmd /*csl_cmd[term]*/ + ((cslown[term].batched_index != -1)? cslown[term].batched_index : 0);
+    // support for ; separators (batching)
+    char *cmd_line = cmd + ((cslown[term].batched_index != -1)? cslown[term].batched_index : 0);
 
-  if(streq(cmd_line, '\0'))
-  {
+    if(streq(cmd_line, '\0'))
+    {
         show_prompt(term);
         return 0;
-  }
+    }
 
-  int i = 0, ln = len(cmd_line), brk = 0;
-  while(i < ln) 
-  {
-	if(cmd_line[i] == '"')
-	{
-		brk = !brk;
-	}
-	else if(cmd_line[i] == ';' && !brk)
-	{
-		cmd_line[i] = '\0';
-		if(cslown[term].batched_index != -1)
-			cslown[term].batched_index += i + 1;
-		else
-			cslown[term].batched_index = i + 1;
-		break;
-	}
-	i++;
-  }
+    int i = 0, ln = len(cmd_line), brk = 0;
+    while(i < ln) 
+    {
+        if(cmd_line[i] == '"')
+        {
+            brk = !brk;
+        }
+        else if(cmd_line[i] == ';' && !brk)
+        {
+            cmd_line[i] = '\0';
+            if(cslown[term].batched_index != -1)
+                cslown[term].batched_index += i + 1;
+            else
+                cslown[term].batched_index = i + 1;
+            break;
+        }
+        i++;
+    }
 
-  if(i == ln)
-  {
-	cslown[term].batched_index = -1; // no more commands
-  }
+    if(i == ln)
+    {
+        cslown[term].batched_index = -1; // no more commands
+    }
 
-  trim(cmd_line);
+    trim(cmd_line);
 
-  if(streq(cmd_line, '\0'))
-  {
-      show_prompt(term);
-	  return 0;
-  }
+    if(streq(cmd_line, '\0'))
+    {
+        show_prompt(term);
+        return 0;
+    }
 
-  term_print(term, "\n");
+    term_print(term, "\n");
 
-  /* See if it's an internal command */
-  if(run_internal(term, cmd_line))
-  {
-	if(cslown[term].batched_index == -1)
-	{
-		show_prompt(term);
-		return 1;
-	}
+    /* See if it's an internal command */
+    if(run_internal(term, cmd_line))
+    {
+        if(cslown[term].batched_index == -1)
+        {
+            show_prompt(term);
+            return 1;
+        }
 
-	return run_command(term, cmd /*cmd[term]*/);
-  }
+        return run_command(term, cmd);
+    }
 
-  // not an internal command, attempt running
-  if(run(term, cmd_line)) return 1;
-	
-  // ok, it's not a recognised command, fail
-  term_color_print(term, "Unrecognised command.\n", 7);
-  
-  show_prompt(term);
+    // not an internal command, attempt running
+    if(run(term, cmd_line)) return 1;
 
-  return 0;
+    // ok, it's not a recognised command, fail
+    term_color_print(term, "\nUnrecognised command.\n", 7);
+
+    show_prompt(term);
+
+    return 0;
 }
 

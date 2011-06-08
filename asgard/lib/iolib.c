@@ -300,8 +300,7 @@ FILE *open_spipe(int wtask, int rtask)
 		free(file);
 		return NULL;
 	}
-	//////////////////////
-
+	//////////////////////		
 	open_msg.command = PIPES_OPENSHARED;
 	open_msg.ret_port = g_ioport;
 	open_msg.task1 = wtask;
@@ -311,7 +310,7 @@ FILE *open_spipe(int wtask, int rtask)
 
 	if(open_res.ret != PIPESERR_OK)
 	{
-		iolasterr = map_error(open_res.ret, ERRSOURCE_PIPES);
+        iolasterr = map_error(open_res.ret, ERRSOURCE_PIPES);
 		free(file);
 		return NULL;
 	}

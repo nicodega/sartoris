@@ -82,17 +82,17 @@ struct pipes_res * pwritegen(struct pipes_write *cmd, int delimited, struct pipe
 	}
 	else
 	{
-		unsigned long offset = 0, left = 0, written = 0, curd;
+		unsigned long offset = 0, left = 0, written = 0, bwritec;
 		struct pipe_buffer_block *b = NULL;
 		int i;
-//print("writing",0);
+
 		// as this function is not as simple as read, if writing is delimited, we will modify command
 		// count now, by reading the user buffer
 		if(delimited)
 		{
 			left = cmd->count; 	// remaining
-			offset = 0;		// offset on sender buffer
-			i = 0;			// count
+			offset = 0;		    // offset on sender buffer
+			i = 0;			    // count
 			
 			while(left > 0)
 			{
@@ -111,7 +111,7 @@ struct pipes_res * pwritegen(struct pipes_write *cmd, int delimited, struct pipe
 
 			cmd->count = i;
 		}
-
+        
 		// if writing nothing return ok
 		if(cmd->count == 0)
 		{
@@ -127,46 +127,56 @@ struct pipes_res * pwritegen(struct pipes_write *cmd, int delimited, struct pipe
 		i = 0;
 		unsigned int bn = (int)(p->buffer->wcursor / PIPES_BUFFER_SIZE);
 
-		while(i < bn)
-		{
-			b = (struct pipe_buffer_block *)get_next(&it);	
-			i++;
-		}
+        if(it != NULL)
+        {
+		    do
+		    {
+			    b = (struct pipe_buffer_block *)get_next(&it);	
+			    i++;
+		    }while(i < bn);
+        }
 
 		left = cmd->count;
-		curd = p->buffer->wcursor % PIPES_BUFFER_SIZE;
-
+        offset = 0;
+		bwritec = p->buffer->wcursor % PIPES_BUFFER_SIZE;
+        
 		while(left > 0)
 		{
-			bn = (int)((p->buffer->wcursor + cmd->count - written) / PIPES_BUFFER_SIZE);
-
+			bn = (int)((p->buffer->wcursor + cmd->count - left) / PIPES_BUFFER_SIZE);
+            
 			// get a new block if needed
-			if(bn > length(&p->buffer->blocks))
-			{
-				add_tail(&p->buffer->blocks, alloc_block());	
+			if(bn >= length(&p->buffer->blocks))
+			{			
+                bwritec = 0;
+                b = alloc_block();
+				add_tail(&p->buffer->blocks, b);	
 			}
 
+            written =  MIN( PIPES_BUFFER_SIZE - bwritec, left);
+            
 			// write data from smo onto the current block
 			if(cmd->command == STDFSS_PUTC)
 			{
-				*((char*)(b->bytes + curd)) = ((struct stdfss_putc *)cmd)->c;
+				*((char*)(b->bytes + bwritec)) = ((struct stdfss_putc *)cmd)->c;
 			}
 			else
 			{
-				read_mem(cmd->smo, offset, MIN( PIPES_BUFFER_SIZE - curd, cmd->count), (char*)(b->bytes + curd));
+				read_mem(cmd->smo, offset, written, (char*)(b->bytes + bwritec));
 			}
 
-			p->buffer->wcursor += MIN( PIPES_BUFFER_SIZE-curd, left );
-			offset += MIN( PIPES_BUFFER_SIZE-curd, left );
-			written += MIN( PIPES_BUFFER_SIZE-curd, left );
-			// decrement left on bytes read
-			left -=  MIN( PIPES_BUFFER_SIZE-curd, left );
-			curd = 0;
+			p->buffer->wcursor += written;
+			offset += written;
+			left -= written;
+            bwritec += written;
 		}
-		if(p->buffer->size < p->buffer->wcursor) p->buffer->size = p->buffer->wcursor;
+
+		if(p->buffer->size < p->buffer->wcursor) 
+            p->buffer->size = p->buffer->wcursor;
 		res = build_response_msg(PIPESERR_OK);
+
 		res->param1 = 0;
 		res->param2 = (p->buffer->wcursor == p->buffer->size); // eof
+
 	}
 	return res;
 }

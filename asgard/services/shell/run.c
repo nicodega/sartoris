@@ -45,16 +45,16 @@ int run(int term, char *cmd_line)
 		{
 			return FALSE;
 		}
-
-		struct console_proc_info *pinf2 = run_partial(term, cmd_line2, 1, 1, &console2);
+        
+        struct console_proc_info *pinf2 = run_partial(term, cmd_line2, 1, 1, &console2);
 		if(pinf2 == NULL)
 		{
 			destroy_tsk(pinf->task);
 			task_finished(pinf->task, -1);
 			return FALSE;
 		}
-
-		// FIXED: Now an internal task id is used for pipes (because of task id reuse)
+        
+		// The internal task id is used for pipes (because of task id reuse)
 		pinf->piped_to_task = pinf2->id;
 		pinf2->piped_to_task = pinf->id;
 
@@ -71,12 +71,14 @@ int run(int term, char *cmd_line)
 
 		if(!finish_execute(pinf, pipe, 0))
 		{
+            print("Finish execute failed for cmd 1\n");
 			destroy_tsk(pinf2->task);
 			task_finished(pinf2->task, -1);
 		}
 
 		if(!finish_execute(pinf2, pipe, 1))
 		{
+            print("Finish execute failed for cmd 2\n");
 			// just close the pipe...
 			fclose(pipe);
 		}
