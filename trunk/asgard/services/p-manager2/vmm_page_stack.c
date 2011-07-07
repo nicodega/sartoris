@@ -71,7 +71,6 @@ void push_page(struct page_stack *ps, ADDR new_page)
 ADDR pop_page(struct page_stack *ps) 
 {
 	ADDR ret_page = NULL;
-
 	/* if we have pages at all, */
 	if(ps->top_page)
 	{
@@ -110,7 +109,7 @@ ADDR pop_page(struct page_stack *ps)
 	}
 	else
 	{
-		pman_print_and_stop("PAGE STACK: NULL PAGE RETURN");
+		pman_print_dbg("PAGE STACK: NULL PAGE RETURN\n");
 	}
 
 	return ret_page;

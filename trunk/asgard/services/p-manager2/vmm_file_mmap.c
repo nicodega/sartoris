@@ -207,6 +207,8 @@ UINT32 vmm_fmap(UINT16 task_id, UINT32 fileid, UINT16 fs_task, ADDR start, UINT3
 					
 					/* Put page onto PMAN */
 					vmm_put_page((ADDR)pg_addr);
+
+                    task->vmm_info.page_count--;
 				}
 			}
 		}
@@ -474,6 +476,7 @@ INT32 vmm_fmap_flush_callback(struct fsio_event_source *iosrc, INT32 ioret)
 				vmm_put_page((ADDR)PHYSICAL2LINEAR(PG_ADDRESS(tbl->pages[PM_LINEAR_TO_TAB(fm->release_addr)].entry.phy_page_addr)));
 
 				/* NOTE: I don't remove IO lock here for taken record has been reseted with vmm_put_page */
+                task->vmm_info.page_count--;
 			}			
 		}
 

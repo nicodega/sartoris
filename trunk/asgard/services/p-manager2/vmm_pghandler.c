@@ -81,7 +81,7 @@ BOOL vmm_handle_page_fault(UINT16 *thr_id, BOOL internal)
         {
 		    if(pf.task_id == PMAN_TASK)
 			    pman_print_and_stop("PMAN: INTERNAL PF linear: %x, task: %i, thr: %i ", pf.linear, pf.task_id, pf.thread_id);
-		
+
 		    task_id = pf.task_id; 
 		    thread_id = pf.thread_id;
 		
@@ -210,13 +210,13 @@ BOOL vmm_handle_page_fault(UINT16 *thr_id, BOOL internal)
     */
     if(task->vmm_info.regions != NULL)
     {
-        pman_print_dbg("PF: Regions!!\n");
-        ma_node *n = ma_search_point(&task->vmm_info.regions, (UINT32)pf.linear);
+        ma_node *n = ma_search_point(&task->vmm_info.regions, (UINT32)pf.linear - SARTORIS_PROCBASE_LINEAR);
         int libret;
 
 	    if(n != NULL)
         {
             struct vmm_memory_region *mreg = VMM_MEMREG_MEMA2MEMR(n);
+
             switch(mreg->type)
             {
                 case VMM_MEMREGION_FMAP:
@@ -226,7 +226,7 @@ BOOL vmm_handle_page_fault(UINT16 *thr_id, BOOL internal)
                 case VMM_MEMREGION_SHARED:
                     return vmm_page_shared(task, (ADDR)PG_ADDRESS(pf.linear), mreg);    // page is shared
                 case VMM_MEMREGION_LIB:
-                    libret = vmm_page_filemapped(task, thread, (ADDR)PG_ADDRESS(pf.linear), mreg);
+                    libret = vmm_page_lib(task, thread, (ADDR)PG_ADDRESS(pf.linear), mreg);
 
                     if(libret == 1) return FALSE;
                     else if(libret == 2) return TRUE;
@@ -293,6 +293,12 @@ BOOL vmm_handle_page_fault(UINT16 *thr_id, BOOL internal)
         vmm_set_flags(task_id, thread->vmm_info.page_in_address, TRUE, TAKEN_EFLAG_IOLOCK | TAKEN_EFLAG_PF, TRUE);
 
 		thread->io_finished.callback = vmm_elffile_seekend_callback;
+
+        // if it's a different task, set the IO source
+        if(thread->task_id != task_id)
+        {
+            io_set_src(&thread->io_event_src, &task->io_event_src);
+        }
 		
 		io_begin_seek(&thread->io_event_src, filepos);
 
@@ -363,6 +369,7 @@ INT32 vmm_elffile_seekend_callback(struct fsio_event_source *iosrc, INT32 ioret)
 		vmm_page_ioerror(thread, FALSE);
 		return 0;
 	}
+
     vmm_check_threads_pg(&thread, FALSE);
 
     if(!thread)
@@ -408,24 +415,31 @@ INT32 vmm_elffile_readend_callback(struct fsio_event_source *iosrc, INT32 ioret)
         // see if it's an executable section of the library
         struct taken_entry *tentry = vmm_taken_get(thread->vmm_info.page_in_address);
 
-        if(tentry->data.b_pdir.eflags & TAKEN_PG_FLAG_LIBEXE)
+        if(tentry->data.b_pg.flags & TAKEN_PG_FLAG_LIBEXE)
         {
             /* Page in on library address space */
             pm_page_in(thread->vmm_info.fault_task, (ADDR)PG_ADDRESS(thread->vmm_info.pg_node.value), (ADDR)LINEAR2PHYSICAL(thread->vmm_info.page_in_address), 2, thread->vmm_info.page_perms);
-        }        
+
+            /* Remove page from pman address space and create assigned record. */
+            vmm_unmap_page(task->id, PG_ADDRESS(thread->vmm_info.pg_node.value));
+        }
+        else
+        {
+            /* Remove page from pman address space and create assigned record. */
+            vmm_unmap_page(thread->task_id, PG_ADDRESS(thread->vmm_info.fault_address));
+        }
     }
     else
     {
         /* Page in on process address space */
         pm_page_in(thread->vmm_info.fault_task, (ADDR)PG_ADDRESS(thread->vmm_info.fault_address), (ADDR)LINEAR2PHYSICAL(thread->vmm_info.page_in_address), 2, thread->vmm_info.page_perms);
+
+        vmm_unmap_page(thread->task_id, PG_ADDRESS(thread->vmm_info.fault_address));
     }
       
     /* Un set IOLCK on the page */
     vmm_set_flags(task->id, (ADDR)thread->vmm_info.page_in_address, TRUE, TAKEN_EFLAG_IOLOCK, FALSE);
-  
-    /* Remove page from pman address space and create assigned record. */
-    vmm_unmap_page(task->id, PG_ADDRESS(thread->vmm_info.fault_address));
-
+    
     /* Wake threads waiting for this page */
     vmm_wake_pf_threads(thread);
 
@@ -436,24 +450,28 @@ void vmm_page_ioerror(struct pm_thread *thread, BOOL removeTBLTree)
 {
     struct pm_thread *curr_thr;
     int task_id = thread->task_id;
-    struct pm_task *task = tsk_get(thread->task_id), *t;
     rbnode n = thread->vmm_info.pg_node;
     rbnode *currnode = NULL, *on = NULL;
+    struct pm_task *task = tsk_get(thread->vmm_info.fault_task), *t;
+
+    pman_print_dbg("PF: IO ERROR \n");
 
     /* Return page to vmm, for it hasn't been mapped yet and it wouldn't be freed. */
 	if(thread->vmm_info.page_in_address)
     {
         vmm_put_page(thread->vmm_info.page_in_address);
+        task->vmm_info.page_count--;
         thread->vmm_info.page_in_address = NULL;
     }
     
     currnode = thread->vmm_info.pg_node.next;
-    
-    fatal_exception(thread->task_id, PG_IO_ERROR);
-
-    // If there's a thread from other task waiting, we will not 
-    // send an exception, we will wake it (it's here because of 
-    // an smo operation and it'll fail).
+        
+    // If there's a thread from other task waiting, we will:
+    // - Send an exception if it was a library read.
+    // - Continue pending threads if it's because of an smo
+    //   operation (read/write will fail).
+    // We won't do anything with the faulting task except it's 
+    // the thread task.
     while(currnode != NULL)
     {
         on = currnode->next;
@@ -463,35 +481,51 @@ void vmm_page_ioerror(struct pm_thread *thread, BOOL removeTBLTree)
         if(curr_thr->task_id != task_id)
         {
             t = tsk_get(curr_thr->task_id);
-            
-            if(curr_thr->state == TSK_KILLED)
-            {
-                rb_remove_child(&task->vmm_info.wait_root, currnode);
-                if(removeTBLTree)
-                    rb_remove_child(&task->vmm_info.tbl_wait_root, &thread->vmm_info.tbl_node);
-                thr_destroy_thread(thread->id);
 
-                if(t->killed_threads == 0)
-                    tsk_destroy(task);
+            if(task->flags & TSK_SHARED_LIB)
+            {
+                // kill the task
+                fatal_exception(t->id, PG_IO_ERROR);
             }
             else
             {
-                // wake the thread
                 curr_thr->flags &= ~(THR_FLAG_PAGEFAULT | THR_FLAG_PAGEFAULT_TBL);
-                curr_thr->state = THR_WAITING;
-			    sch_activate(curr_thr);
+                
+                if(curr_thr->state == THR_KILLED)
+                {
+                    rb_remove_child(&task->vmm_info.wait_root, currnode);
+                    if(removeTBLTree)
+                        rb_remove_child(&task->vmm_info.tbl_wait_root, &thread->vmm_info.tbl_node);
+                
+                    thr_destroy_thread(thread->id);
+
+                    tsk_destroy(task);
+                }
+                else
+                {
+                    // wake the thread
+                    curr_thr->state = THR_WAITING;
+			        sch_activate(curr_thr);
+                }
             }
         }
         else
-        {   
-            // this is the page fault task.. since we sent a fatal exception,
-            // it'll be on killing state
+        {
             curr_thr->flags &= ~THR_FLAG_PAGEFAULT;
         }
 
         currnode = on;
     }
 
+    // restore the IO source it it's not the same task
+    if(thread->task_id != task->id)
+    {
+        t = tsk_get(thread->task_id);
+        io_set_src(&thread->io_event_src, &t->io_event_src);
+    }
+    
+    fatal_exception(thread->task_id, PG_IO_ERROR);
+    
     rb_remove(&task->vmm_info.wait_root, &thread->vmm_info.pg_node);
     if(removeTBLTree)
         rb_remove_child(&task->vmm_info.tbl_wait_root, &thread->vmm_info.tbl_node);
@@ -504,7 +538,7 @@ and destroy it's task if it was also killed.
 */
 void vmm_check_threads_pg(struct pm_thread **thr, BOOL removeTBLTree)
 {
-    struct pm_thread *thread = *thr, *athread, *curr_thr, *othr;
+    struct pm_thread *thread = *thr, *athread, *curr_thr, *othr = NULL;
 	struct pm_task *task, *t;
     int task_id = thread->task_id;
     ADDR pg_addr = thread->vmm_info.page_in_address;
@@ -518,36 +552,52 @@ void vmm_check_threads_pg(struct pm_thread **thr, BOOL removeTBLTree)
 	while(currnode)
 	{
         curr_thr = thr_get(currnode->value2);
-    
+        t = tsk_get(curr_thr->task_id);
+
         on = currnode->next;
         
-        if(curr_thr->state == TSK_KILLED)
+        curr_thr->flags &= ~(THR_FLAG_PAGEFAULT | THR_FLAG_PAGEFAULT_TBL);
+		    
+        if(curr_thr->state == THR_KILLED)
         {
             /* Thread was killed! */
-            curr_thr->flags &= ~(THR_FLAG_PAGEFAULT | THR_FLAG_PAGEFAULT_TBL);
-		     
-			if(on)
+			if(on && othr == NULL)
             {
                 othr = thr_get(on->value2);
-                othr->vmm_info.page_in_address = curr_thr->vmm_info.page_in_address;
+                othr->vmm_info.page_in_address = pg_addr;
             }
 
             if(athread == curr_thr)
+            {
+                athread = NULL;
+            }
+            else if(othr == NULL)
+            {
+                // set the IO source if it's not the same task as the thread
+                if(curr_thr->task_id != task->id)
+                    io_set_src(&curr_thr->io_event_src, &task->io_event_src);
+                athread = curr_thr;
+            }
+            else
+            {
+                // set the IO source if it's not the same task as the thread
+                if(curr_thr->task_id != task->id)
+                    io_set_src(&othr->io_event_src, &task->io_event_src);
                 athread = othr;
+            }
                
-            /* this thread was killed and does not belong to the page fault task */
             rb_remove_child(&task->vmm_info.wait_root, &curr_thr->vmm_info.pg_node);
             if(removeTBLTree)
                 rb_remove_child(&task->vmm_info.tbl_wait_root, &curr_thr->vmm_info.tbl_node);
             
-            if(curr_thr->task_id != task_id || thread->vmm_info.fault_task != task_id)
+            /* this thread was killed it does not belong to the page fault task */
+            if(thread->vmm_info.fault_task != thread->task_id)
             {
                 // destroy the thread
                 t = tsk_get(curr_thr->task_id);
                 thr_destroy_thread(curr_thr->id);
                 
-                if(t->state == TSK_KILLED && t->killed_threads == 0)
-                    tsk_destroy(t);
+                tsk_destroy(t);
             }   
         }
         else if(task->state == TSK_KILLED 
@@ -560,41 +610,41 @@ void vmm_check_threads_pg(struct pm_thread **thr, BOOL removeTBLTree)
             // - If the task is a shared library, in order for it to be killed
             //   this thread task must have been killed, then it'll fall on the 
             //   first condition.
-            curr_thr->flags &= ~(THR_FLAG_PAGEFAULT | THR_FLAG_PAGEFAULT_TBL);
 		    curr_thr->state = THR_WAITING;
 	        sch_activate(curr_thr);
         }
 
         currnode = on;
 	}
-    
-    // if the original task was killed, then destroy it
-    if(task->state == TSK_KILLED && task->killed_threads == 0)
-	{
-        if(thread->vmm_info.fault_task == task_id)
-        {
-            thr_destroy_thread(thread->id);
-            
-            rb_remove(&task->vmm_info.wait_root, &thread->vmm_info.pg_node); 
-            if(removeTBLTree)
-                rb_remove(&task->vmm_info.tbl_wait_root, &thread->vmm_info.tbl_node);
 
-            if(task->killed_threads == 0)
-                tsk_destroy(task);
-        }
-        else if ((task->flags & TSK_SHARED_LIB) && task->vmm_info.wait_root.root == NULL)
+    // restore the IO source it it's not the same task and our 
+    // thread is dead
+    if(athread != thread && thread->task_id != task->id)
+    {
+        t = tsk_get(thread->task_id);
+        io_set_src(&thread->io_event_src, &t->io_event_src);
+    }
+    
+    if(athread == NULL && pg_addr)
+    {
+        vmm_put_page(pg_addr);
+        task->vmm_info.page_count--;
+    }
+
+    // if the original task was killed, then destroy it
+    if(task->state == TSK_KILLED)
+	{
+        if ((task->flags & TSK_SHARED_LIB) == 0
+            || ((task->flags & TSK_SHARED_LIB) && task->vmm_info.wait_root.root == NULL))
         {
-            tsk_destroy(task);  // it was a shared library waiting to be removed
+              // it was a shared library waiting to be removed
+            // or a task waiting to be killed
+            tsk_destroy(task);
         }
 
         *thr = NULL;
         return;
 	}
-
-    if(athread == NULL && pg_addr)
-    {
-        vmm_put_page(pg_addr);
-    }
         
     *thr = athread;
 }
@@ -609,9 +659,19 @@ void vmm_wake_pf_threads(struct pm_thread *thread)
     struct pm_task *task = NULL;
     rbnode *currnode = NULL, *on = NULL;
 
-	/* First things first: Unblock the thread and reactivate it. */
+	/* 
+       First things first: Unblock the first 
+       faulting thread and reactivate it. 
+    */
 	thread->state = THR_WAITING;	
 	thread->flags &= ~(THR_FLAG_PAGEFAULT | THR_FLAG_PAGEFAULT_TBL);
+
+    if(thread->task_id != thread->vmm_info.fault_task)
+    {
+        task = tsk_get(thread->task_id);
+        io_set_src(&thread->io_event_src, &task->io_event_src);
+        task = NULL;
+    }
 
 	sch_activate(thread);
 

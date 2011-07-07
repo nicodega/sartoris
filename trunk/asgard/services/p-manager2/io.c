@@ -902,3 +902,10 @@ void ioslot_return(UINT32 id)
 	ioslots.free_first = ioslot;
 	ioslots.free_count++;
 }
+
+void io_set_src(struct fsio_event_source *iosrc_dst, struct fsio_event_source *iosrc_src)
+{
+    iosrc_dst->file_id = iosrc_src->file_id;
+    iosrc_dst->fs_service = iosrc_src->fs_service;
+    iosrc_dst->size = iosrc_src->size;
+}

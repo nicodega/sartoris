@@ -2,17 +2,17 @@ include ../../include/dep_rule.mk
 
 CFLAGS += -I"../../include" -fPIC
 
-objects = start.o ld.o ldio.o  $(extobjects)
+objects = start.o ldselflink.o bind_start.o ld.o ldio.o lddebug.o  $(extobjects)
 
-extobjects = ../../klib/kserv-user.o ../../lib/scheduler.o ../../lib/debug.o ../../drivers/screen/screen.o
+extobjects = ../../klib/kserv-user.o ../../lib/scheduler.o ../../drivers/screen/screen.o
 
-dependencies = ld.d ldio.d
+dependencies = ld.d ldio.d lddebug.d ldselflink.d
 
 all : ld.img 
 
 .PHONY : ld.img
 ld.img : $(objects) 
-	$(LD) -T ./linkscript --Map ld.map -o ld.elf.img $(objects)
+	$(LD) -shared -nostdlib -soname ld.so -T ./linkscript --Map ld.map -o ld.elf.img $(objects)
 	../../tools/sld ld.elf.img ld.img
 	
 .PHONY : clean

@@ -63,7 +63,8 @@ void loader_calculate_working_set(struct pm_task *task);
 BOOL loader_filepos(struct pm_task *task, ADDR linear, UINT32 *outpos, UINT32 *outsize, INT32 *perms, INT32 *page_displacement, BOOL *exec);
 BOOL loader_collides(struct pm_task *task, ADDR lstart, ADDR lend);
 BOOL loader_task_loaded(struct pm_task *task, char *interpreter);
-
+ADDR loader_task_ep(struct pm_task *task);
+ADDR loader_lddynsec_addr();
 
 #endif
 

@@ -132,10 +132,10 @@ struct vmm_memory_region
 	UINT16 flags;           // Exclusive, write, execute, etc
 	ADDR descriptor;        // The typed global memory region descriptor to which this memory regions belongs.
                             // NOTE: Many memory regions might contain the same descriptor.
-	ma_node tsk_node;       // Node on task memory areas
-    rbnode tsk_id_node;     // Node on task memory regions by id tree
     struct vmm_memory_region *next; // on the descriptor "regions" list
     struct vmm_memory_region *prev; // on the descriptor "regions" list
+	ma_node tsk_node;       // Node on task memory areas
+    rbnode tsk_id_node;     // Node on task memory regions by id tree
 } PACKED_ATT;
 
 /* Memory region Types */
@@ -190,8 +190,6 @@ struct vmm_fmap_descriptor
 Shared Pages Region Descriptor 
 */
 
-#define MAREA2SHAREDDESC(a) ((struct vmm_shared_descriptor*)((unsigned int)a - sizeof(struct vmm_shared_descriptor) + sizeof(ma_node)))
-
 struct vmm_shared_descriptor
 {
 	struct vmm_memory_region *regions;      // memory regions referencing this descriptor
@@ -220,7 +218,7 @@ struct vmm_slib_descriptor
 	struct vmm_memory_region *regions;  // memory regions referencing this descriptor
     int references;                     // references to the library
     char *path;                         // library path
-    struct vmm_slib_descriptor *next; // used on the libraries list on vmm main struct
+    struct vmm_slib_descriptor *next;   // used on the libraries list on vmm main struct
     struct vmm_slib_descriptor *prev;
     int task;                           // the task for this shared library (where we will get our pages from)
     BOOL loaded;                        
@@ -340,6 +338,11 @@ ADDR vmm_pm_get_page(BOOL lowmem);
 // Return a page to the free set
 void vmm_pm_put_page(ADDR page_addr);
 
+// map a page already taken by a task for pman read/write
+UINT32 vmm_temp_pgmap(struct pm_task *task, ADDR proc_laddress);
+// restore a mapping
+void vmm_restore_temp_pgmap(struct pm_task *task, ADDR proc_laddress, UINT32 assigned_bck);
+
 // initialize Task VMM information structure
 void vmm_init_task_info(struct task_vmm_info *vmm_info);
 // Decide if a task can be loaded, based on the expected working set and physical/virtual memory available
@@ -362,7 +365,9 @@ void vmm_put_page(ADDR address);
 // map a page to a process linear address
 void vmm_map(ADDR page_addr, ADDR linear);
 // claim a task address space completely
-void vmm_claim(UINT16 task);
+void vmm_claim(struct pm_task *task);
+// claim a memory region pages from a task
+void vmm_claim_region(struct pm_task *task, struct vmm_memory_region *mreg);
 // Interrupt handler for PF
 void vmm_paging_interrupt_handler();
 // Close task address space (free descriptors, flush FMAPs, return pages to pool)

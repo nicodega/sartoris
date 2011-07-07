@@ -26,6 +26,7 @@ This will allow us to insert, remove and query for collitions in O(log(n)) time.
 
 #include "vmm_memarea.h"
 
+
 #define RED   1
 #define BLACK 0
 
@@ -39,9 +40,9 @@ ma_node *ma_single_rotation(memareas *t, ma_node *n, int dir );
 ma_node *ma_double_rotation(memareas *t, ma_node *n, int dir );
 void ma_fix_insert(memareas *t, ma_node *n);
 
-static inline intersects(ma_node *n, UINT32 low, UINT32 high)
+static inline int intersects(ma_node *n, UINT32 low, UINT32 high)
 {
-    return (n->low <= high && low <= n->high);
+    return (n->low < high && low < n->high);
 }
 
 /*
@@ -128,13 +129,17 @@ This function runs in O(log(n)) time on the worst case.
 ma_node *ma_search_point(memareas *t, UINT32 p) 
 {
 	ma_node *current = *t;
-			
-	while (current != NULL && !(current->low <= p && current->high > p)) 
+    	
+    while (current != NULL && !(current->low <= p && current->high > p)) 
 	{
 		if(current->link[0] && current->link[0]->max > p)
+        {
 			current = current->link[0];
+        }
 		else
+        {
 			current = current->link[1];
+        }
 	}
     		
 	return current;
@@ -162,7 +167,6 @@ int ma_insert(memareas *t, ma_node *n)
 {
     ma_node *parent = NULL;
 	ma_node *current = *t;
-    ma_node *lastLeft = NULL, *lastRight = NULL;
     
     n->link[0] = NULL;
     n->link[1] = NULL;
@@ -175,7 +179,6 @@ int ma_insert(memareas *t, ma_node *n)
 			
 		if (n->low < current->low) 
 		{	
-            lastLeft = current;
 			current = current->link[0];
 		}
 		else
@@ -184,9 +187,10 @@ int ma_insert(memareas *t, ma_node *n)
             {
                return FALSE;
             }
-            lastLeft = current;
 			current = current->link[1];				
 		}
+        if(parent->max < n->high)
+            parent->max = n->high;
 	}
 
     // color the node red and hang it from the parent
@@ -207,9 +211,9 @@ int ma_insert(memareas *t, ma_node *n)
     
     if(n->link[0] && n->link[1])
         n->max = MAX(n->high, MAX(n->link[0]->max, n->link[1]->max));
-    else if(!n->link[0])
+    else if(n->link[0])
         n->max = MAX(n->high, n->link[0]->max);
-    else
+    else if(n->link[1])
         n->max = MAX(n->high, n->link[1]->max);
 
     // fix the tree
@@ -300,16 +304,16 @@ void ma_fix_maxs(ma_node *n, ma_node *y)
     // fix maxs
     if(n->link[0] && n->link[1])
         n->max = MAX(n->high, MAX(n->link[0]->max, n->link[1]->max));
-    else if(!n->link[0])
+    else if(n->link[0])
         n->max = MAX(n->high, n->link[0]->max);
-    else
+    else if(n->link[1])
         n->max = MAX(n->high, n->link[1]->max);
 
     if(y->link[0] && y->link[1])
         y->max = MAX(y->high, MAX(y->link[0]->max, y->link[1]->max));
-    else if(!y->link[0])
+    else if(y->link[0])
         y->max = MAX(y->high, y->link[0]->max);
-    else
+    else if(y->link[1])
         y->max = MAX(y->high, y->link[1]->max);
 }
 
@@ -456,7 +460,7 @@ void ma_remove(memareas *t, ma_node *n)
                         }
                         else 
                         {
-                            int dir2 = g->link[1] == p;
+                            int dir2 = (g->link[1] == p);
  
                             if ( s->link[last]->color == RED )
                                 ma_double_rotation(t, p, last );
@@ -480,7 +484,7 @@ void ma_remove(memareas *t, ma_node *n)
             f->high = q->high;
             f->parent = q->parent;
             f->max = q->max;
-            p->link[p->link[1] == q] = q->link[q->link[0] == NULL];            
+            p->link[p->link[1] == q] = q->link[q->link[0] == NULL];
         }
  
         /* Update root and make it black */

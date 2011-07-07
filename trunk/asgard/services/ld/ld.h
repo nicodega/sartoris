@@ -144,6 +144,9 @@ typedef struct __dl_object
     unsigned int fini;
     unsigned int pltrel;
     unsigned int dynamic; // address of the dynamic section
+    unsigned int *buckets;
+    unsigned int *chain;
+    unsigned int nbuckets;
     char *name;           // the decoded name of the dependency
     struct __dl_object *ls_first; // local scope of dependencies (when using dlopen)
     struct __dl_object *next;     // next on scope list
@@ -164,9 +167,10 @@ This functions are used on the initial relocation procedure for LD.
 static inline void RELOC_REL(Elf32_Rel *rel, Elf32_Sym *sym, unsigned int *addr, unsigned int base)
 {
 	if (ELF32_R_TYPE(rel->r_info) == R_386_RELATIVE) 
-    	*addr += base;
-	else if (ELF32_R_TYPE(rel->r_info) == R_386_GLOB_DAT) 
-    	*addr += (unsigned int)sym->st_value + base;
+    	*addr = base;
+	else if (ELF32_R_TYPE(rel->r_info) == R_386_GLOB_DAT 
+        || ELF32_R_TYPE(rel->r_info) == R_386_JMP_SLOT) 
+    	*addr = (unsigned int)sym->st_value + base;
 	else
     	__ldexit(-6); // not supported
 }
@@ -175,8 +179,9 @@ static inline void RELOC_RELA(Elf32_Rela *rel, Elf32_Sym *sym,unsigned int *addr
 {
 	if (ELF32_R_TYPE(rel->r_info) == R_386_RELATIVE) 
     	*addr = base + rel->r_addend;
-	else if (ELF32_R_TYPE(rel->r_info) == R_386_GLOB_DAT) 
-    	*addr = base + (unsigned int)sym->st_value + rel->r_addend;
+	else if (ELF32_R_TYPE(rel->r_info) == R_386_GLOB_DAT
+        || ELF32_R_TYPE(rel->r_info) == R_386_JMP_SLOT) 
+    	*addr = (unsigned int)sym->st_value + rel->r_addend + base;
 	else 
     	__ldexit(-6); // not supported	
 }
@@ -186,13 +191,15 @@ unsigned int elf_hash(const unsigned char *name);
 int dl_load(dl_object *obj, struct init_data_dl *initd);
 void dl_build_global_scope();
 int dl_resolve(int obj, int lazy);
-int dl_relocate(dl_object *obj, int rel, int relsz);
+int dl_relocate(dl_object *obj, int rel, unsigned int relsz);
 int dl_relocate_gotplt_lazy(dl_object *obj);
 char *dl_symbol_name(dl_object *obj, Elf32_Sym *sym);
-int dl_find_symbol_obj(char *name, dl_object *obj, Elf32_Sym **sym, int plt);
-int dl_find_symbol(char *name, dl_object *obj, Elf32_Sym **sym, dl_object **found_obj, int weak, int plt);
-void dl_runtime_bind(dl_object *obj, int rel_index);
+int dl_find_symbol_obj(char *name, unsigned int hv, dl_object *obj, Elf32_Sym **sym, int plt);
+int dl_find_symbol(char *name, dl_object *obj, Elf32_Sym **sym, dl_object **found_obj, int weak, int plt, int exclude_obj);
+unsigned int dl_runtime_bind(dl_object *obj, int rel_index);
 void dl_init_libs();
+void __ldmain(struct init_data_dl *initd, dyncache *dync);
+void dl_buildobject(dl_object *obj, dyncache *dyn);
 
 /* String helpers */
 int streq(char* str1, char* str2);

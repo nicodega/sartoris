@@ -49,7 +49,7 @@
 #define TSK_DYNAMIC             64	/* This task required loading by the dynamic linker    */
 #define TSK_SHARED_LIB          128	/* This task is for a shared lib. It won't have threads*/
 #define TSK_LOADING_LIB         256	/* This task is loading a shared lib.                  */
-#define TSK_DEBUG               512	/* This task being debugged by it's creator.           */
+#define TSK_DEBUG               512	/* This task is being debugged by it's creator.        */
 
 struct pm_task 
 {

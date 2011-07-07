@@ -231,6 +231,10 @@ Upon completion the source callback function will be invoked.
 */
 BOOL io_begin_release(struct fsio_event_source *iosrc);
 
-
+/*
+Sets the IO source to the one specified in order to perform a file operation
+on the iosrc_src file, using the iosrc_dst object.
+*/
+void io_set_src(struct fsio_event_source *iosrc_dst, struct fsio_event_source *iosrc_src);
 
 #endif

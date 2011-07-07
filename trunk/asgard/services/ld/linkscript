@@ -18,24 +18,22 @@ SECTIONS
   .interp : { 
 	*(.interp) 
 	} :text :interp
-  .hash   : { *(.hash) } : text
-  .dynsym : { *(.dynsym) } : text
-  .dynstr : { *(.dynstr) } : text
   .text : { 
 	*(.text .stub .text.* .gnu.linkonce.t.*) 
 	} :text
-  .init : { *(.init) } 
-  .fini : { *(.init) } 
-  .plt : { *(.plt) }
+  .hash   : { *(.hash) } : text
+  .dynsym : { *(.dynsym) } : text
+  .dynstr : { *(.dynstr) } : text
+  .init : { *(.init) } : text
+  .fini : { *(.init) } : text
+  .plt : { *(.plt) } : text
   .rodata : { *(.rodata .rodata.* .gnu.linkonce.r.* ) }      /* defaults to :text */
   .rodata1 : { *(.rodata1) }
   PROVIDE (etext = .);
-  PROVIDE (_DYNAMIC = .);
-  .dynamic : { *(.dynamic) } : dynamic
-  PROVIDE (_edynamic = .);
-  PROVIDE (_LDGOT = .);
-  .got ALIGN(0x1000) : { *(.got.plt) *(.got) } : data
-  PROVIDE (_LDGOTEND = .);
+  .dynamic ALIGN(0x1000) : { *(.dynamic) } : dynamic
+  .got ALIGN(0x1000) : { 
+    *(.got.plt) *(.got) 
+  } : data
   .rel        : { *(.rel*) }
   .rela       : { *(.rela*) }
   .data ALIGN(0x1000) : 

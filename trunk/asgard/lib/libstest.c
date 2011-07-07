@@ -26,10 +26,10 @@ int static_int = 30;
 int shared_test(int b)
 {
     static_int = 5;
-    return add(static_int, b);
+    return add(b);
 }
 
-int add(int a, int b)
+int add(int a)
 {
-    return a + b;
+    return a + static_int;
 }

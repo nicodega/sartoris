@@ -27,7 +27,7 @@ struct _rbnode
 {
     UINT32 value;                       // Memory address the thread is waiting for.
 	UINT32 value2;                      // we will allow a second value on the nodes
-	struct _rbnode *link[0];            // 0 Left node, 1 right
+	struct _rbnode *link[2];            // 0 Left node, 1 right
 	struct _rbnode *parent;             // parent node
 	int color;                          // color of the node
     struct _rbnode *next;	            // used for nodes with the same value

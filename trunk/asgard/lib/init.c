@@ -74,7 +74,7 @@ void __procinit(struct init_data *initd)
     open_port(STDPROCESS_DIRLIBPORT, 2, PRIV_LEVEL_ONLY);
     open_port(STDPROCESS_IOPORT, 2, PRIV_LEVEL_ONLY);
     open_port(STDPROCESS_PORT, 2, PRIV_LEVEL_ONLY);
-    
+
 	// init mem
 	init_mem((void*)initd->bss_end, initd->curr_limit);
 

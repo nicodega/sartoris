@@ -104,7 +104,7 @@ INT32 elf_check_header(struct pm_task *task)
 	if(header->e_ident[4] != ELFCLASS32 || header->e_ident[5] != ELFDATA2LSB) return 0;
 
 	// check it´s an executable file
-	if(header->e_type != ET_EXEC) return 0;	// must be an executable file
+	if(header->e_type != ET_EXEC && header->e_type != ET_DYN) return 0;	// must be an executable file
 
 	return 1;
 }
