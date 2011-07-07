@@ -38,15 +38,19 @@ void set_cmd(int term, char **args, int argc)
 		return;
 	}
 
-	if(argc > 5 || argc < 3 || (!streq(args[argc - 2], "=") && !streq(args[argc - 2], "+=")))
+	if(argc > 5 || argc < 3 || (!streq(args[argc - 2], "=") && !streq(args[argc - 2], "+="))
+         || (!streq(args[argc - 1], "=") && !streq(args[argc - 1], "+=")))
 	{
 		term_color_print(term, "\nInvalid parameters.\n", 12);
-		term_color_print(term, "usage: set [-r] [-g] [var {=|+=} \"value\"]\n", 7);
+		term_color_print(term, "usage: set [-r] [-g] [var {=|+=} [\"value\"]]\n", 7);
 		return;	
 	}
 
 	varname = args[argc - 3];
-	val = args[argc - 1];
+    if(args[argc - 1][0] == '=' || args[argc - 1][0] == '+')
+        val = ENV_EMPTY_VALUE;
+    else
+	    val = args[argc - 1];
 
 	if(streq(varname, "CURRENT_PATH") || streq(varname, "TERM"))
 	{
@@ -71,10 +75,9 @@ void set_cmd(int term, char **args, int argc)
 		return;
 	}
 
-
 	oldval = get_env(varname, tm);
 
-	if(get && len(val) == 0) return;
+	if(get && (val == ENV_EMPTY_VALUE || len(val) == 0)) return;
 	
 	// if variable is not global, an append is being performed
 	// and variable is not defined on the console, copy
@@ -93,7 +96,7 @@ void set_cmd(int term, char **args, int argc)
 		istrcopy(oldval, val, 0);
 		istrcopy(args[argc - 1], val, len(oldval));
 	}
-	else
+	else if(val != ENV_EMPTY_VALUE)
 	{
 		val = (char *)malloc(len(val) + 1);
 		istrcopy(args[argc - 1], val, 0);
@@ -123,8 +126,11 @@ void list_env(int term)
 		{
 			term_color_print(term, val->name, 7);
 			term_color_print(term, " = \"", 7);
-			term_color_print(term, val->value, 7);		
-			term_color_print(term, "\"\n", 7);
+            if(val->value != ENV_EMPTY_VALUE)
+            {
+			    term_color_print(term, val->value, 7);		
+			    term_color_print(term, "\"\n", 7);
+            }
 		}
 	}
 
@@ -137,8 +143,11 @@ void list_env(int term)
 		
 		term_color_print(term, val->name, 7);
 		term_color_print(term, " = \"", 7);
-		term_color_print(term, val->value, 7);		
-		term_color_print(term, "\"\n", 7);
+        if(val->value != ENV_EMPTY_VALUE)
+        {
+		    term_color_print(term, val->value, 7);		
+		    term_color_print(term, "\"\n", 7);
+        }
 	}
 }
 

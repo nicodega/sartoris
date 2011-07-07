@@ -27,6 +27,7 @@
 #define LDH
 
 #define MAX_OBJECTS   40
+#define LD_INITPORT  2
 #define LD_IOPORT     2
 #define LD_PMAN_PORT  3
 
@@ -107,8 +108,14 @@ typedef struct
 #define DT_DEBUG		21
 #define DT_TEXTREL		22
 #define DT_JMPREL		23
+#define DT_FLAGS        30
 #define DT_LOPROC       0x70000000
 #define DT_HIPROC       0x7fffffff
+
+#define DF_ORIGIN       0x1
+#define DF_SYMBOLIC     0x2
+#define DF_TEXTREL      0x4
+#define DF_BIND_NOW     0x8 
 
 #define R_386_NONE      0
 #define R_386_32	    1    
@@ -147,6 +154,7 @@ typedef struct __dl_object
     unsigned int *buckets;
     unsigned int *chain;
     unsigned int nbuckets;
+    unsigned int flags;
     char *name;           // the decoded name of the dependency
     struct __dl_object *ls_first; // local scope of dependencies (when using dlopen)
     struct __dl_object *next;     // next on scope list
@@ -156,7 +164,7 @@ typedef struct __dl_object
 
 typedef struct
 {
-    unsigned int data[24];
+    unsigned int data[25];
 } dyncache;
 
 void __ldexit(int ret);
@@ -200,6 +208,9 @@ unsigned int dl_runtime_bind(dl_object *obj, int rel_index);
 void dl_init_libs();
 void __ldmain(struct init_data_dl *initd, dyncache *dync);
 void dl_buildobject(dl_object *obj, dyncache *dyn);
+void dl_runtime_bind_start();
+int dl_get_envs();
+int dl_build_path(dl_object *obj);
 
 /* String helpers */
 int streq(char* str1, char* str2);

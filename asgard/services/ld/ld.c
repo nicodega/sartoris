@@ -22,8 +22,9 @@
 #include "ld.h"
 #include "ldio.h"
 #include "services/pmanager/services.h"
-
-void dl_runtime_bind_start();
+#include <lib/scheduler.h>
+#include <services/directory/directory.h>
+#include <services/shell/shell.h>
 
 dl_object *gs_first;     // the global dependencies scope (DT_NEEDED)
 dl_object *mem_first;    // memory list of loaded libraries (we will use a first fit algorithm)
@@ -31,12 +32,13 @@ dl_object objects[MAX_OBJECTS];
 int objcount;   // ammount of objects
 int resobj;     // resolved objects
 char path[256];
+char libpaths[1024];
 
 /* We are running on the process being loaded */
 void __ldmain(struct init_data_dl *initd, dyncache *dync)
 {   
     struct pm_msg_generic pmmsg;    
-    int i;
+    int i, lazy = 1;
        
     objcount = 2;
     resobj = 1;
@@ -47,7 +49,9 @@ void __ldmain(struct init_data_dl *initd, dyncache *dync)
     path[2] = 'i';
     path[3] = 'b';
     path[4] = '/';
-    
+
+    lazy = dl_get_envs();
+
     // object 0 will be our executable file
     objects[0].base = 0;
     objects[0].maxaddr = 0;
@@ -85,13 +89,13 @@ void __ldmain(struct init_data_dl *initd, dyncache *dync)
 
     dl_build_global_scope();
 
-    dl_resolve(0, 1);
+    dl_resolve(0, lazy);
     /* Now resolve the symbols */
     i = 1;
     while(objcount != resobj)
     {
         i++;
-        dl_resolve(i, 1);
+        dl_resolve(i, lazy);
     }
     
     // close the IOPORT
@@ -141,6 +145,88 @@ void __ldexit(int ret)
 	send_msg(PMAN_TASK, PMAN_COMMAND_PORT, &finished);
 
 	for(;;) { reschedule(); }
+}
+
+int dl_get_envs()
+{
+    // ask the directory for the shell task
+    struct directory_resolveid res_cmd;
+	struct directory_response dir_res;
+	int id_proc, lazy = 1, i;
+
+    open_port(LD_INITPORT, 2, PRIV_LEVEL_ONLY);
+
+    res_cmd.command = DIRECTORY_RESOLVEID;
+ 	res_cmd.ret_port = LD_INITPORT;
+	res_cmd.thr_id = get_current_thread();
+	res_cmd.service_name_smo = share_mem(DIRECTORY_TASK, "os/shell", 9, READ_PERM);
+	    
+    while(send_msg(DIRECTORY_TASK, DIRECTORY_PORT, &res_cmd) == FAILURE){ reschedule(); }
+  
+	do
+    {
+	    while (get_msg_count(LD_INITPORT) == 0) { reschedule(); }
+
+	    get_msg(LD_INITPORT, &dir_res, &id_proc);
+
+    }while(id_proc != DIRECTORY_TASK);
+
+	claim_mem(res_cmd.service_name_smo);
+
+	if(dir_res.ret == DIRECTORYERR_OK)
+    {
+        // ask the shell for LD_LIBRARY_PATH and LD_BIND_NOW
+        struct shell_cmd shell_cmd;
+        struct shell_res shell_res;
+
+        for(i = 0; i < 1024; i++)
+            libpaths[i] = '\0';
+
+        shell_cmd.command = SHELL_GETENV;
+        shell_cmd.name_smo = share_mem(DIRECTORY_TASK, "LD_LIBRARY_PATH", 16, READ_PERM);
+        shell_cmd.value_smo = share_mem(DIRECTORY_TASK, libpaths, 1024, WRITE_PERM);
+        shell_cmd.msg_id = 0;
+
+        send_msg(dir_res.ret_value, SHELL_PORT, &res_cmd);
+  
+        do
+        {
+	        while (get_msg_count(LD_INITPORT) == 0) { reschedule(); }
+
+	        get_msg(LD_INITPORT, &shell_res, &id_proc);
+
+        }while(id_proc != dir_res.ret_value);
+
+	    claim_mem(shell_cmd.name_smo);
+        claim_mem(shell_cmd.value_smo);
+        
+        shell_cmd.command = SHELL_ENVEXISTS;
+        shell_cmd.name_smo = share_mem(DIRECTORY_TASK, "LD_BIND_NOW", 12, READ_PERM);
+        shell_cmd.value_smo = -1;
+        shell_cmd.msg_id = 0;
+
+        send_msg(dir_res.ret_value, SHELL_PORT, &res_cmd);
+  
+	    do
+        {
+	        while (get_msg_count(LD_INITPORT) == 0) { reschedule(); }
+
+	        get_msg(LD_INITPORT, &shell_res, &id_proc);
+
+        }while(id_proc != dir_res.ret_value);
+
+	    claim_mem(shell_cmd.name_smo);
+
+        if(shell_res.ret == SHELLERR_OK)
+        {
+            // set !lazy
+            lazy = 0;
+        }
+    }
+
+    close_port(LD_INITPORT);
+
+    return lazy;
 }
 
 void dl_init_libs()
@@ -209,19 +295,9 @@ int dl_load(dl_object *obj, struct init_data_dl *initd)
             o = o->mem_next;
         }
         
-        // is the name absolute or relative?
-        int index = last_index_of(obj->name, '/');
-
-        if(index == -1)
-        {            
-            // idealy we should sheck environment variables and stuf like that
-            // but we will do that in a future.
-            // for now we will use /lib
-            istrcopy(obj->name, path, 5);
-        }
-        else
+        if(!dl_build_path(obj))
         {
-            istrcopy(obj->name, path, 0);
+            return 0;
         }
 
         // calculate dependency size
@@ -372,6 +448,7 @@ int dl_load(dl_object *obj, struct init_data_dl *initd)
     obj->relsz = 0;
     obj->pltrelsz = 0;
     obj->pltrel = 0;
+    obj->flags = 0;
         
     int i = 0;
     while(dyn[i].d_tag != DT_NULL)
@@ -417,6 +494,12 @@ int dl_load(dl_object *obj, struct init_data_dl *initd)
             case DT_PLTREL:
                 obj->pltrel = dyn[i].d_un.d_val;
                 break;
+            case DT_SYMBOLIC:
+                obj->flags |= DF_SYMBOLIC;
+                break;
+            case DT_FLAGS:
+                obj->flags |= dyn[i].d_un.d_val;
+                break;
             default:
                 break;
         }
@@ -460,6 +543,83 @@ int dl_load(dl_object *obj, struct init_data_dl *initd)
     return 1;
 }
 
+int dl_build_path(dl_object *obj)
+{
+    /*
+    FIXME: This should consider sonames, but it doesn't.
+    */
+
+    // is the name absolute or relative?
+    int index = last_index_of(obj->name, '/');
+    int i = 0, libstart = 0, len;
+
+    if(index == -1)
+    {
+        // check libpaths
+        while(libpaths[i] != '\0')
+        {
+            if(libpaths[i] == ',' && i-libstart > 0)
+            {
+                libpaths[i] = '\0';
+                istrcopy(&libpaths[libstart], path, 0);
+                libpaths[i] = ',';
+                
+                len = i-libstart;
+                
+                if(libpaths[i-1] == '/')
+                {
+                    istrcopy(obj->name, path, len);
+                }
+                else
+                {
+                    path[len] = '/';
+                    istrcopy(obj->name, path, len+1);
+                }
+
+                if(exists(path, STDFSS_FILETYPE_FILE))
+                    return 1;
+
+                libstart = i + 1;
+            }
+            i++;
+        }
+
+        if(i != 0 && i-libstart > 0)
+        {
+            istrcopy(&libpaths[libstart], path, 0);
+            
+            len = len = i-libstart;
+            
+            if(libpaths[i-1] == '/')
+            {
+                istrcopy(obj->name, path, len);
+            }
+            else
+            {
+                path[len] = '/';
+                istrcopy(obj->name, path, len+1);
+            }
+
+            if(exists(path, STDFSS_FILETYPE_FILE))
+                return 1;
+        }
+
+        // idealy we should sheck environment variables and stuf like that
+        // but we will do that in a future.
+        // for now we will use /lib
+        istrcopy("/lib/", path, 0);
+        istrcopy(obj->name, path, 5);
+
+        return exists(path, STDFSS_FILETYPE_FILE);
+    }
+    else
+    {
+        istrcopy(obj->name, path, 0);
+
+        return exists(path, STDFSS_FILETYPE_FILE);
+    }
+}
+
 void dl_build_global_scope()
 {
     int i = 2;  // we will ignore the linker
@@ -489,7 +649,7 @@ int dl_resolve(int obj, int lazy)
     dl_relocate(o, DT_REL, o->relsz);
     dl_relocate(o, DT_RELA, o->relasz);
     
-    if(!lazy)
+    if(!lazy || (o->flags & DF_BIND_NOW))
         dl_relocate(o, DT_JMPREL, o->pltrelsz);
     else
         dl_relocate_gotplt_lazy(o);
@@ -571,7 +731,9 @@ int dl_relocate(dl_object *obj, int rel, unsigned int relsz)
                 ret++;
                 continue;
             }
-            
+
+            sname = (char*)(fobj->dynstr + sm->st_name);
+
             // copy the value
             src = (char*)(fobj->base + sm->st_value); // the symbol is not yet resolved, add the base!
             dst = (char*)addr;
@@ -741,13 +903,18 @@ int dl_find_symbol(char *name, dl_object *obj, Elf32_Sym **sym, dl_object **foun
 
     unsigned int hv = elf_hash(name); // first entry of the hash has nbuckets
     
-    if(!exclude_obj && dl_find_symbol_obj(name, hv, obj, &fsm, plt))
+    /*
+        We will first search the symbol on the global scope and then on the local scope.
+        If object has DF_SYMBOLIC flags set, we will first search the local scope.
+    */
+
+    if((obj->flags & DF_SYMBOLIC) && !exclude_obj && dl_find_symbol_obj(name, hv, obj, &fsm, plt))
     {
         // is it a weak symbol?
         if(ELF32_ST_BIND(fsm->st_info) == STB_GLOBAL)
         {
             sm = fsm;
-            fobj = obj;               
+            fobj = obj;
         }
         else if(ELF32_ST_BIND(fsm->st_info) == STB_WEAK && !weaksym) 
         {
@@ -756,22 +923,20 @@ int dl_find_symbol(char *name, dl_object *obj, Elf32_Sym **sym, dl_object **foun
         }
     }
 
+    // try the global scope
     if(!sm)
     {
-        o = obj->ls_first;
-    
-        // first try the local scope
+        o = gs_first;    // start at the first global scope object
         while(o)
         {
-            if(dl_find_symbol_obj(name, hv, o, &fsm, plt))
+            if((!exclude_obj || (exclude_obj && o != obj)) && dl_find_symbol_obj(name, hv, o, &fsm, plt))
             {
                 // is it a weak symbol?
                 if(ELF32_ST_BIND(fsm->st_info) == STB_GLOBAL)
                 {
                     sm = fsm;
                     fobj = o;
-                    break;  // found a symmbol
-                
+                    break;  // found a symmbol                
                 }
                 else if(ELF32_ST_BIND(fsm->st_info) == STB_WEAK && !weaksym) 
                 {
@@ -783,13 +948,11 @@ int dl_find_symbol(char *name, dl_object *obj, Elf32_Sym **sym, dl_object **foun
         }
     }
 
-    // if we didn't find a symbol on the local scope, try the 
-    // global scope (I won't care about weak symbols found on 
-    // the local scope, unless nothing is found on the global
-    // scope.
     if(!sm)
     {
-        o = obj->next;    // start at the next object
+        o = obj->ls_first;
+    
+        // try the local scope
         while(o)
         {
             if(dl_find_symbol_obj(name, hv, o, &fsm, plt))
@@ -799,7 +962,8 @@ int dl_find_symbol(char *name, dl_object *obj, Elf32_Sym **sym, dl_object **foun
                 {
                     sm = fsm;
                     fobj = o;
-                    break;  // found a symmbol                
+                    break;  // found a symmbol
+                
                 }
                 else if(ELF32_ST_BIND(fsm->st_info) == STB_WEAK && !weaksym) 
                 {
@@ -876,6 +1040,7 @@ void dl_buildobject(dl_object *obj, dyncache *dync)
     obj->relsz = 0;
     obj->pltrelsz = 0;
     obj->pltrel = 0;
+    obj->flags = 0;
 
     int i = 0;
     while(i < 24)
@@ -920,6 +1085,9 @@ void dl_buildobject(dl_object *obj, dyncache *dync)
                 break;
             case DT_PLTREL:
                 obj->pltrel = dync->data[i];
+                break;
+            case DT_FLAGS:
+                obj->flags = dync->data[i];
                 break;
             default:
                 break;

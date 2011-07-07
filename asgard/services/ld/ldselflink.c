@@ -48,7 +48,7 @@ unsigned int __ldep(struct init_data_dl *initd)
     i = 0;
     while(dyn[i].d_tag != DT_NULL)
     {
-        if(dyn[i].d_tag < 24)
+        if(dyn[i].d_tag < 24 || dyn[i].d_tag == 30)
         {
             switch(dyn[i].d_tag)
             {
@@ -63,6 +63,12 @@ unsigned int __ldep(struct init_data_dl *initd)
                 case DT_DEBUG:
                 case DT_JMPREL:
                     dync.data[dyn[i].d_tag] = (unsigned int)dyn[i].d_un.d_ptr + (unsigned int)initd->ld_start;
+                    break;
+                case DT_SYMBOLIC:
+                    dync.data[DT_FLAGS] |= DF_SYMBOLIC;
+                    break;
+                case DT_FLAGS:
+                    dync.data[25] |= dyn[i].d_un.d_val;
                     break;
                 default:
                     dync.data[dyn[i].d_tag] = dyn[i].d_un.d_val;
