@@ -40,6 +40,7 @@ int fopen(char *filename, FILE *file)
 
 	if(file->fs_serviceid == -1)
 	{
+        print("LD fopen: NULL FS SERVICE");
 		return 0;
 	}
 	//////////////////////
@@ -60,7 +61,10 @@ int fopen(char *filename, FILE *file)
 	claim_mem(open_msg.file_path);
 
 	if(open_res.ret != STDFSSERR_OK)
+    {
+        print("LD fopen: STFSS_ERR %i ", open_res.ret);
 		return 0;
+    }
 	
 	file->file_id = open_res.file_id;
 

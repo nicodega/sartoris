@@ -37,29 +37,29 @@
 
 // Commands Interface //
 
-#define STDFSS_VERSION		0
-#define STDFSS_MOUNT		1
-#define STDFSS_UMOUNT		2
-#define STDFSS_OPEN		3
+#define STDFSS_VERSION      0
+#define STDFSS_MOUNT        1
+#define STDFSS_UMOUNT       2
+#define STDFSS_OPEN         3
 #define STDFSS_CLOSE		4
-#define STDFSS_SEEK		5
-#define STDFSS_READ		6
-#define STDFSS_WRITE		7
-#define STDFSS_FLUSH		8
-#define STDFSS_LINK		9
-#define STDFSS_MKDIR		10
-#define STDFSS_MKDEVICE		11
-#define STDFSS_CHANGEATT	12
-#define STDFSS_DELETE		13
+#define STDFSS_SEEK         5
+#define STDFSS_READ         6
+#define STDFSS_WRITE        7
+#define STDFSS_FLUSH        8
+#define STDFSS_LINK         9
+#define STDFSS_MKDIR        10
+#define STDFSS_MKDEVICE     11
+#define STDFSS_CHANGEATT    12
+#define STDFSS_DELETE       13
 #define STDFSS_FILEINFO		14
-#define STDFSS_INIT		15
-#define STDFSS_EXISTS		16
-#define STDFSS_IOCTL		17
-#define STDFSS_TELL		18
-#define STDFSS_GETC		19
-#define STDFSS_PUTC		20
-#define STDFSS_GETS		21
-#define STDFSS_PUTS		22
+#define STDFSS_INIT         15
+#define STDFSS_EXISTS       16
+#define STDFSS_IOCTL        17
+#define STDFSS_TELL         18
+#define STDFSS_GETC         19
+#define STDFSS_PUTC         20
+#define STDFSS_GETS         21
+#define STDFSS_PUTS         22
 #define STDFSS_FORWARD		23
 #define STDFSS_TAKEOVER		24		// Take over will be issued by PMAN to take control of a file
 #define STDFSS_RETURN		25		// Return will return control over a file to a taken over task

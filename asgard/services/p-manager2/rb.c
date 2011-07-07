@@ -441,10 +441,10 @@ BOOL rb_free_value(rbt *t, UINT32 *value)
 			    while(n)
                 {
 				    if(n->link[0])
-					    n->link[0]->color &= ~3;
+					    n->link[0]->color &= ~2;
 				    if(n->link[1])
-					    n->link[1]->color &= ~3;
-				    n->color &= ~3;
+					    n->link[1]->color &= ~2;
+				    n->color &= ~2;
 				    n = n->parent;
                 }
                 if(n != t->max)
@@ -459,16 +459,16 @@ BOOL rb_free_value(rbt *t, UINT32 *value)
             }
 		    cand = n->value + 1;
         }
-	    if(!(n->color & 3))
+	    if(!(n->color & 2))
         {
-		    n->color |= 3;
-		    if(n->link[0] && !(n->link[0]->color & 3))
+		    n->color |= 2;
+		    if(n->link[0] && !(n->link[0]->color & 2))
             {
 			    fromLeft = FALSE;
 			    n = n->link[0];
 			    continue;
             }
-		    if(n->link[1] && !(n->link[1]->color & 3))
+		    if(n->link[1] && !(n->link[1]->color & 2))
 			{
                 fromLeft = FALSE;
 			    n = n->link[1];
@@ -479,9 +479,9 @@ BOOL rb_free_value(rbt *t, UINT32 *value)
         {
 		    fromLeft = (n->parent->link[0] == n);
 		    if( n->link[0] )
-			    n->link[0]->color &= ~3;
+			    n->link[0]->color &= ~2;
 		    if( n->link[1] )
-			    n->link[1]->color &= ~3;
+			    n->link[1]->color &= ~2;
 		    n = n->parent;
 		}
     }
@@ -508,24 +508,24 @@ void rb_inorder(rbt *t, void (*callback)(rbnode *n))
                 while(n)
                 {
 				    if(n->link[0])
-					    n->link[0]->color &= ~3;
+					    n->link[0]->color &= ~2;
 				    if(n->link[1])
-					    n->link[1]->color &= ~3;
-				    n->color &= ~3;
+					    n->link[1]->color &= ~2;
+				    n->color &= ~2;
 				    n = n->parent;
                 }
             }
         }
-	    if(!(n->color & 3))
+	    if(!(n->color & 2))
         {
-		    n->color |= 3;
-		    if(n->link[0] && !(n->link[0]->color & 3))
+		    n->color |= 2;
+		    if(n->link[0] && !(n->link[0]->color & 2))
             {
 			    fromLeft = FALSE;
 			    n = n->link[0];
 			    continue;
             }
-		    if(n->link[1] && !(n->link[1]->color & 3))
+		    if(n->link[1] && !(n->link[1]->color & 2))
 			{
                 fromLeft = FALSE;
 			    n = n->link[1];
@@ -536,9 +536,9 @@ void rb_inorder(rbt *t, void (*callback)(rbnode *n))
         {
 		    fromLeft = (n->parent->link[0] == n);
 		    if( n->link[0] )
-			    n->link[0]->color &= ~3;
+			    n->link[0]->color &= ~2;
 		    if( n->link[1] )
-			    n->link[1]->color &= ~3;
+			    n->link[1]->color &= ~2;
 		    n = n->parent;
 		}
     }

@@ -12,10 +12,10 @@ critical_section.o m_malloc.o pm_malloc.o bmalloc.o pbmalloc.o rawpiolib.o io.o 
 all : $(baseobjects) stdlibcpp.o stdlib.o malloc.o libstest.so
 	
 libstest.o : libstest.c
-	$(CC) -c libstest.c -fPIC -o libstest.o 
+	$(CC) -c $(CFLAGS) libstest.c -fPIC -o libstest.o 
 
 libstest.so: libstest.o
-	$(LD) -shared -nostdlib -T ../tools/linkscript2 --dynamic-linker /usr/lib/ld.so -soname libstest.so -o libstest.so libstest.o
+	$(LD) -shared -nostdlib -T ../tools/linkscript2 --dynamic-linker /usr/lib/ld.so --Map libstest.map -soname libstest.so -o libstest.so libstest.o
 
 pm_malloc.o : m_malloc.c
 	$(CC) -c m_malloc.c $(CFLAGS) -o pm_malloc.o 

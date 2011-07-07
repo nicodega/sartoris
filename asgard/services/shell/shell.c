@@ -267,7 +267,6 @@ void service_main (void)
 							csl_lastcmdcnt[signal.console] = 0;
 						}
 						// if failed do nothing
-					
 						break;
 					case 0x91:
 						break;

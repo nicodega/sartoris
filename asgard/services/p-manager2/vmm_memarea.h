@@ -28,7 +28,7 @@ struct _memarea_node
     UINT32 low;                         // left memory boundary
 	UINT32 high;                        // right memory boundary
     UINT32 max;                         // augmentation (maximum "high" from subtree rooted at this node)
-    struct _memarea_node *link[0];      // 0 Left node, 1 right
+    struct _memarea_node *link[2];      // 0 Left node, 1 right
 	struct _memarea_node *parent;       // parent node
 	int color;                          // color of the node
 };

@@ -746,12 +746,14 @@ void cmd_load_library(struct pm_msg_loadlib *msg, UINT16 loader_task)
 
 	if(pman_stage == PMAN_STAGE_INITIALIZING)
 	{
+        pman_print_dbg("PM LOAD LIB ERR1\n");
 		cmd_inform_result(msg, loader_task, PM_IS_INITIALIZING, 0, 0);
 		return;
 	}
 
     if(msg->vlow < PMAN_MAPPING_BASE || msg->vhigh < msg->vlow)
 	{
+        pman_print_dbg("PM LOAD LIB ERR2\n");
 		cmd_inform_result(msg, loader_task, PM_INVALID_BOUNDARIES, 0, 0);
 		return;
 	}
@@ -769,10 +771,10 @@ void cmd_load_library(struct pm_msg_loadlib *msg, UINT16 loader_task)
 		cmd_inform_result(msg, loader_task, PM_ERROR, 0, 0);
 		return;
 	}
-
     path = NULL;
 	psize = mem_size(msg->path_smo_id);
 
+    pman_print_dbg("LOADING LIB path size %i\n", psize);
 	if(psize < 1)
 	{
 		cmd_inform_result(msg, loader_task, PM_BAD_SMO, 0, 0);
@@ -794,6 +796,7 @@ void cmd_load_library(struct pm_msg_loadlib *msg, UINT16 loader_task)
 		cmd_inform_result(msg, loader_task, PM_BAD_SMO, 0, 0);
 		return;
 	}
+    pman_print_dbg("LOADING LIB path %s\n", path);
 
     tsk->command_inf.callback = cmd_finished__callback;
 	tsk->command_inf.command_ret_port = msg->response_port;
@@ -801,8 +804,7 @@ void cmd_load_library(struct pm_msg_loadlib *msg, UINT16 loader_task)
 	tsk->command_inf.command_sender_id = loader_task;
     tsk->flags |= TSK_LOADING_LIB;
 
-    // library is already loaded, tell vmm to add it to the lib to this
-    // task address space
+    // load the library
     int ret = vmm_lib_load(tsk, path, psize, msg->vlow, msg->vhigh);
     if(!ret)
     {
@@ -928,9 +930,10 @@ void cmd_create_thread(struct pm_msg_create_thread *msg, UINT16 creator_task_id)
 	struct pm_thread *thread = NULL; 
 	ADDR pg = NULL;
     
-	if (task == NULL || task->state != TSK_NORMAL || (task->flags & TSK_SHARED_LIB)
-        || (task->num_threads > 0 && creator_task_id != task->id)
-        || (task->num_threads == 0 && creator_task_id != task->creator_task)) 
+	if (task == NULL || task->state != TSK_NORMAL || (task->flags & TSK_SHARED_LIB) // task is not null, it's on normal state and it's not a shared library
+        || (task->num_threads > 0 && creator_task_id != task->id)                   // only the owner task can create it's threads (other than the first one)
+        || (task->num_threads == 0 && creator_task_id != task->creator_task)        // only the creator task can create the first thread
+        || (msg->interrupt != 0 && creator_task_id != task->id))                    // only the owner task can create an interrupt thread
 	{
 		cmd_inform_result(msg, creator_task_id, PM_THREAD_FAILED, 0, 0);
 		return;
@@ -989,9 +992,19 @@ void cmd_create_thread(struct pm_msg_create_thread *msg, UINT16 creator_task_id)
 
 	mk_thread.stack = thread->stack_addr = (ADDR)STACK_ADDR(PMAN_THREAD_STACK_BASE - stack_slot * 0x20000);
         
-	/* Set thread entry point from elf file if 0 is specified. */
-	if(msg->entry_point == 0)
-		mk_thread.ep = (ADDR)task->loader_inf.elf_header.e_entry;
+	/* Set thread entry point from elf file if 0 is specified. 
+       If this is a dynamic task (i.e. uses shared libraries)
+       we will set the entry point to that of the ld service.
+    */
+    if(msg->interrupt != 0 || task->num_threads > 1)
+    {
+        if(msg->entry_point == 0)
+		    mk_thread.ep = (ADDR)task->loader_inf.elf_header.e_entry;
+    }
+    else
+    {
+	    mk_thread.ep = loader_task_ep(task);
+    }
 
 	if(msg->interrupt != 0)
 	{
@@ -1055,6 +1068,7 @@ void cmd_create_thread(struct pm_msg_create_thread *msg, UINT16 creator_task_id)
 
             if(task->flags & TSK_DYNAMIC)
             {
+                pman_print_dbg("COMMAND: Dynamic task init creation. Thread EP: %x Task EP: %x\n", ((msg->entry_point == 0)? task->loader_inf.elf_header.e_entry : msg->entry_point), mk_thread.ep);
                 struct init_data_dl *idatd = (struct init_data_dl *)((UINT32)pg + stackpad - sizeof(struct init_data_dl));
 
                 idatd->ldexit = NULL;
@@ -1062,7 +1076,8 @@ void cmd_create_thread(struct pm_msg_create_thread *msg, UINT16 creator_task_id)
                 idatd->param = task->loader_inf.param;
 			    idatd->bss_end = task->tsk_bss_end;
 			    idatd->curr_limit = task->vmm_info.max_addr;
-                idatd->prg_start = (unsigned int)mk_thread.ep;
+                idatd->prg_start = ((msg->entry_point == 0)? (UINT32)task->loader_inf.elf_header.e_entry : (UINT32)msg->entry_point);
+                idatd->ld_dynamic = (PMAN_MAPPING_BASE + (UINT32)loader_lddynsec_addr());
                 idatd->ld_start = PMAN_MAPPING_BASE;
                 idatd->ld_size = ld_size;                                       // comes from loader.h
                 idatd->phsmo = task->loader_inf.phdrs_smo;

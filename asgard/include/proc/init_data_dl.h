@@ -40,11 +40,12 @@ struct init_data_dl
 {
     unsigned int prg_start;     /* entry point for the task */
     unsigned int ld_start;      /* Base address for LD */
+    unsigned int ld_dynamic;    /* Location of the dynamic section for LD */
     unsigned int ld_size;       /* size of LD memory image (all sections) */
     int          phsmo;         /* SMO to the program headers for the process */
     int          phsize;        /* Program header size */
     int          phcount;       /* Program headers count */
-    int (*ldexit)(int ret);     /* If this value is 1 then on exit the process will 
+    void (*ldexit)(int ret);    /* If this value is 1 then on exit the process will 
                                 call this function, which must be completed by LD. */
     unsigned int bss_end;		/* This will be the virtual address where defined segments end */
 	unsigned int curr_limit;	/* Current segment limit */

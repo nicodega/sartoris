@@ -196,14 +196,14 @@ ADDR create_service(UINT16 task, UINT16 thread, INT32 invoke_level, UINT32 size,
 	    /* Schedule and activate thread */
 	    sch_add(pthread);
 	    sch_activate(pthread);
-
-	    ptask->state = TSK_NORMAL;
     }
     else
     {
         ld_size = max_addr;
         ptask->vmm_info.max_addr = max_addr;
     }
+    
+    ptask->state = TSK_NORMAL;
 
 	return (ADDR)first_page;
 }
@@ -227,7 +227,7 @@ UINT32 put_pages(struct pm_task *task, BOOL use_fsize, BOOL low_mem, BOOL lib)
 	{
 		prog_header = (struct Elf32_Phdr*)&task->loader_inf.elf_pheaders[i * task->loader_inf.elf_header.e_phentsize];
 
-		if(prog_header->p_type == PT_LOAD)
+		if(prog_header->p_type == PT_LOAD || prog_header->p_type == PT_DYNAMIC)
 		{
             if((UINT32)prog_header->p_vaddr + (UINT32)prog_header->p_memsz > max_addr)
                    max_addr = (UINT32)prog_header->p_vaddr + (UINT32)prog_header->p_memsz;
@@ -262,24 +262,52 @@ UINT32 put_pages(struct pm_task *task, BOOL use_fsize, BOOL low_mem, BOOL lib)
 					task->vmm_info.page_count++;
 				}
                 
-				pg = (ADDR)LINEAR2PHYSICAL(vmm_get_page_ex(task->id, page_addr, low_mem));
-				
-				pgp = (ADDR)PHYSICAL2LINEAR(pg);
+                // is the page present?
+                struct vmm_page_table *tbl = (struct vmm_page_table*)PHYSICAL2LINEAR(PG_ADDRESS(pdir->tables[PM_LINEAR_TO_DIR(page_addr)].b));
+                
+                UINT32 ass_bck = 0;
+                if(tbl->pages[PM_LINEAR_TO_TAB(page_addr)].entry.ia32entry.present == 1)
+                {
+                    ass_bck = vmm_temp_pgmap(task, (ADDR)page_addr);
+                    pg = (ADDR)PG_ADDRESS(tbl->pages[PM_LINEAR_TO_TAB(page_addr)].entry.phy_page_addr);
+                }
+                else
+                {
+                    pg = (ADDR)LINEAR2PHYSICAL(vmm_get_page_ex(task->id, page_addr, low_mem));
+                }
+                pgp = (ADDR)PHYSICAL2LINEAR(pg);
 
 				/* Set page as service (won't be paged out) */
 				vmm_set_flags(task->id, pgp, TRUE, TAKEN_EFLAG_SERVICE, TRUE);
-                                
+
+                if(lib && (prog_header->p_flags & PF_EXEC))
+                    vmm_set_flags(task->id, pgp, FALSE, TAKEN_PG_FLAG_LIBEXE, TRUE);
+                
 				if(foffset < curr_header->image_size)
 				{
 					pminit_elf_seek(&task->io_event_src, foffset);
-					pminit_elf_read(&task->io_event_src, PAGE_SIZE, pgp);					
+                    if(j == 0) 
+                    {
+					    pminit_elf_read(&task->io_event_src, PAGE_SIZE - ((UINT32)prog_header->p_vaddr % 0x1000), (ADDR)((UINT32)pgp + ((UINT32)prog_header->p_vaddr % 0x1000)));  // add page displacement
+                    }
+                    else
+                    {
+                        pminit_elf_read(&task->io_event_src, PAGE_SIZE, pgp);
+                    }                    
 				}
-			
-				if(page_in(task->id, (ADDR)page_addr, (ADDR)pg, 2, PGATT_WRITE_ENA) != SUCCESS)
-					pman_print_and_stop("Failed to page_in for laddress: %x, physical: %x ", page_addr, pg);
+
+                if(tbl->pages[PM_LINEAR_TO_TAB(page_addr)].entry.ia32entry.present == 0)
+                {
+				    if(page_in(task->id, (ADDR)page_addr, (ADDR)pg, 2, PGATT_WRITE_ENA) != SUCCESS)
+					    pman_print_and_stop("Failed to page_in for laddress: %x, physical: %x ", page_addr, pg);
 				
-                /* unmap the page from pmanager, so it's assigned record is used. */
-                vmm_unmap_page(task->id, page_addr);
+                    /* unmap the page from pmanager, so it's assigned record is used. */
+                    vmm_unmap_page(task->id, page_addr);
+                }
+                else
+                {
+                    vmm_restore_temp_pgmap(task, (ADDR)page_addr, ass_bck);
+                }
 
 				task->vmm_info.page_count++;
 			
@@ -346,7 +374,6 @@ INT32 get_img_header(struct ifs2srv_header **header, int imgId)
 	*header = c_header;
 	(*header)->image_pos += (UINT32)iheader; // this can be done only because this function is issued only once
 
-	
 	return 0;
 }
 

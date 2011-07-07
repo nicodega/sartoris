@@ -23,142 +23,51 @@
 #include "ldio.h"
 #include "services/pmanager/services.h"
 
-
-extern unsigned int _LDGOTEND;
-extern unsigned int _LDGOT;
-extern unsigned int _edynamic;
-extern unsigned int _DYNAMIC;
+void dl_runtime_bind_start();
 
 dl_object *gs_first;     // the global dependencies scope (DT_NEEDED)
 dl_object *mem_first;    // memory list of loaded libraries (we will use a first fit algorithm)
 dl_object objects[MAX_OBJECTS];
 int objcount;   // ammount of objects
-int resojb;     // resolved objects
+int resobj;     // resolved objects
 char path[256];
 
 /* We are running on the process being loaded */
-void __ldmain(struct init_data_dl *initd)
+void __ldmain(struct init_data_dl *initd, dyncache *dync)
 {   
-    struct pm_msg_generic pmmsg;
-    unsigned int rsize, n;
-	Elf32_Rel *rel;
-    Elf32_Rela *rela;
-	Elf32_Sym *sym;
-	dyncache dync;
+    struct pm_msg_generic pmmsg;    
     int i;
-
-    /******************************************************/
-    /*                     LD Relocation                  */
-    /******************************************************/
-    /*
-    We need to relocate ourselves.
-    First add the offset to the dynamic section pointers.
-    */
-    Elf32_Dyn *dyn = (Elf32_Dyn *)((long)_DYNAMIC + initd->ld_start);
-
-    for(i = 0; i < 24; i++)
-        dync.data[i] = 0;
-
-    i = 0;
-    while(dyn[i].d_tag != DT_NULL)
-    {
-        switch(dyn->d_tag)
-        {
-            case DT_PLTGOT:
-            case DT_HASH:
-            case DT_STRTAB:
-            case DT_SYMTAB:
-            case DT_RELA:
-            case DT_INIT:
-            case DT_FINI:
-            case DT_REL:
-            case DT_DEBUG:
-            case DT_JMPREL:
-                dyn[i].d_un.d_ptr += initd->ld_start;
-            default:
-                dync.data[dyn->d_tag] = dyn[i].d_un.d_val;
-        }
-        i++;
-    }
-
-    // relocate rel relocation section
-	rel = (Elf32_Rel*)dync.data[DT_REL];
-	rsize = dync.data[DT_RELSZ];
-    
-    n = 0;
-    do
-    {
-        for (i = 0; i < rsize; i += sizeof (Elf32_Rel)) 
-        {
-		    sym = (Elf32_Sym*)(dync.data[DT_SYMTAB] + ELF32_R_SYM(rel->r_info));
-
-		    if (ELF32_R_SYM(rel->r_info) && sym->st_value == 0)    // undefined symbol!
-			    __ldexit(-4);
-
-		    RELOC_REL(rel, sym, (unsigned int*)(rel->r_offset + initd->ld_start), initd->ld_start);
-		    rel++;
-	    }
-        rel = (Elf32_Rel*)dync.data[DT_JMPREL];
-	    rsize = dync.data[DT_PLTRELSZ];
-    }while(n < 2 && dync.data[DT_PLTREL] == DT_REL);
-
-    // relocate DT_RELA (if JMPREL is of type DT_RELA we will initialize it here)
-    rela = (Elf32_Rela*)dync.data[DT_RELA];
-	rsize = dync.data[DT_RELASZ];
-    
-    n = 0;
-    do
-    {
-        for (i = 0; i < rsize; i += sizeof(Elf32_Rela)) 
-        {
-		    sym = (Elf32_Sym*)(dync.data[DT_SYMTAB] + ELF32_R_SYM(rel->r_info)); // get the symbol from the table by adding it's offset
-
-		    if (ELF32_R_SYM(rel->r_info) && sym->st_value == 0)    // undefined symbol!
-			    __ldexit(-4);
-
-		    RELOC_RELA(rela, sym, (unsigned int*)(rel->r_offset + initd->ld_start), initd->ld_start);
-		    rela++;
-	    }
-        n++;
-        rela = (Elf32_Rela*)dync.data[DT_JMPREL];
-	    rsize = dync.data[DT_PLTRELSZ];
-    }while(n < 2 && dync.data[DT_PLTREL] == DT_RELA);
-
-    /******************************************************/
-    /*                 LD Relocation END                  */
-    /******************************************************/
-
-    // now we can execute as normal (we have linked ourselves!)
+       
     objcount = 2;
-    resojb = 2;
+    resobj = 1;
     gs_first = NULL;
     
     path[0] = '/';
-    path[1] = 'u';
-    path[2] = 's';
-    path[3] = 'r';
+    path[1] = 'l';
+    path[2] = 'i';
+    path[3] = 'b';
     path[4] = '/';
-    path[5] = 'l';
-    path[6] = 'i';
-    path[7] = 'b';
-    path[8] = '/';
-
-    // object 0 will be out executable file
-    objects[0].base = initd->prg_start;
-    objects[1].maxaddr = 0;
     
+    // object 0 will be our executable file
+    objects[0].base = 0;
+    objects[0].maxaddr = 0;
+    objects[0].name = "exec";
+    
+    dl_buildobject(&objects[1], dync);
+
     objects[1].base = initd->ld_start;
-    objects[1].maxaddr = initd->ld_size;
+    objects[1].maxaddr = initd->ld_start + (initd->ld_size % 0x1000 == 0? initd->ld_size : initd->ld_size + (0x1000 - initd->ld_size % 0x1000));
     objects[1].mem_next = objects[1].mem_prev = NULL;
     objects[1].ls_first = NULL;
+    objects[1].name = "ld.so";
 
     mem_first = &objects[1];
 
-    // we will need the IOLIB to read the elf headers from 
+    // we will need the IOLIB to read the elf headers for 
     // dependencies
     open_port(LD_IOPORT, 2, PRIV_LEVEL_ONLY);
     open_port(LD_PMAN_PORT, 1, PRIV_LEVEL_ONLY);
-
+    
     /* Load dependencies */
     int ret = dl_load(&objects[0], initd);
     if(!ret)
@@ -176,12 +85,13 @@ void __ldmain(struct init_data_dl *initd)
 
     dl_build_global_scope();
 
-    /* Now resolve the symbols */
     dl_resolve(0, 1);
-    i = 2;
-    while(objcount != resojb)
+    /* Now resolve the symbols */
+    i = 1;
+    while(objcount != resobj)
     {
-        dl_resolve(i++, 1);
+        i++;
+        dl_resolve(i, 1);
     }
     
     // close the IOPORT
@@ -190,12 +100,12 @@ void __ldmain(struct init_data_dl *initd)
         
     /* Invoke init on each loaded library */
     dl_init_libs();
-
     // let PMAN know the dynamic loader has finished
     pmmsg.pm_type = PM_LOADER_READY;
     send_msg(PMAN_TASK, PMAN_COMMAND_PORT, &pmmsg);
-
+    
     // process entry point will be executed from _ldstart upon ret
+    initd->ldexit = &__ldexit;
 }
 
 typedef void (*ldfunc)(void);
@@ -266,9 +176,9 @@ unsigned int elf_hash(const unsigned char *name)
         h = (h << 4) + *name++; 
         if (g = h & 0xf0000000) 
             h ^= g >> 24; 
-        h &= g; 
+        h &= ~g; 
     }
-
+    
     return h; 
 } 
 
@@ -279,6 +189,7 @@ int dl_load(dl_object *obj, struct init_data_dl *initd)
 {    
     struct Elf32_Phdr phdr;
     struct Elf32_Ehdr h;
+    dl_object *o = NULL;
 
     /*
     if it's not the executable file we must find free address
@@ -292,25 +203,31 @@ int dl_load(dl_object *obj, struct init_data_dl *initd)
         while(o)
         {
             if(streq(o->name, obj->name))
+            {
                 return 0;
+            }
             o = o->mem_next;
         }
-
+        
         // is the name absolute or relative?
         int index = last_index_of(obj->name, '/');
 
         if(index == -1)
-        {
+        {            
             // idealy we should sheck environment variables and stuf like that
             // but we will do that in a future.
             // for now we will use /lib
-            istrcopy(obj->name, path, 9);
+            istrcopy(obj->name, path, 5);
+        }
+        else
+        {
+            istrcopy(obj->name, path, 0);
         }
 
         // calculate dependency size
         FILE fp;
-                
-        if(!fopen(obj->name, &fp)) return 0;
+
+        if(!fopen(path, &fp)) return 0;
 
         // read the elf header        
         if(fread((char*)&h, sizeof(struct Elf32_Ehdr), &fp) != sizeof(struct Elf32_Ehdr))
@@ -333,19 +250,19 @@ int dl_load(dl_object *obj, struct init_data_dl *initd)
                 fclose(&fp);
                 return 0;
             }
-            if( (phdr.p_type == PT_LOAD || phdr.p_type == PT_DYNAMIC) && (unsigned int)phdr.p_vaddr + phdr.p_memsz > obj->maxaddr)
+            if((unsigned int)phdr.p_vaddr + phdr.p_memsz > obj->maxaddr)
             {
                 obj->maxaddr = (unsigned int)phdr.p_vaddr + phdr.p_memsz;
             }
             if(phdr.p_type == PT_DYNAMIC)
-            {
+            {   
                 obj->dynamic = (unsigned int)phdr.p_vaddr;
             }
             count--;
         }
         
-        if(obj->maxaddr & 0x1000 != 0)
-            obj->maxaddr += 0x1000 - (obj->maxaddr & 0x1000);
+        if(obj->maxaddr % 0x1000 != 0)
+            obj->maxaddr += 0x1000 - (obj->maxaddr % 0x1000);
 
         fclose(&fp);
 
@@ -356,7 +273,7 @@ int dl_load(dl_object *obj, struct init_data_dl *initd)
 
         while(o)
         {   
-            if(o->maxaddr - last_addr >= obj->maxaddr)
+            if(o->base - last_addr >= obj->maxaddr)
                 break;  // it fits here
             last_addr = o->maxaddr;
             ol = o;
@@ -388,7 +305,7 @@ int dl_load(dl_object *obj, struct init_data_dl *initd)
             obj->base = last_addr;
             obj->maxaddr += obj->base;
         }
-
+        
         // tell pman to load the library
         struct pm_msg_loadlib pmload;
 
@@ -411,6 +328,9 @@ int dl_load(dl_object *obj, struct init_data_dl *initd)
             get_msg(LD_PMAN_PORT, &res, &id);
 
         }while(id != PMAN_TASK);
+        
+        if(res.status != PM_OK)
+            return 0;
         
         /*
         Get pointers to the dynamic section
@@ -448,15 +368,15 @@ int dl_load(dl_object *obj, struct init_data_dl *initd)
     obj->jmprel = NULL;
     obj->init = NULL;
     obj->fini = NULL;
-    obj->relasz = NULL;
-    obj->relsz = NULL;
-    obj->pltrelsz = NULL;
+    obj->relasz = 0;
+    obj->relsz = 0;
+    obj->pltrelsz = 0;
     obj->pltrel = 0;
         
     int i = 0;
     while(dyn[i].d_tag != DT_NULL)
     {
-        switch(dyn->d_tag)
+        switch(dyn[i].d_tag)
         {
             case DT_PLTGOT:
                 obj->pltgot = (unsigned int)dyn[i].d_un.d_ptr + obj->base;
@@ -496,12 +416,24 @@ int dl_load(dl_object *obj, struct init_data_dl *initd)
                 break;
             case DT_PLTREL:
                 obj->pltrel = dyn[i].d_un.d_val;
+                break;
             default:
                 break;
         }
         i++;
     }
 
+    if(obj->hash)
+    {
+        obj->nbuckets = *((unsigned int*)obj->hash);
+        obj->buckets = (unsigned int*)(obj->hash+8);
+        obj->chain = (unsigned int*)(obj->hash + 8 + (obj->nbuckets << 2));
+    }
+    else
+    {
+        obj->nbuckets = 0;
+    }
+    
     /*
     Look for dependencies on the DT_NEEDED area and dl_resolve them.
     REMEMBER: Add the dependencies to the global lookup scope in a
@@ -510,21 +442,21 @@ int dl_load(dl_object *obj, struct init_data_dl *initd)
     i = 0;
     while(dyn[i].d_tag != DT_NULL)
     {
-        switch(dyn->d_tag)
+        switch(dyn[i].d_tag)
         {
             case DT_NEEDED:
                 // allocate a new object
-                obj = &objects[objcount];
+                o = &objects[objcount];
                 objcount++;
                 // look on the dynstr using d_val
-                obj->name = (char*)(obj->dynstr + dyn[i].d_un.d_val);
+                o->name = (char*)(obj->dynstr + dyn[i].d_un.d_val);
                 break;
             default:
                 break;
         }
         i++;
     }
-
+    
     return 1;
 }
 
@@ -533,6 +465,8 @@ void dl_build_global_scope()
     int i = 2;  // we will ignore the linker
 
     gs_first = objects; // first the executable
+
+    objects[0].next = &objects[1];
 
     // now all of it's dependencies and so on
     // NOTE: Because of the way we created the objects
@@ -548,21 +482,22 @@ void dl_build_global_scope()
 int dl_resolve(int obj, int lazy)
 {
     dl_object *o = &objects[obj];
+    
     /*
     Resolve symbols at load time.
     */
-    dl_relocate(o, DT_REL, DT_RELSZ);
-    dl_relocate(o, DT_RELA, DT_RELASZ);
+    dl_relocate(o, DT_REL, o->relsz);
+    dl_relocate(o, DT_RELA, o->relasz);
     
-    if(lazy)
-        dl_relocate(o, DT_JMPREL, DT_RELASZ);
+    if(!lazy)
+        dl_relocate(o, DT_JMPREL, o->pltrelsz);
     else
         dl_relocate_gotplt_lazy(o);
         
-    resojb++;
+    resobj++;
 }
 
-int dl_relocate(dl_object *obj, int rel, int relsz)
+int dl_relocate(dl_object *obj, int rel, unsigned int relsz)
 {
     int i, relsc;
 	Elf32_Rel *rels;  // careful, if section is not DT_REL this will be an Elf32_Rela *array.
@@ -572,32 +507,52 @@ int dl_relocate(dl_object *obj, int rel, int relsz)
     char *sname;
     int numrel;
     int ret = 0;
-
+    
     if((rel == DT_REL && !obj->rel) 
         || (rel == DT_RELA && !obj->rela)
         || (rel == DT_JMPREL && !obj->jmprel))
         return 1;
 
+    unsigned int relinc = sizeof(Elf32_Rel);
+
     if(rel == DT_REL) 
-        numrel = relsz / sizeof(Elf32_Rel);
-    else
-        numrel = relsz / sizeof(Elf32_Rela);
-
-    for (i = 0; i < numrel; i++, rels++) 
     {
-        if(rel != DT_REL) rels = (Elf32_Rel*)((unsigned int)rels+4);
-
+        rels = (Elf32_Rel*)obj->rel;
+        numrel = relsz / sizeof(Elf32_Rel);
+    }
+    else if(rel == DT_JMPREL) 
+    {
+        rels = (Elf32_Rel*)obj->jmprel;
+        if(obj->pltrel == DT_REL)
+        {
+            numrel = relsz / sizeof(Elf32_Rel);
+        }
+        else
+        {
+            relinc = sizeof(Elf32_Rela);
+            numrel = relsz / sizeof(Elf32_Rela);
+        }
+    }
+    else
+    {
+        rels = (Elf32_Rel*)obj->rela;
+        numrel = relsz / sizeof(Elf32_Rela);
+        relinc = sizeof(Elf32_Rela);
+    }
+    
+    for (i = 0; i < numrel; i++) 
+    {
         type = ELF32_R_TYPE(rels->r_info);
-
+        
         if (type == R_386_NONE 
             || (type == R_386_JMP_SLOT && rel != DT_JMPREL))
             continue;
 
         addr = (Elf32_Addr *)(rels->r_offset + obj->base);
-
-        sym = (Elf32_Sym*)(obj->symtbl + ELF32_R_SYM(rels->r_info));
+                
+        sym = (Elf32_Sym*)(obj->symtbl + sizeof(Elf32_Sym) * ELF32_R_SYM(rels->r_info));
         sname = (char*)(obj->dynstr + sym->st_name);
-
+            
         if (type == R_386_COPY) 
         {
             /*
@@ -611,7 +566,7 @@ int dl_relocate(dl_object *obj, int rel, int relsz)
             dl_object *fobj;
             char *dst, *src;
                      
-            if(!dl_find_symbol(sname, obj, &sm, &fobj, 1, type == R_386_JMP_SLOT))
+            if(!dl_find_symbol(sname, obj, &sm, &fobj, 1, type == R_386_JMP_SLOT, 1))
             {
                 ret++;
                 continue;
@@ -622,7 +577,7 @@ int dl_relocate(dl_object *obj, int rel, int relsz)
             dst = (char*)addr;
 
             int j;
-            for(j = 0; j < sym->st_size; j++)
+            for(j = 0; j < sm->st_size; j++)
             {
                 dst[j] = src[j];
             }
@@ -638,21 +593,20 @@ int dl_relocate(dl_object *obj, int rel, int relsz)
             case R_386_GLOB_DAT:
             case R_386_RELATIVE:
                 if(rel == DT_REL)
-                    value = *addr;
+                    value = 0;
                 else
                     value = (Elf32_Addr)((Elf32_Rela*)rels)->r_addend;
                 break;
             default:
                 value = 0;
         }
-
-        sym = NULL;
-        sname = NULL;
+        
         // if it uses a symbol
         if (type == R_386_32 || type == R_386_PC32 
             || type == R_386_GLOB_DAT || type == R_386_JMP_SLOT 
             || type == R_386_GOTOFF) 
-        {
+        {            
+
             // resolve the symbol and it's name
             if (sym->st_shndx != SHN_UNDEF 
                 && ELF32_ST_BIND(sym->st_info) == STB_LOCAL) 
@@ -662,19 +616,16 @@ int dl_relocate(dl_object *obj, int rel, int relsz)
             }
             else
             {
-                // find the symbol with the index specified on this symbol
-                // r_info
-                Elf32_Sym *symref = (Elf32_Sym*)(obj->symtbl + ELF32_R_SYM(rels->r_info));
+                // find the symbol with the index specified on this symbol r_info
                 dl_object *fobj;
-                sname = (char*)(obj->dynstr + symref->st_name);
-
-                if(!dl_find_symbol(sname, obj, &sm, &fobj, 1, type == R_386_JMP_SLOT))
+                
+                if(!dl_find_symbol(sname, obj, &sm, &fobj, 1, type == R_386_JMP_SLOT, 0))
                 {
                     ret++;
                     continue;
                 }
 
-                value = (Elf32_Addr)((unsigned int)value + fobj->base + (unsigned int)symref->st_value);
+                value = (Elf32_Addr)((unsigned int)value + fobj->base + (unsigned int)sm->st_value);
             }
 
             if (type == R_386_PC32)
@@ -692,7 +643,9 @@ int dl_relocate(dl_object *obj, int rel, int relsz)
             value += obj->base;
         }
 
-        *((unsigned int*)addr) |= (unsigned int)value;
+        *((unsigned int*)addr) = (unsigned int)value;
+        
+        rels = (Elf32_Rel*)((unsigned int)rels + relinc);
     }
 }
 
@@ -702,8 +655,8 @@ int dl_relocate_gotplt_lazy(dl_object *obj)
     Elf32_Addr *addr;
     int i, num;
 
-    if(!obj->pltgot
-        || obj->pltrel != DT_REL) return 1; // I'll only support JMPREL with DT_REL format
+    if(!obj->pltgot || obj->pltrel != DT_REL) 
+        return 1; // I'll only support JMPREL with DT_REL format
 
 	rel = (Elf32_Rel*)obj->jmprel;
 	num = obj->pltrelsz / sizeof(Elf32_Rel);
@@ -719,8 +672,8 @@ int dl_relocate_gotplt_lazy(dl_object *obj)
     // set the GOT second and third entries
     unsigned int *got = (unsigned int*)obj->pltgot;
 
-    got[1] = (unsigned int)&obj;  // second entry contains the object address
-    got[2] = (unsigned int)&dl_runtime_bind;  
+    got[1] = (unsigned int)obj;  // second entry contains the object address
+    got[2] = (unsigned int)&dl_runtime_bind_start;  
 
     return 1;
 }
@@ -734,20 +687,19 @@ char *dl_symbol_name(dl_object *obj, Elf32_Sym *sym)
 Find a symbol on an object (and only on this object).
 sym will be set to the symbol if found or NULL otherwise.
 */
-int dl_find_symbol_obj(char *name, dl_object *obj, Elf32_Sym **sym, int plt)
+int dl_find_symbol_obj(char *name, unsigned int hv, dl_object *obj, Elf32_Sym **sym, int plt)
 {
-    unsigned int nbuckets = *((unsigned int*)obj->hash),
-                 *hash = (unsigned int*)(obj->hash+8),
-                 *chain = (unsigned int*)(obj->hash + (nbuckets << 2)),
-	             hv = elf_hash(name) % *(hash), // first entry of the hash has nbuckets
-                 index;
+    unsigned int nbuckets = obj->nbuckets;
+    unsigned int *hash = obj->buckets;
+    unsigned int *chain = obj->chain;
+	unsigned int index;
     Elf32_Sym *sm = NULL;
     *sym = NULL;
 
     // using the hash we will find the symbol on the specified object
-    for(index = hash[hv]; index; index = chain[index])
+    for(index = hash[hv % nbuckets]; index; index = chain[index])
     {
-        sm = (Elf32_Sym*)obj->symtbl + index;
+        sm = (Elf32_Sym*)(obj->symtbl + sizeof(Elf32_Sym) * index);
 
         if (ELF32_ST_TYPE(sm->st_info) != STT_NOTYPE &&
 		    ELF32_ST_TYPE(sm->st_info) != STT_OBJECT &&
@@ -773,7 +725,6 @@ int dl_find_symbol_obj(char *name, dl_object *obj, Elf32_Sym **sym, int plt)
             return 1;
         }
     }
-
 	return 0;
 }
 
@@ -782,34 +733,54 @@ This function will find a symbol starting at a given object.
 - First it'll find on the local scope.
 - If the symbol is not found on the local scope, it'll search the global scope.
 */
-int dl_find_symbol(char *name, dl_object *obj, Elf32_Sym **sym, dl_object **found_obj, int weak, int plt)
+int dl_find_symbol(char *name, dl_object *obj, Elf32_Sym **sym, dl_object **found_obj, int weak, int plt, int exclude_obj)
 {
     Elf32_Sym *weaksym = NULL, *sm = NULL, *fsm;
     dl_object *wobj, *fobj;
     dl_object *o;
 
-    o = obj->ls_first;
+    unsigned int hv = elf_hash(name); // first entry of the hash has nbuckets
     
-    // first try the local scope
-    while(o)
-    {   
-        if(dl_find_symbol_obj(name, o, &fsm, plt))
+    if(!exclude_obj && dl_find_symbol_obj(name, hv, obj, &fsm, plt))
+    {
+        // is it a weak symbol?
+        if(ELF32_ST_BIND(fsm->st_info) == STB_GLOBAL)
         {
-            // is it a weak symbol?
-            if(ELF32_ST_BIND(fsm->st_info) == STB_GLOBAL)
-            {
-                sm = fsm;
-                fobj = o;
-                break;  // found a symmbol
-                
-            }
-            else if(ELF32_ST_BIND(fsm->st_info) == STB_WEAK && !weaksym) 
-            {
-                wobj = o;
-                weaksym = fsm;
-            }
+            sm = fsm;
+            fobj = obj;               
         }
-        o = o-> next;
+        else if(ELF32_ST_BIND(fsm->st_info) == STB_WEAK && !weaksym) 
+        {
+            wobj = obj;
+            weaksym = fsm;
+        }
+    }
+
+    if(!sm)
+    {
+        o = obj->ls_first;
+    
+        // first try the local scope
+        while(o)
+        {
+            if(dl_find_symbol_obj(name, hv, o, &fsm, plt))
+            {
+                // is it a weak symbol?
+                if(ELF32_ST_BIND(fsm->st_info) == STB_GLOBAL)
+                {
+                    sm = fsm;
+                    fobj = o;
+                    break;  // found a symmbol
+                
+                }
+                else if(ELF32_ST_BIND(fsm->st_info) == STB_WEAK && !weaksym) 
+                {
+                    wobj = o;
+                    weaksym = fsm;
+                }
+            }
+            o = o-> next;
+        }
     }
 
     // if we didn't find a symbol on the local scope, try the 
@@ -820,8 +791,8 @@ int dl_find_symbol(char *name, dl_object *obj, Elf32_Sym **sym, dl_object **foun
     {
         o = obj->next;    // start at the next object
         while(o)
-        {   
-            if(dl_find_symbol_obj(name, o, &fsm, plt))
+        {
+            if(dl_find_symbol_obj(name, hv, o, &fsm, plt))
             {
                 // is it a weak symbol?
                 if(ELF32_ST_BIND(fsm->st_info) == STB_GLOBAL)
@@ -858,12 +829,12 @@ int dl_find_symbol(char *name, dl_object *obj, Elf32_Sym **sym, dl_object **foun
     return 0;
 }
 
-void dl_runtime_bind(dl_object *obj, int rel_index)
-{
+unsigned int dl_runtime_bind(dl_object *obj, int rel_index)
+{    
     // a function tried to access a shared library function
     // with late binding. Fix the GOT.
     Elf32_Rel *rel = (Elf32_Rel *)(obj->jmprel + rel_index);
-    Elf32_Sym *sym = (Elf32_Sym*)(obj->symtbl + ELF32_R_SYM(rel->r_info)), *sm;
+    Elf32_Sym *sym = (Elf32_Sym*)(obj->symtbl + sizeof(Elf32_Sym) * ELF32_R_SYM(rel->r_info)), *sm;
     char *symn = (char*)(obj->dynstr + sym->st_name);
     dl_object *fobj;
 
@@ -877,17 +848,96 @@ void dl_runtime_bind(dl_object *obj, int rel_index)
     the dynamic linker what symbol is being referenced, name1 in this
     case.
     */
-    Elf32_Word *addr = (Elf32_Word *)(obj->pltgot + rel->r_offset);
+    Elf32_Word *addr = (Elf32_Word *)(obj->base + rel->r_offset);
 
     // do a symbol lookup
-    if(!dl_find_symbol(symn, obj, &sm, &fobj, 1, 1))
+    if(!dl_find_symbol(symn, obj, &sm, &fobj, 1, 1, 0))
     {
         __ldexit(-6);
     }
 
     *addr = fobj->base + (Elf32_Word)sm->st_value; // set the correct value on the GOT
+
+    return *addr;
 }
 
+void dl_buildobject(dl_object *obj, dyncache *dync)
+{
+    obj->pltgot = NULL;
+    obj->hash = NULL;
+    obj->dynstr = NULL;
+    obj->symtbl = NULL;
+    obj->rela = NULL;
+    obj->rel = NULL;
+    obj->jmprel = NULL;
+    obj->init = NULL;
+    obj->fini = NULL;
+    obj->relasz = 0;
+    obj->relsz = 0;
+    obj->pltrelsz = 0;
+    obj->pltrel = 0;
+
+    int i = 0;
+    while(i < 24)
+    {
+        switch(i)
+        {
+            case DT_PLTGOT:
+                obj->pltgot = dync->data[i];
+                break;
+            case DT_HASH:
+                obj->hash = dync->data[i];
+                break;
+            case DT_STRTAB:
+                obj->dynstr = dync->data[i];
+                break;
+            case DT_SYMTAB:
+                obj->symtbl = dync->data[i];
+                break;
+            case DT_RELA:
+                obj->rela = dync->data[i];
+                break;
+            case DT_REL:
+                obj->rel = dync->data[i];
+                break;
+            case DT_JMPREL:
+                obj->jmprel = dync->data[i];
+                break;
+            case DT_INIT:
+                obj->init = dync->data[i];
+                break;
+            case DT_FINI:
+                obj->fini = dync->data[i];
+                break;
+            case DT_RELASZ:
+                obj->relasz = dync->data[i];
+                break;
+            case DT_RELSZ:
+                obj->relsz = dync->data[i];
+                break;
+            case DT_PLTRELSZ:
+                obj->pltrelsz = dync->data[i];
+                break;
+            case DT_PLTREL:
+                obj->pltrel = dync->data[i];
+                break;
+            default:
+                break;
+        }
+        i++;
+    }
+
+    if(obj->hash)
+    {
+        obj->nbuckets = *((unsigned int*)obj->hash);
+        obj->buckets = (unsigned int*)(obj->hash+8);
+        obj->chain = (unsigned int*)(obj->hash + 8 + (obj->nbuckets << 2));
+    }
+    else
+    {
+        obj->nbuckets = 0;
+    }
+}
 
 int streq(char* str1, char* str2)
 {

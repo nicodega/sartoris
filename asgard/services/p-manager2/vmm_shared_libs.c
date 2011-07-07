@@ -25,6 +25,7 @@
 #include "helpers.h"
 #include "loader.h"
 #include "vmm_memarea.h"
+#include <services/stds/stdfss.h>
 
 BOOL vmm_ld_mapped(struct pm_task *task, UINT32 vlow, UINT32 vhigh)
 {
@@ -71,14 +72,11 @@ int vmm_page_lib(struct pm_task *task, struct pm_thread *thread, ADDR proc_laddr
 	INT32 perms, page_displacement;
     ADDR page_addr;
     struct vmm_page_table *tbl;
-
-    pman_print_dbg("PF: Page lib \n");
-
+    
     /* See if it's a loadable page, if not, skip this */
     if(loader_filepos(ltask, (ADDR)ld_addr, &filepos, &readsize, &perms, &page_displacement, &exec))
     {
         // FIXME: we should check the page is not on swap.
-
         /* See if the page is present on the lib task (only executable pages) */  
         if(exec)
         {
@@ -99,23 +97,21 @@ int vmm_page_lib(struct pm_task *task, struct pm_thread *thread, ADDR proc_laddr
             {
                 // table is present.. the page?
                 tbl = (struct vmm_page_table*)PHYSICAL2LINEAR(PG_ADDRESS(ltask->vmm_info.page_directory->tables[PM_LINEAR_TO_DIR(ld_addr)].b));
-
+                
                 if(tbl->pages[PM_LINEAR_TO_TAB(ld_addr)].entry.ia32entry.present == 1)
                 {
                     // map the page 
-                    pm_page_in(task->id, (ADDR)(PG_ADDRESS(proc_laddr)), (ADDR)PG_ADDRESS(tbl->pages[PM_LINEAR_TO_TAB(ld_addr)].entry.phy_page_addr), 1, perms);
+                    pm_page_in(task->id, (ADDR)(PG_ADDRESS(proc_laddr)), (ADDR)PG_ADDRESS(tbl->pages[PM_LINEAR_TO_TAB(ld_addr)].entry.phy_page_addr), 2, perms);
 
                     return 1; // return to the thread execution
                 }
             }
         }
 
-        /* See if there are other threads waiting for this shared lib page */
-        thread->vmm_info.pg_node.value = ld_addr;          // thread will be placed on the ltask waiting tree
-                        
+        /* See if there are other threads waiting for this shared lib page */                        
         if(rb_insert(&ltask->vmm_info.wait_root, &thread->vmm_info.pg_node, TRUE) == 2)
         {
-            pman_print_dbg("PF: Other Thread was waiting (lib) \n");
+            pman_print_dbg("vmm_page_lib Other Thread was waiting (lib) \n");
             sch_deactivate(thread);
             
 			/* Page was being retrieved already for other thread! Block the thread.	*/
@@ -126,6 +122,7 @@ int vmm_page_lib(struct pm_task *task, struct pm_thread *thread, ADDR proc_laddr
 			thread->vmm_info.page_perms = perms;
 			thread->vmm_info.page_displacement = page_displacement;
 			thread->vmm_info.fault_task = ltask->id;
+            thread->vmm_info.pg_node.value = PG_ADDRESS(ld_addr);
 
 			return 2;	// thread will remain on hold
 		}
@@ -146,6 +143,7 @@ int vmm_page_lib(struct pm_task *task, struct pm_thread *thread, ADDR proc_laddr
 		thread->vmm_info.page_perms = perms;
 		thread->vmm_info.page_displacement = page_displacement;
         thread->vmm_info.fault_task = ltask->id;
+        thread->vmm_info.pg_node.value = PG_ADDRESS(ld_addr);
 
 		/* 
 		Page will be granted before hand, so page stealing thread won't attempt to take our page table.
@@ -158,19 +156,23 @@ int vmm_page_lib(struct pm_task *task, struct pm_thread *thread, ADDR proc_laddr
         // if exec is not 0, we are bringing a page for
         // an executable section of a shared library.
         if(exec)
+        {
             vmm_set_flags(ltask->id, thread->vmm_info.page_in_address, FALSE, TAKEN_PG_FLAG_LIBEXE, TRUE);
+        }
 
         /* IO Lock page */
         vmm_set_flags(task->id, thread->vmm_info.page_in_address, TRUE, TAKEN_EFLAG_IOLOCK | TAKEN_EFLAG_PF, TRUE);
 
 		thread->io_finished.callback = vmm_elffile_seekend_callback;
 		
+        // switch the IO source to the lib task one
+        io_set_src(&thread->io_event_src, &ltask->io_event_src);
+
 		io_begin_seek(&thread->io_event_src, filepos);
 
         // we must insert the thread on the pg wait tree
         // in case another thread asks for the same page.
         rb_insert(&ltask->vmm_info.wait_root, &thread->vmm_info.pg_node, FALSE);
-        rb_insert(&ltask->vmm_info.tbl_wait_root, &thread->vmm_info.tbl_node, FALSE);
         
         return 2;
     }
@@ -188,9 +190,13 @@ int vmm_lib_load(struct pm_task *task, char *path, int plength, UINT32 vlow, UIN
     int ret;
 	struct pm_task *libtsk = NULL;
 
+    pman_print_dbg("PM: vmm_lib_load %s l: %x h: %x\n", path, vlow, vhigh);
+
     if(ma_collition(&task->vmm_info.regions, vlow, vhigh))
         return FALSE;
         
+    pman_print_dbg("PM: vmm_lib_load no collition\n");
+
     mreg = kmalloc(sizeof(struct vmm_memory_region));
 
     if(!mreg) return 0;
@@ -201,8 +207,12 @@ int vmm_lib_load(struct pm_task *task, char *path, int plength, UINT32 vlow, UIN
 		return FALSE;
 	}
 
+    pman_print_dbg("PM: vmm_lib_load id %i\n", &mreg->tsk_id_node.value);
+
     if(!lib)
     {
+        pman_print_dbg("PM: vmm_lib_load loading lib for the first time\n");
+
         lib = kmalloc(sizeof(struct vmm_slib_descriptor));
 
         if(!lib) 
@@ -227,6 +237,8 @@ int vmm_lib_load(struct pm_task *task, char *path, int plength, UINT32 vlow, UIN
             return 0;
         }
 	
+        pman_print_dbg("PM: vmm_lib_load task created %i\n", libtask);
+
 	    libtsk->flags = TSK_SHARED_LIB;
         libtsk->state = TSK_NORMAL;
 
@@ -254,6 +266,8 @@ int vmm_lib_load(struct pm_task *task, char *path, int plength, UINT32 vlow, UIN
         mreg->descriptor = lib;
 
         lib->regions = mreg;
+
+        pman_print_dbg("PM: vmm_lib_load invoke loader reg: %x\n", mreg);
    
 	    ret = loader_create_task(libtsk, path, plength, (unsigned int)lib, 1, LOADER_CTASK_TYPE_LIB);
 
@@ -263,8 +277,12 @@ int vmm_lib_load(struct pm_task *task, char *path, int plength, UINT32 vlow, UIN
 		    kfree(mreg);
             return 0;
 	    }
+        
+        pman_print_dbg("PM: vmm_lib_load loader create task ret OK\n");
         return 1;
     }
+
+    pman_print_dbg("PM: vmm_lib_load lib is already loaded! ref: %i \n", lib->references);
     
     lib->references++;
 
@@ -282,10 +300,12 @@ int vmm_lib_load(struct pm_task *task, char *path, int plength, UINT32 vlow, UIN
 	
     if(!lib->loaded)
     {
+        pman_print_dbg("PM: vmm_lib_load lib is not loaded yet\n");
         return 1;
     }
     else
     {
+        pman_print_dbg("PM: vmm_lib_load lib is loaded!\n");
          /* Add new_mreg on the task lists */
         ma_insert(&task->vmm_info.regions, &mreg->tsk_node);
         rb_search(&task->vmm_info.regions_id, mreg->tsk_id_node.value);
@@ -310,6 +330,11 @@ BOOL vmm_lib_loaded(struct pm_task *libtask, BOOL ok)
     struct vmm_memory_region *mreg, *nmreg;
     struct vmm_slib_descriptor *lib = (struct vmm_slib_descriptor*)task->loader_inf.param;
 
+    if(ok)
+        pman_print_dbg("PM: Lib ELF loaded OK\n");
+    else
+        pman_print_dbg("PM: Lib ELF load ERROR\n");
+
     res_msg.pm_type = PM_LOAD_LIBRARY;
 	res_msg.req_id  = task->command_inf.command_req_id;
 	res_msg.new_id  = task->id;
@@ -324,6 +349,8 @@ BOOL vmm_lib_loaded(struct pm_task *libtask, BOOL ok)
         while(mreg)
         {            
             task = tsk_get(mreg->owner_task);
+
+            pman_print_dbg("PM: Inserting region for task %i\n", task->id);
             
             ma_insert(&task->vmm_info.regions, &mreg->tsk_node);
             rb_insert(&task->vmm_info.regions_id, &mreg->tsk_id_node, FALSE);
@@ -385,12 +412,24 @@ BOOL vmm_lib_unload(struct pm_task *task, struct vmm_memory_region *mreg)
 {
     struct vmm_slib_descriptor *lib = (struct vmm_slib_descriptor*)mreg->descriptor;
  
+    
     if(lib == NULL)
+    {
+        ma_remove(&task->vmm_info.regions, &mreg->tsk_node);
+        rb_remove(&task->vmm_info.regions_id, &mreg->tsk_id_node);
+        kfree(mreg);
+        pman_print_dbg("PMAN vmm_lib_unload: Lib is LD\n");
         return TRUE;    // this can only happen on the LD mapping
+    }
+
+    pman_print_dbg("PMAN vmm_lib_unload: Claim memory from task.\n");
+
+    // claim memory from the referencing task
+    vmm_claim_region(task, mreg);
 
     ma_remove(&task->vmm_info.regions, &mreg->tsk_node);
     rb_remove(&task->vmm_info.regions_id, &mreg->tsk_id_node);
-
+        
     // fix regions list on the descriptor
     if(mreg->prev == NULL)
         lib->regions = mreg->next;
@@ -403,13 +442,24 @@ BOOL vmm_lib_unload(struct pm_task *task, struct vmm_memory_region *mreg)
 
     lib->references--;
 
+    pman_print_dbg("PMAN vmm_lib_unload: Lib references %i\n", lib->references);
+
     if(!lib->references && lib->loaded)
     {
         struct pm_task *ltask = tsk_get(lib->task);
 
+        pman_print_dbg("PMAN vmm_lib_unload: Lib UNLOADING\n");
+
 		/* Close the file but dont wait for a callback */
-		io_begin_close(&ltask->io_event_src);
-                
+        struct stdfss_close msg_close;
+
+	    msg_close.command  = STDFSS_CLOSE;
+	    msg_close.thr_id   = -1;
+	    msg_close.file_id  = ltask->io_event_src.file_id;
+	    msg_close.ret_port = 50; // this port is clearly not open
+
+	    send_msg(ltask->io_event_src.fs_service, STDFSS_PORT, &msg_close);
+
         // destroy the task
         tsk_destroy(ltask); // this should also free the path!
 
@@ -427,10 +477,13 @@ BOOL vmm_lib_unload(struct pm_task *task, struct vmm_memory_region *mreg)
             lib->next->prev = lib->prev;
 
         kfree(lib);
+
+        pman_print_dbg("PMAN vmm_lib_unload: Lib FREED\n");
     }
 
     return TRUE;
 }
+
 
 /*
 If the library is already loaded, this function will return a pointer to

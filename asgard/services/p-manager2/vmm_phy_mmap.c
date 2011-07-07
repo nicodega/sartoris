@@ -137,7 +137,8 @@ BOOL vmm_phy_mmap(struct pm_task *task, ADDR py_start, ADDR py_end, ADDR lstart,
 
                 if(tsk_get(assigned->task_id) == NULL) return 0;
 
-				pdir = tsk_get(assigned->task_id)->vmm_info.page_directory;
+                struct pm_task *t = tsk_get(assigned->task_id);
+				pdir = t->vmm_info.page_directory;
 				ptbl = (struct vmm_page_table*)PG_ADDRESS(PHYSICAL2LINEAR(pdir->tables[assigned->dir_index].b));
 
 				/* Check page is not dirty. */
@@ -151,6 +152,8 @@ BOOL vmm_phy_mmap(struct pm_task *task, ADDR py_start, ADDR py_end, ADDR lstart,
 
 				/* Put page on VMM */
 				vmm_put_page((ADDR)pg_addr);
+
+                t->vmm_info.page_count--;
 			}
 		}
 		pstart += PAGE_SIZE;
@@ -176,6 +179,8 @@ BOOL vmm_phy_mmap(struct pm_task *task, ADDR py_start, ADDR py_end, ADDR lstart,
 				vmm_put_page((ADDR)PHYSICAL2LINEAR(PG_ADDRESS(tbl->pages[PM_LINEAR_TO_TAB(laddr)].entry.phy_page_addr)));
 
 				page_out(task->id, (ADDR)laddr, 2);
+
+                task->vmm_info.page_count--;
 			}
 			else if(tbl->pages[PM_LINEAR_TO_TAB(laddr)].entry.record.swapped == 1)
 			{
@@ -318,7 +323,9 @@ void vmm_phy_umap(struct pm_task *task, ADDR lstart)
 		page_out(task->id, (ADDR)offset, 2);
 
 		/* Return page to VMM */
-		vmm_put_page((ADDR)((UINT32)pmap->area.low + (offset - (UINT32)mreg->tsk_node.low)));		
+		vmm_put_page((ADDR)((UINT32)pmap->area.low + (offset - (UINT32)mreg->tsk_node.low)));
+
+        task->vmm_info.page_count--;
 	}
 
 	/* Remove structures */

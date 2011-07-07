@@ -19,6 +19,7 @@
 
 #include "formats/elf.h"
 #include "elf_loader.h"
+#include "layout.h"
 #include "loader.h"
 #include "helpers.h"
 #include "task_thread.h"
@@ -138,7 +139,7 @@ BOOL loader_filepos(struct pm_task *task, ADDR linear, UINT32 *outpos, UINT32 *o
 		phdr = (struct Elf32_Phdr*) &headers[i * task->loader_inf.elf_header.e_phentsize];
 
 		// consider only loadable segments
-		if(phdr->p_type != PT_LOAD)
+		if(phdr->p_type != PT_LOAD && phdr->p_type != PT_DYNAMIC)
 		{
 			i++;
 			continue;
@@ -219,7 +220,7 @@ BOOL loader_collides(struct pm_task *task, ADDR lstart, ADDR lend)
 		    phdr = (struct Elf32_Phdr*) &headers[i * task->loader_inf.elf_header.e_phentsize];
 
 		    // consider only loadable segments
-		    if(phdr->p_type == PT_LOAD 
+		    if((phdr->p_type == PT_LOAD || phdr->p_type == PT_DYNAMIC)
                 && ((phdr->p_flags & PF_EXEC) || ((phdr->p_flags & PF_READ) && !(phdr->p_flags & PF_WRITE)))
                 && ((UINT32)phdr->p_vaddr <= (UINT32)lend 
                 && (UINT32)lstart < (UINT32)phdr->p_vaddr + (UINT32)phdr->p_memsz))
@@ -301,7 +302,7 @@ void loader_calculate_working_set(struct pm_task *task)
 		phdr = (struct Elf32_Phdr*)&headers[i * task->loader_inf.elf_header.e_phentsize];
 
 		// consider only loadable segments
-		if(phdr->p_type != PT_LOAD)
+		if(phdr->p_type != PT_LOAD && phdr->p_type != PT_DYNAMIC)
 		{
 			i++;
 			continue;
@@ -320,6 +321,39 @@ void loader_calculate_working_set(struct pm_task *task)
 	}	
 }
 
+ADDR loader_task_ep(struct pm_task *task)
+{
+    if(task->flags & TSK_DYNAMIC)
+    {
+        struct pm_task *ldtask = tsk_get(ld_task);
+        return (ADDR)((UINT32)ldtask->loader_inf.elf_header.e_entry + PMAN_MAPPING_BASE);
+    }
+    else
+    {
+        return (ADDR)task->loader_inf.elf_header.e_entry;
+    }
+}
+
+ADDR loader_lddynsec_addr()
+{
+    if(ld_task == -1) return NULL;
+
+    struct pm_task *ldtsk = tsk_get(ld_task);
+    struct Elf32_Phdr *phdr = NULL;
+    UINT32 i = 0, phnum = ldtsk->loader_inf.elf_header.e_phnum;
+    BYTE *headers = ldtsk->loader_inf.elf_pheaders;
+
+    while(i < phnum)
+	{
+		phdr = (struct Elf32_Phdr*)&headers[i * ldtsk->loader_inf.elf_header.e_phentsize];
+
+        if(phdr->p_type == PT_DYNAMIC) return phdr->p_vaddr;
+
+        i++;
+    }
+    return NULL;
+}
+
 BOOL loader_task_loaded(struct pm_task *task, char *interpreter)
 {
     struct pm_msg_response res_msg;
@@ -335,11 +369,7 @@ BOOL loader_task_loaded(struct pm_task *task, char *interpreter)
 
 	/* Check created task fits in memory */
 	if(vmm_can_load(task))
-	{				
-		// finished loading
-		task->state = TSK_NORMAL;
-		task->loader_inf.stage = LOADER_STAGE_LOADED;
-
+	{	
         if(interpreter != NULL)
         {
             // FIXME: We should load the interpreter reported on interpreter param
@@ -356,43 +386,38 @@ BOOL loader_task_loaded(struct pm_task *task, char *interpreter)
             }
             else
             {
-                pman_print_dbg("LOADER: mapping ld \n");
-
                 // now tell vmm to create the library memory region
-                if(!vmm_ld_mapped(task, PMAN_MAPPING_BASE, PMAN_MAPPING_BASE+ld_size))
+                if(!vmm_ld_mapped(task, PMAN_MAPPING_BASE, PMAN_MAPPING_BASE+(ld_size % 0x1000 == 0? ld_size : ld_size + (0x1000 - ld_size % 0x1000))))
                     return FALSE;
 
                 ldtsk = tsk_get(ld_task);
-
-                pman_print_dbg("LOADER: ld region created \n");
-
+                
                 /* 
                 We need to map LD onto the task address space.
                 To do that, we will go through the LD task phdrs and page in
                 every PT_LOAD section on it.
                 */
-                BYTE *headers = task->loader_inf.elf_pheaders;
-	            UINT32 i = 0, phnum = task->loader_inf.elf_header.e_phnum;
+                BYTE *headers = ldtsk->loader_inf.elf_pheaders;
+	            UINT32 i = 0, phnum = ldtsk->loader_inf.elf_header.e_phnum;
                 UINT32 laddr_ld, laddr, end_addr;
                 int att;
 	            struct Elf32_Phdr *phdr = NULL;
                 struct vmm_page_directory *lddir = ldtsk->vmm_info.page_directory,
                                           *dir = task->vmm_info.page_directory;
 	            struct vmm_page_table *ldtbl, *tbl;
-                ADDR pg;
-
-                laddr = PMAN_MAPPING_BASE;
-                        
+                ADDR pg, ppg;
+                                        
 	            while(i < phnum)
 	            {
-		            phdr = (struct Elf32_Phdr*)&headers[i * task->loader_inf.elf_header.e_phentsize];
+		            phdr = (struct Elf32_Phdr*)&headers[i * ldtsk->loader_inf.elf_header.e_phentsize];
 
 		            // consider only loadable segments
-		            if(phdr->p_type == PT_LOAD)
+		            if(phdr->p_type == PT_LOAD || phdr->p_type == PT_DYNAMIC)
                     {
-                        laddr += (UINT32)phdr->p_vaddr;
-                        laddr_ld = (UINT32)phdr->p_vaddr;
-                        end_addr = (UINT32)phdr->p_vaddr + (UINT32)phdr->p_memsz;
+                        laddr = (PMAN_MAPPING_BASE + SARTORIS_PROCBASE_LINEAR) + (UINT32)phdr->p_vaddr;
+                        laddr_ld = SARTORIS_PROCBASE_LINEAR + (UINT32)phdr->p_vaddr;
+                        end_addr = SARTORIS_PROCBASE_LINEAR + (UINT32)phdr->p_vaddr + (UINT32)phdr->p_memsz;
+
                         while(laddr_ld < end_addr)
                         {
                             // do we need a page table?
@@ -435,25 +460,63 @@ BOOL loader_task_loaded(struct pm_task *task, char *interpreter)
                             // own copy of it
                             if(phdr->p_flags & PF_EXEC)
                             {
-                                pm_page_in(task->id, (ADDR)laddr, (ADDR)PG_ADDRESS(ldtbl->pages[PM_LINEAR_TO_TAB(laddr_ld)].entry.phy_page_addr), 1, att);
+                                ppg = (ADDR)PG_ADDRESS(ldtbl->pages[PM_LINEAR_TO_TAB(laddr_ld)].entry.phy_page_addr);
+                                pg = (ADDR)PHYSICAL2LINEAR(ppg);
+                                pm_page_in(task->id, (ADDR)laddr, ppg, 2, att);
                             }
                             else
                             {
-                                pg = (ADDR)vmm_get_page(task->id, laddr);
- 
-                                pm_page_in(task->id, (ADDR)PG_ADDRESS(laddr), (ADDR)LINEAR2PHYSICAL(pg), 2, att);
+                                // we need to check if the segment starts at 0 on a page
+                                // or it overlaps another segment
+                                if(tbl->pages[PM_LINEAR_TO_TAB(laddr)].entry.ia32entry.present)
+                                {
+                                    pg = (ADDR)PHYSICAL2LINEAR(PG_ADDRESS(tbl->pages[PM_LINEAR_TO_TAB(laddr)].entry.phy_page_addr));
+                                }
+                                else
+                                {
+                                    pg = (ADDR)vmm_get_page(task->id, laddr);
+                                }
 		
                                 /* copy the contents of the page */
-                                unsigned int *src = (unsigned int*)PHYSICAL2LINEAR(PG_ADDRESS(ldtbl->pages[PM_LINEAR_TO_TAB(laddr_ld)].entry.phy_page_addr));
-                                unsigned int *dst = (unsigned int*)pg;
-                                int i;
-                                for(i = 0; i < 0x400; i++)
-                                {
-                                    dst[i] = src[i];
-                                    i++;
-                                }
+                                UINT32 *src = (UINT32*)PHYSICAL2LINEAR(PG_ADDRESS(ldtbl->pages[PM_LINEAR_TO_TAB(laddr_ld)].entry.phy_page_addr));
+                                UINT32 *dst = (UINT32*)pg;
+                                UINT32 *pman_addr = (UINT32*)((UINT32)src + SARTORIS_PROCBASE_LINEAR);
 
-                                vmm_unmap_page(task->id, (UINT32)PG_ADDRESS(laddr));
+                                // In order to copy the page contents, we will have to map the page to 
+                                // the process manager (it's a common page, and it's been unmapped).
+                                // To do that we must preserve the assigned record
+                                int i;
+                                
+                                UINT32 ass_bck = vmm_temp_pgmap(ldtsk, (ADDR)laddr_ld);
+                                                                
+                                if(laddr_ld == SARTORIS_PROCBASE_LINEAR + (UINT32)phdr->p_vaddr 
+                                    && laddr_ld % 0x1000 != 0)
+                                {
+                                    UINT32 disp = (laddr_ld % 0x1000) / 4;
+
+                                    // there is a displacement
+                                    for(i = 0; i < 0x400 - disp; i++)
+                                    {
+                                        dst[i + disp] = src[i + disp];
+                                    }
+                                }
+                                else
+                                {
+                                    for(i = 0; i < 0x400; i++)
+                                    {
+                                        dst[i] = src[i];
+                                    }
+                                }
+                      
+                                //restore the assigned record
+                                vmm_restore_temp_pgmap(ldtsk, (ADDR)laddr_ld, ass_bck);
+                                
+                                if(tbl->pages[PM_LINEAR_TO_TAB(laddr)].entry.ia32entry.present == 0)
+                                {
+                                    pm_page_in(task->id, (ADDR)PG_ADDRESS(laddr), (ADDR)LINEAR2PHYSICAL(pg), 2, att);
+                                    // unmap the task new page from pman
+                                    vmm_unmap_page(task->id, laddr);
+                                }
 
 		                        task->vmm_info.page_count++;
                             }
@@ -468,23 +531,21 @@ BOOL loader_task_loaded(struct pm_task *task, char *interpreter)
                 task->flags |= TSK_DYNAMIC;
 
                 task->loader_inf.phdrs_smo = share_mem(task->id, task->loader_inf.elf_pheaders, task->loader_inf.elf_header.e_phnum * task->loader_inf.elf_header.e_phentsize, READ_PERM);
-
-                pman_print_dbg("LOADER: LD Mapped! \n");
-
-                return TRUE;
             }
         }
-        else
+        
+        // finished loading
+		task->state = TSK_NORMAL;
+		task->loader_inf.stage = LOADER_STAGE_LOADED;
+
+        /* Task loaded successfully */
+		if(task->creator_task != 0xFFFF)
         {
-            /* Task loaded successfully */
-		    if(task->creator_task != 0xFFFF)
-            {
-                res_msg.status = PM_OK;
-		        res_msg.new_id = task->id;
-		        send_msg(task->creator_task, task->creator_task_port, &res_msg );
-            }
-            return TRUE;
+            res_msg.status = PM_OK;
+		    res_msg.new_id = task->id;
+		    send_msg(task->creator_task, task->creator_task_port, &res_msg );
         }
+        return TRUE;        
 	}
 	else
 	{

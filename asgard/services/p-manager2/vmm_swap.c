@@ -234,6 +234,7 @@ void vmm_swap_empty(struct pm_task *task, BOOL iocall)
 			{
 				page_out(task->id, (ADDR)(i * 0x100000), 1);
 				vmm_put_page((ADDR)PHYSICAL2LINEAR(PG_ADDRESS(pdir->tables[i].b)));
+                task->vmm_info.page_count--;
 			}
 		}
 

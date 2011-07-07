@@ -20,11 +20,6 @@
 
 global _ldstart
 
-;; void __ldmain(struct init_data *initd) on ld.c
-extern __ldmain
-;; void __ldexit() on ld.c
-extern __ldexit
-
 ;; Process manager will leave the stack in this way: 
 ;;
 ;;		 ----------------------------
@@ -38,26 +33,24 @@ bits 32
 
 ;; . <-- this is LDs entry point!
 _ldstart:
-xchg bx,bx
 	mov eax, esp
     mov ebx, esp
 	sub eax, [esp]		  ;; substract size bytes from esp possition
 	sub esp, [esp]		  ;; position at the begining of init structure [esp] = struct size
 
-	sub esp, 4			  ;; leave 4 bytes to the stack (don't remember why!)
+	sub esp, 4			  ;; remove struct size
 		
 	push eax			  ;; push the pointer to init structure
 	mov edx, [eax+4]      ;; we where relocated, add offset to the function address.
-    add edx, __ldmain
+    add edx, end
 	call edx
-
-	mov esp, ebx          ;; restore the stack initial position
+    
+    mov esp, ebx          ;; restore the stack initial position
     mov dword [esp], 5*4  ;; change structure size to the init_data size
-    mov eax, esp
-    sub eax, 5*4
-    mov [eax], dword __ldexit
-    call [eax]            ;; execute the thread entry point
+    
+    jmp eax               ;; execute the thread entry point
     
 	jmp $ ;; <-- we will never reach this point, but if we do, we cannot return
-	
+align 16
+end:	
 	

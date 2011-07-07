@@ -131,11 +131,13 @@ BOOL tsk_destroy(struct pm_task *task)
 
 	if(task->state == TSK_KILLED)
 	{
+        if(task->killed_threads != 0) return FALSE;
+
+		vmm_claim(task);
+
         if(task->loader_inf.full_path != NULL) kfree(task->loader_inf.full_path);
 	    if(task->loader_inf.elf_pheaders != NULL) kfree(task->loader_inf.elf_pheaders);
 		
-		vmm_claim(task->id);
-
         task_info[task->id] = NULL;
 		kfree(task);
 		return TRUE;
@@ -156,6 +158,10 @@ BOOL tsk_destroy(struct pm_task *task)
     
     if(ret == -1 || ((task->flags & TSK_SHARED_LIB) && task->vmm_info.wait_root.root != NULL)) 
     {
+        if((task->flags & TSK_SHARED_LIB))
+        {
+            pman_print_dbg("LIB TASK NOT DESTROYED\n");
+        }
         if(destroy_task(task->id) != SUCCESS)
         {
             pman_print_dbg("Destroy task failed %i ", task->id);
@@ -167,14 +173,14 @@ BOOL tsk_destroy(struct pm_task *task)
         return FALSE;
     }
 	
+	vmm_claim(task);
+
     if(destroy_task(task->id) != SUCCESS)
     {
         pman_print_dbg("Destroy task failed %i ", task->id);
 	    return FALSE;
     }
 
-	vmm_claim(task->id);
-    
     if(task->loader_inf.full_path != NULL) kfree(task->loader_inf.full_path);
 	if(task->loader_inf.elf_pheaders != NULL) kfree(task->loader_inf.elf_pheaders);
 	    

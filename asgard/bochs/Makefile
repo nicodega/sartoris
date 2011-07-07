@@ -12,8 +12,7 @@ all : 1.44a 10MB.hd.ofs
 	../tools/mkofs d 10MB.hdb.ofs /dev
 	../tools/mkofs d 10MB.hdb.ofs /bin
 	../tools/mkofs d 10MB.hdb.ofs /mnt
-	../tools/mkofs d 10MB.hdb.ofs /usr
-	../tools/mkofs d 10MB.hdb.ofs /usr/lib
+	../tools/mkofs d 10MB.hdb.ofs /lib
 	../tools/mkofs dev 10MB.hdb.ofs /dev/tty0 devices/tty 0
 	../tools/mkofs dev 10MB.hdb.ofs /dev/tty1 devices/tty 1
 	../tools/mkofs dev 10MB.hdb.ofs /dev/tty2 devices/tty 2
@@ -33,7 +32,7 @@ all : 1.44a 10MB.hd.ofs
 	../tools/mkofs a 10MB.hdb.ofs /bin/cat ../programs/cat/cat.raw
 	../tools/mkofs a 10MB.hdb.ofs /bin/more ../programs/more/more.raw
 	../tools/mkofs a 10MB.hdb.ofs /bin/stest ../programs/stest/stest.raw
-	../tools/mkofs a 10MB.hdb.ofs /usr/lib/libstest.so ../lib/libstest.so
+	../tools/mkofs a 10MB.hdb.ofs /lib/libstest.so ../lib/libstest.so
 	../tools/mkofs a 10MB.hdb.ofs /testtxt ./testtxt
 
 	#create boot sector (modify stage 1.5 possition on it and set partition table)

@@ -21,9 +21,10 @@
 #include <lib/printf.h>
 
 void main(int argc, char **argv)
-{
-    if(static_int == 5)
-        printf("static is 5\n");
+{    
+    if(static_int == 30)
+        printf("static is 30\n");
     int r = shared_test(4);
-    printf("r is %i", r);        
+    printf("r is %i static is %i", r, static_int);
+    fgetc(&stdin);
 }

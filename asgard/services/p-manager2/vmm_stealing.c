@@ -250,6 +250,9 @@ void vmm_page_stealer()
 				/* put the page back onto free pages! */
 				vmm_put_page((ADDR)LINEAR2PHYSICAL(candidate_addr));
 				
+                task = tsk_get(candidate_task_id);
+                task->vmm_info.page_count--;
+
 				int_set(0);
 			}
 
