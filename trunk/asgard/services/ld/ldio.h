@@ -39,9 +39,13 @@ typedef struct SFILE
     int eof;
 } FILE;
 
+#define EXISTS_FILE   STDFSS_FILETYPE_FILE
+#define EXISTS_DIR    STDFSS_FILETYPE_DIRECTORY
+
 int fopen(char *filename, FILE *file);
 int fclose(FILE *stream);
 size_t fread(char *buffer, int bytes, FILE *stream);
+int exists(char *filename, int type);
 
 /* intenal */
 int resolve_fs();

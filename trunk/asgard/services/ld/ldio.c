@@ -140,6 +140,36 @@ int fseek (FILE * stream, long offset)
 	return 0;
 }
 
+int exists(char *filename, int type)
+{
+	struct stdfss_exists exists_cmd;
+	struct stdfss_res res;
+	int service;
+	
+	// resolve default fs service //
+	service = resolve_fs();
+
+	if(service == -1)
+	{
+		return -1;
+	}
+
+	exists_cmd.command = STDFSS_EXISTS;
+	exists_cmd.path_smo = share_mem(service, filename, len(filename)+1, READ_PERM);
+	exists_cmd.ret_port = g_ioport;
+
+	send_fs(service,(int*)&exists_cmd, (int*)&res);
+
+	claim_mem(exists_cmd.path_smo);
+
+	if(res.ret != STDFSSERR_OK)
+	{
+		return 0;
+	}
+
+	return (((struct stdfss_exists_res *)&res)->type == type);
+}
+
 int send_fs(int task, int *msg, int *res)
 {
 	((struct stdfss_cmd *)msg)->thr_id = get_current_thread();

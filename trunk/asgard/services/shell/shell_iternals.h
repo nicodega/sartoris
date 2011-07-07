@@ -111,6 +111,7 @@ struct env_var_value
 	char *value;
 };
 
+#define ENV_EMPTY_VALUE     (char*)0xFFFFFFFF
 
 /* Functions */
 void process_env_msg();

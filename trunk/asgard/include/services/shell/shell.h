@@ -29,13 +29,14 @@
 
 #define SHELL_GETENV	1	// gets an environment variable value
 #define SHELL_SETENV	2	// sets an environment variable
+#define SHELL_ENVEXISTS	3	// is a variable defined?
 
-#define SHELLERR_OK			0
+#define SHELLERR_OK			        0
 #define SHELLERR_SMO_TOOSMALL		1
 #define SHELLERR_INVALIDNAME		2
 #define SHELLERR_INVALIDVALUE		3
 #define SHELLERR_INVALIDCOMMAND		4
-#define SHELLERR_SMOERROR		5
+#define SHELLERR_SMOERROR		    5
 #define SHELLERR_VAR_NOTDEFINED		6
 
 /* generic command format */

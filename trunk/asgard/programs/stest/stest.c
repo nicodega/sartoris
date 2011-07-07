@@ -22,8 +22,7 @@
 
 void main(int argc, char **argv)
 {    
-    if(static_int == 30)
-        printf("static is 30\n");
+    printf("static is %i\n", static_int);
     int r = shared_test(4);
     printf("r is %i static is %i", r, static_int);
     fgetc(&stdin);

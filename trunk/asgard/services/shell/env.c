@@ -173,9 +173,8 @@ void process_env_msg()
 		res.msg_id = shellcmd.msg_id;
 		res.ret = SHELLERR_INVALIDCOMMAND;
 
-		nsize = mem_size(shellcmd.name_smo);
-		vsize = mem_size(shellcmd.value_smo);
-
+        nsize = mem_size(shellcmd.name_smo);
+		
 		if(nsize <= 1)
 		{
 			res.ret = SHELLERR_INVALIDNAME;
@@ -184,13 +183,21 @@ void process_env_msg()
 			continue;
 		}		
 
-		if(vsize <= 1)
-		{
-			res.ret = SHELLERR_INVALIDVALUE;
-			send_msg(id, shellcmd.ret_port, &res);
-			count--;
-			continue;
-		}		
+        if(shellcmd.value_smo != -1)
+        {
+            vsize = mem_size(shellcmd.value_smo);
+		    if(vsize <= 1)
+		    {
+			    res.ret = SHELLERR_INVALIDVALUE;
+			    send_msg(id, shellcmd.ret_port, &res);
+			    count--;
+			    continue;
+		    }
+        }
+        else
+        {
+            vsize = -1;
+        }
 
 		switch(shellcmd.command)
 		{
@@ -208,31 +215,69 @@ void process_env_msg()
 					res.ret = SHELLERR_VAR_NOTDEFINED;
 					break;
 				}
-				if(vsize <= len(value))
+                else if(value == ENV_EMPTY_VALUE)
 				{
-					res.ret = SHELLERR_SMO_TOOSMALL;
-					break;
+					if(vsize == 0)
+				    {
+					    res.ret = SHELLERR_SMO_TOOSMALL;
+					    break;
+				    }
+				    if(write_mem(shellcmd.value_smo, 0, 1, "\0"))
+				    {
+					    res.ret = SHELLERR_SMOERROR;
+					    break;
+				    }
 				}
-				if(write_mem(shellcmd.value_smo, 0, len(value) + 1, value))
+                else
+                {
+				    if(vsize <= len(value))
+				    {
+					    res.ret = SHELLERR_SMO_TOOSMALL;
+					    break;
+				    }
+				    if(write_mem(shellcmd.value_smo, 0, len(value) + 1, value))
+				    {
+					    res.ret = SHELLERR_SMOERROR;
+					    break;
+				    }
+                }
+				res.ret = SHELLERR_OK;
+				break;
+            case SHELL_ENVEXISTS:
+                name = shell_get_string(shellcmd.name_smo);
+
+				value = get_env(name, get_proc_term(id));
+				if(value == NULL)
 				{
-					res.ret = SHELLERR_SMOERROR;
+					value = get_global_env(name);
+				}
+				
+				if(value == NULL)
+				{
+					res.ret = SHELLERR_VAR_NOTDEFINED;
 					break;
 				}
 				res.ret = SHELLERR_OK;
 				break;
 			case SHELL_SETENV:
 				name = shell_get_string(shellcmd.name_smo);
-				value = (char*)malloc(vsize);
-				if(read_mem(shellcmd.value_smo, 0, vsize, value))
-				{
-					res.ret = SHELLERR_SMOERROR;
-					break;
-				}
-				if(value[vsize] != '\0')
-				{
-					res.ret = SHELLERR_INVALIDVALUE;
-					break;
-				}
+
+                if(vsize == -1)
+                    value == NULL;
+                else
+                {
+				    value = (char*)malloc(vsize);
+				    if(read_mem(shellcmd.value_smo, 0, vsize, value))
+				    {
+					    res.ret = SHELLERR_SMOERROR;
+					    break;
+				    }
+				    if(value[vsize] != '\0')
+				    {
+					    res.ret = SHELLERR_INVALIDVALUE;
+					    break;
+				    }
+                }
 				if(shellcmd.global)
 				{
 					set_global_env(name, value);
