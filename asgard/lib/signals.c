@@ -106,10 +106,11 @@ int wait_signal(unsigned short event_type, unsigned short task, unsigned int tim
 			free(sentry);
 			return chkres == -1;		// finished.
 		}
+        reschedule();
 	}
 }
 
-SIGNALHANDLER wait_signal_async(unsigned short event_type, unsigned short task, unsigned int timeout, unsigned short param1, unsigned short param2, unsigned short *res0, unsigned short *res1)
+SIGNALHANDLER wait_signal_async(unsigned short event_type, unsigned short task, unsigned int timeout, unsigned short param1, unsigned short param2)
 {
 	struct wait_for_signal_cmd waitcmd;
 	struct signal_cmd signal;
@@ -141,6 +142,8 @@ SIGNALHANDLER wait_signal_async(unsigned short event_type, unsigned short task, 
 int check_signal(SIGNALHANDLER sigh, unsigned short *res0, unsigned short *res1)
 {
 	int res = 0;
+
+    if(sigh == NULL) return 0;
 
 	process_signal_responses();
 	
@@ -218,8 +221,6 @@ void send_event(unsigned short task, unsigned short event_type, unsigned short p
 	send_msg(PMAN_TASK, PMAN_EVENTS_PORT, &evntcmd);
 }
 
-
-
 /* Internal Helper functions*/
 
 unsigned char get_id(int threadid)
@@ -243,7 +244,12 @@ SIGNALHANDLER prepare_send_signal(unsigned short event_type, unsigned short task
 	sentry = (struct signal_response *)malloc(sizeof(struct signal_response));
 
 	if(sentry == NULL)
+    {
+#ifdef SIGNALS_MULTITHREADED
+        leave_mutex(&sigmutex);
+#endif
 		return (SIGNALHANDLER)NULL;
+    }
 
 	sentry->thr = currthr;
 	sentry->task = task;

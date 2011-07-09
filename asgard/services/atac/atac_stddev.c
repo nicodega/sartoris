@@ -49,87 +49,118 @@ void process_query_interface(struct stdservice_query_interface *query_cmd, int t
 	// send response
 	send_msg(task, query_cmd->ret_port, &qres);
 }
-struct stddev_res process_stddev(struct stddev_cmd stddev_msg, int sender_id)
+int process_stddev(struct stddev_cmd *stddev_msg, int sender_id, struct stddev_res *res)
 {
-	struct stddev_res res;
 	struct stddev_devtype_res *type_res;
 	struct stddev_ver_res *ver_res;
 	int i = 0, owners, exclusive, ownerid;
 	
-	res.logic_deviceid = -1;
-	res.command = stddev_msg.command;
+	res->logic_deviceid = -1;
+	res->command = stddev_msg->command;
 
-	switch(stddev_msg.command)
+	switch(stddev_msg->command)
 	{
 		case STDDEV_GET_DEVICETYPE:
-			type_res = (struct stddev_devtype_res*)&res;
+			type_res = (struct stddev_devtype_res*)res;
 			type_res->dev_type = STDDEV_BLOCK;
 			type_res->ret = STDDEV_OK;
-			type_res->msg_id = stddev_msg.msg_id;
+			type_res->msg_id = stddev_msg->msg_id;
 			type_res->block_size = 512;
-			return *((struct stddev_res*)type_res);
+            break;
 		case STDDEV_VER:
-			ver_res = (struct stddev_ver_res*)&res;
+			ver_res = (struct stddev_ver_res*)res;
 			ver_res->ret = STDDEV_OK;
 			ver_res->ver = STDDEV_VERSION;
-			ver_res->msg_id = stddev_msg.msg_id;
-			return *((struct stddev_res*)ver_res);
+			ver_res->msg_id = stddev_msg->msg_id;
+            break;
 		case STDDEV_GET_DEVICE:
-			res.logic_deviceid = stddev_msg.padding0;
+			res->logic_deviceid = stddev_msg->padding0;
 			// if logic id is physical then 
 			// any logic devices cant be exclusive
 			// if its a logic device no logic dev can be exclusive
-			if(ldev_stdget(res.logic_deviceid, sender_id, 1))
+			if(ldev_stdget(res->logic_deviceid, sender_id, 1))
 			{
-				res.msg_id = stddev_msg.msg_id;
-				res.ret = STDDEV_ERR;
+				res->msg_id = stddev_msg->msg_id;
+				res->ret = STDDEV_ERR;
 			}
 			else
 			{
-				res.msg_id = stddev_msg.msg_id;
-				res.ret = STDDEV_OK;
+				res->msg_id = stddev_msg->msg_id;
+				res->ret = STDDEV_OK;
 			}
 			break;
 		case STDDEV_GET_DEVICEX:
-			res.logic_deviceid = stddev_msg.padding0;
-			if(ldev_stdget(res.logic_deviceid, sender_id, 0))
+			res->logic_deviceid = stddev_msg->padding0;
+			if(ldev_stdget(res->logic_deviceid, sender_id, 0))
 			{
-				res.msg_id = stddev_msg.msg_id;
-				res.ret = STDDEV_ERR;
+				res->msg_id = stddev_msg->msg_id;
+				res->ret = STDDEV_ERR;
 			}
 			else
 			{
-				res.msg_id = stddev_msg.msg_id;
-				res.ret = STDDEV_OK;
+				res->msg_id = stddev_msg->msg_id;
+				res->ret = STDDEV_OK;
 			}
 			break;
 		case STDDEV_FREE_DEVICE:
-			res.logic_deviceid = stddev_msg.padding0;
-			if(ldev_stdfree(res.logic_deviceid, sender_id))
+			res->logic_deviceid = stddev_msg->padding0;
+			if(ldev_stdfree(res->logic_deviceid, sender_id))
 			{
-				res.msg_id = stddev_msg.msg_id;
-				res.ret = STDDEV_ERR;
+				res->msg_id = stddev_msg->msg_id;
+				res->ret = STDDEV_ERR;
 			}
 			else
 			{
-				res.msg_id = stddev_msg.msg_id;
-				res.ret = STDDEV_OK;
+				res->msg_id = stddev_msg->msg_id;
+				res->ret = STDDEV_OK;
 			}
 			break;
 		case STDDEV_IOCTL:
-			/* process IOCTRL commands */
-			res.logic_deviceid = stddev_msg.padding0;
-			res.ret = STDDEV_ERR;
+            {
+			    /* 
+                Process IOCTRL commands.
+                ATAC_IOCTRL_REMOVELDEV and ATAC_IOCTRL_CREATELDEV will be handled on the channel
+                command queue.
+                */
+                struct stddev_ioctl_cmd *iocmd = (struct stddev_ioctl_cmd *)stddev_msg;
 
-			process_ioctrl((struct stddev_ioctl_cmd *)&stddev_msg, sender_id, ((struct stddev_ioctrl_res*)&res));
-			break;
+                if(iocmd->request == ATAC_IOCTRL_CREATELDEV 
+                    || iocmd->request == ATAC_IOCTRL_REMOVELDEV)
+                {
+                    struct device_command *cmd = (struct device_command *)malloc(sizeof(struct device_command));
+
+	                if(cmd == NULL || !ldev_valdid(stddev_msg->logic_deviceid))
+                    {
+                        res->logic_deviceid = stddev_msg->padding0;
+			            res->ret = STDDEV_ERR;
+                        return 1;
+                    }
+
+	                cmd->ldev = ldev_get(stddev_msg->logic_deviceid);;
+	                cmd->task = sender_id;
+                    cmd->type = DEVICE_COMMAND_IOCTRL;
+	                *((struct stddev_ioctl_cmd*)cmd->msg) = *iocmd;
+
+	                /* enqueue message */
+	                queue_enqueue(&ata_adapters[cmd->ldev->adapter].channels[cmd->ldev->channel], cmd->ldev->drive, cmd);
+
+                    return 0;
+                }
+                else
+                {
+			        res->logic_deviceid = stddev_msg->padding0;
+			        res->ret = STDDEV_ERR;
+			        process_ioctrl(iocmd, sender_id, ((struct stddev_ioctrl_res*)res));
+                }
+			    break;
+            }
 		default:
-			res.msg_id = stddev_msg.msg_id;
-			res.ret = STDDEV_ERR;
+			res->msg_id = stddev_msg->msg_id;
+			res->ret = STDDEV_ERR;
 			break;
 	}
 
-	return res;
+	return 1;
 }
 
 int check_ownership(int task, int logic_device)

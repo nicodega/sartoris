@@ -830,8 +830,8 @@ void cmd_create_task(struct pm_msg_create_task *msg, struct pm_task *ctask)
 
 	if(pman_stage == PMAN_STAGE_INITIALIZING)
 	{
-			cmd_inform_result(msg, ctask->id, PM_IS_INITIALIZING, 0, 0);
-			return;
+		cmd_inform_result(msg, ctask->id, PM_IS_INITIALIZING, 0, 0);
+		return;
 	}
 
 	if(new_task_id != 0xFFFF) 
@@ -976,22 +976,34 @@ void cmd_create_thread(struct pm_msg_create_thread *msg, UINT16 creator_task_id)
 	thread->io_event_src.size = task->io_event_src.size;
 
 	/* Find a location for the thread stack. */
+    if(msg->stack_addr != NULL)
+    {
+        // see it it's a valid stack address
+        if(task->num_threads == 1 || (UINT32)msg->stack_addr > task->vmm_info.max_addr)
+        {
+            cmd_inform_result(msg, creator_task_id, PM_THREAD_INVALID_STACK, 0, 0);
+			return;
+        }
 
-	/* See if a given slot is free, if not increment and test again... */
-	do
-	{
-		stack_slot++;
+        mk_thread.stack = thread->stack_addr = (ADDR)STACK_ADDR(msg->stack_addr);
+    }
+    else
+    {
+	    /* See if a given slot is free, if not increment and test again... */
+	    do
+	    {
+		    stack_slot++;
 
-		/* See if slot is taken */
-		curr_thr = task->first_thread;
-		while(curr_thr != NULL && (curr_thr->stack_addr != (ADDR)STACK_ADDR(PMAN_THREAD_STACK_BASE - stack_slot * 0x20000)))
-		{
-			curr_thr = curr_thr->next_thread;
-		}
-	}while(curr_thr != NULL);
+		    /* See if slot is taken */
+		    curr_thr = task->first_thread;
+		    while(curr_thr != NULL && (curr_thr->stack_addr != (ADDR)STACK_ADDR(PMAN_THREAD_STACK_BASE - stack_slot * 0x20000)))
+		    {
+			    curr_thr = curr_thr->next_thread;
+		    }
+	    }while(curr_thr != NULL);
 
-	mk_thread.stack = thread->stack_addr = (ADDR)STACK_ADDR(PMAN_THREAD_STACK_BASE - stack_slot * 0x20000);
-        
+	    mk_thread.stack = thread->stack_addr = (ADDR)STACK_ADDR(PMAN_THREAD_STACK_BASE - stack_slot * 0x20000);
+    }
 	/* Set thread entry point from elf file if 0 is specified. 
        If this is a dynamic task (i.e. uses shared libraries)
        we will set the entry point to that of the ld service.

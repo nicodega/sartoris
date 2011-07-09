@@ -79,7 +79,8 @@ int process_blockdev(struct stdblockdev_cmd *bmsg, int task, struct stdblockdev_
 
 	cmd->ldev = ldev;
 	cmd->task = task;
-	cmd->block_msg = *bmsg;
+    cmd->type = DEVICE_COMMAND_BLOCK;
+	*((struct stdblockdev_cmd*)cmd->msg) = *bmsg;
 
 	/* enqueue message */
 	queue_enqueue(&ata_adapters[ldev->adapter].channels[ldev->channel], ldev->drive, cmd);

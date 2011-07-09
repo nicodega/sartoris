@@ -111,7 +111,7 @@ int ioctrl_finddev(struct atac_ioctl_finddev *cmd, int task, struct stddev_ioctr
 							res->dev_error = ATAC_IOCTRLERR_INVALIDSMO;
 							return 1;
 						}
-
+                        print("ATAC: FINDLDEV Found\n");
 						res->dev_error = ATAC_IOCTRLERR_OK;
 						res->ret = STDDEV_OK;
 						return 0;

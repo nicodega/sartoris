@@ -172,14 +172,7 @@ BOOL vmm_handle_page_fault(UINT16 *thr_id, BOOL internal)
 	}
 	
 	thread->vmm_info.fault_address = pf.linear;
-
-	/* Check PF is not above max_addr */
-	if(task->vmm_info.max_addr <= (UINT32)pf.linear)
-	{
-		fatal_exception(thread->task_id, MAXADDR_ERROR);
-		return TRUE;
-	}
-    
+    	    
 	/* Check if page table is on swap.
     NOTE: This can only happen when all pages had been sent to swap. The page table
     was also sent to swap because we cannot discard it, for it has swap addresses for it's pages.
@@ -192,19 +185,7 @@ BOOL vmm_handle_page_fault(UINT16 *thr_id, BOOL internal)
         // in case another thread asks for the same page.
         return TRUE;
 	}
-
-	/* Lets see if the page table is present on the page directory and if not give it one */
-	if(task->vmm_info.page_directory->tables[PM_LINEAR_TO_DIR(pf.linear)].ia32entry.present == 0)
-	{
-		/* Get a Page and set taken */
-		page_addr = vmm_get_tblpage(task->id, PG_ADDRESS(pf.linear));
-		
-		/* Page in the table on task linear space. */
-		pm_page_in(task->id, (ADDR)PG_ADDRESS(pf.linear), (ADDR)LINEAR2PHYSICAL(page_addr), 1, PGATT_WRITE_ENA);
-
-		task->vmm_info.page_count++;
-	}
-
+    
     /*
     Does this page collide with a memory region?
     */
@@ -215,6 +196,18 @@ BOOL vmm_handle_page_fault(UINT16 *thr_id, BOOL internal)
 
 	    if(n != NULL)
         {
+            /* Lets see if the page table is present on the page directory and if not give it one */
+	        if(task->vmm_info.page_directory->tables[PM_LINEAR_TO_DIR(pf.linear)].ia32entry.present == 0)
+	        {
+		        /* Get a Page and set taken */
+		        page_addr = vmm_get_tblpage(task->id, PG_ADDRESS(pf.linear));
+		
+		        /* Page in the table on task linear space. */
+		        pm_page_in(task->id, (ADDR)PG_ADDRESS(pf.linear), (ADDR)LINEAR2PHYSICAL(page_addr), 1, PGATT_WRITE_ENA);
+
+		        task->vmm_info.page_count++;
+	        }
+
             struct vmm_memory_region *mreg = VMM_MEMREG_MEMA2MEMR(n);
 
             switch(mreg->type)
@@ -246,6 +239,30 @@ BOOL vmm_handle_page_fault(UINT16 *thr_id, BOOL internal)
             }
         }
     }
+
+    /* 
+    Check PF is not above PMAN_MAPPING_BASE.
+    We should maintain valid stack addresses for the task and check PF is 
+    above max_addr and not on a stack.
+    */
+	if((UINT32)pf.linear - SARTORIS_PROCBASE_LINEAR >= PMAN_MAPPING_BASE)
+	{
+        pman_print_dbg("PF: to high %x\n", pf.linear);
+		fatal_exception(thread->task_id, MAXADDR_ERROR);
+		return TRUE;
+	}
+
+	/* Lets see if the page table is present on the page directory and if not give it one */
+	if(task->vmm_info.page_directory->tables[PM_LINEAR_TO_DIR(pf.linear)].ia32entry.present == 0)
+	{
+		/* Get a Page and set taken */
+		page_addr = vmm_get_tblpage(task->id, PG_ADDRESS(pf.linear));
+		
+		/* Page in the table on task linear space. */
+		pm_page_in(task->id, (ADDR)PG_ADDRESS(pf.linear), (ADDR)LINEAR2PHYSICAL(page_addr), 1, PGATT_WRITE_ENA);
+
+		task->vmm_info.page_count++;
+	}
     
 	/* If task is not a system service, check if page requested is on Swap. */
 	if(!(task->flags & TSK_FLAG_SYS_SERVICE) 

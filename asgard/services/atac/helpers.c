@@ -25,11 +25,11 @@ execution for a device.
 int channel_configure(struct ata_channel *channel, int dev)
 {
 	/* If device interrupts are enabled, set the flag */
-	if(channel->devices[dev].mode & ATAC_DEVMODE_INT)	
+	if((channel->devices[dev].mode & ATAC_DEVMODE_INT)
+        && channel->int_use_intr_flag)	
 	{
-		print("ATAC: CREATING INT HANDLER!",0);
-		for(;;);
-
+		print("ATAC: creating int handler for channel %i\n", channel->id);
+		
 		channel->int_intr_flag = 1;
 
 		/* If interrupt handler has not been created yet, create it */
@@ -38,10 +38,6 @@ int channel_configure(struct ata_channel *channel, int dev)
 			if(int_enable_irq(channel))
 			{
 				channel->int_intr_flag = 0;	// hmm thread creation failed.. fall back.
-			}
-			else
-			{
-				channel->int_thread_created = 1;
 			}
 		}
 	}

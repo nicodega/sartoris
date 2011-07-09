@@ -40,7 +40,7 @@ int main(int argc, char **argv)
 
 	printf("Non Blocking sleep signal for 5 seconds\n");
 
-	SIGNALHANDLER sh = wait_signal_async(PMAN_SLEEP, PMAN_TASK, 5000, PMAN_SIGNAL_PARAM_IGNORE, PMAN_SIGNAL_PARAM_IGNORE, NULL, NULL);
+	SIGNALHANDLER sh = wait_signal_async(PMAN_SLEEP, PMAN_TASK, 5000, PMAN_SIGNAL_PARAM_IGNORE, PMAN_SIGNAL_PARAM_IGNORE);
 	
 	while( check_signal(sh, NULL, NULL) == 0);
 
@@ -50,7 +50,7 @@ int main(int argc, char **argv)
 
 	printf("Non Blocking sleep signal for 60 seconds\n");
 
-	sh = wait_signal_async(PMAN_SLEEP, PMAN_TASK, 60000, PMAN_SIGNAL_PARAM_IGNORE, PMAN_SIGNAL_PARAM_IGNORE, NULL, NULL);
+	sh = wait_signal_async(PMAN_SLEEP, PMAN_TASK, 60000, PMAN_SIGNAL_PARAM_IGNORE, PMAN_SIGNAL_PARAM_IGNORE);
 	
 	printf("still running discarding signal!\n");
 

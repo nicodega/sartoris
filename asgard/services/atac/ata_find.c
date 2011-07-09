@@ -137,7 +137,7 @@ void create_channel_wp(struct ata_channel *channel)
 	msg_create_thr.req_id = 0;
 	msg_create_thr.response_port = ATAC_THREAD_ACK_PORT;
 	msg_create_thr.task_id = get_current_task();
-	msg_create_thr.flags = 0;
+	msg_create_thr.stack_addr = NULL;
 	msg_create_thr.interrupt = 0;
 	msg_create_thr.entry_point = &channel_wp;
 
@@ -281,7 +281,7 @@ void setup_channel(struct ata_channel *channel, unsigned int id, int pio_xfer_wi
 	channel->int_use_intr_flag = 0;		// initially no interrupts
 	channel->irq = 0;
 	channel->int_bm_status = 0;
-	channel->int_ata_status = base_control_reg + 7;
+	channel->int_ata_status = 0;
 
 	channel->int_stack = NULL;
 	channel->dma_mode = DMA_MODE_NONE;	// initially no dma.
@@ -292,9 +292,13 @@ void setup_channel(struct ata_channel *channel, unsigned int id, int pio_xfer_wi
 	channel->initialized = 0;
 	channel->dma_man_smo = -1;
 	channel->dma_count = 0;
-
+#ifdef ATA_INTS_ENABLED
+    channel->devices[0].mode = ATAC_DEVMODE_INT;
+	channel->devices[1].mode = ATAC_DEVMODE_INT;
+#else
 	channel->devices[0].mode = ATAC_DEVMODE_PIO;
 	channel->devices[1].mode = ATAC_DEVMODE_PIO;
+#endif
 	channel->int_thread_created = 0;
 	channel->devices_count = 0;
 

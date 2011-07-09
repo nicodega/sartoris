@@ -423,7 +423,7 @@ int finish_execute(struct console_proc_info *p, FILE *pipe, int pipeis_stdin)
 	msg_create_thr.req_id = p->running_term;
 	msg_create_thr.response_port = PM_THREAD_ACK_PORT;
 	msg_create_thr.task_id = p->task;
-	msg_create_thr.flags = 0;
+	msg_create_thr.stack_addr = NULL;
 	msg_create_thr.interrupt = 0;
 	msg_create_thr.entry_point = 0;
 

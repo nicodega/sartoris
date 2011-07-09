@@ -47,17 +47,23 @@ static void reg_wait_poll(struct ata_channel *channel, int waiterror, int poller
 
 	if ( waiterror && channel->int_use_intr_flag )
 	{
-		// wait for interrupt
-		if(tmr_wait_timeout(channel))
+		while ( 1 )
 		{
-			// interrupt finished ok
-			status = channel->int_ata_status;         // get status
-		}
-		else
-		{
-			// timeout, set the error
-			channel->reg_cmd_info.to = 1;
-			channel->reg_cmd_info.ec = waiterror;
+            // read the error register, for an int won't be raised 
+            // on errors.
+			status = pio_inbyte( channel, CB_ASTAT );       // poll for not busy
+
+            if(!(channel->int_ata_status & CB_STAT_BSY))
+            {
+                status = channel->int_ata_status;           // get status from the int
+                return;
+            }
+			else if ( ( status & CB_STAT_ERR ) == CB_STAT_ERR )
+			{
+				channel->reg_cmd_info.er2 = pio_inbyte( channel, CB_ERR );
+				return;
+			}
+            reschedule();
 		}
 	}
 	else
@@ -1413,7 +1419,7 @@ int reg_packet( struct ata_channel *channel, int dev,
 
    // Make sure the command packet size is either 12 or 16
    // and save the command packet size and data.
-	channel->int_intr_flag = 0;
+   channel->int_intr_flag = 0;
 
    cpbc = cpbc < 12 ? 12 : cpbc;
    cpbc = cpbc > 12 ? 16 : cpbc;
