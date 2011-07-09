@@ -191,7 +191,7 @@ int ldev_stdfree(int id, int task)
 	return 0;
 }
 
-/* This function will go thorugh the device partitions scheme (if ATA device, atapi will be treated different)*/
+/* This function will go through the device partitions scheme (if ATA device, atapi will be treated different)*/
 int ldev_find(struct ata_channel *channel, int dev)
 {
 	/* Create physical logic device */
@@ -356,6 +356,14 @@ int ldev_find(struct ata_channel *channel, int dev)
 
 		}while(ext);	// keep scanning when an extended partition is found.
 	}
+
+#ifdef ATA_INTS_ENABLED
+    if(channel->devices[1].mode & ATAC_DEVMODE_INT)
+    {
+        // enable using interrupts!
+        channel->int_use_intr_flag = 1;
+    }
+#endif
 
 	return 0;
 }

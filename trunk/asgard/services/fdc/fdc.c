@@ -139,7 +139,7 @@ void create_timer_thread()
 	msg_create_thr.req_id = 0;
 	msg_create_thr.response_port = FDC_PMAN_PORT;
 	msg_create_thr.task_id = get_current_task();
-	msg_create_thr.flags = 0;
+    msg_create_thr.stack_addr = NULL;
 	msg_create_thr.entry_point = timer;
 	msg_create_thr.interrupt = 40;
 	msg_create_thr.int_priority = 5;
@@ -163,7 +163,7 @@ void create_fdc_thread()
 	msg_create_thr.req_id = 0;
 	msg_create_thr.response_port = FDC_PMAN_PORT;
 	msg_create_thr.task_id = get_current_task();
-	msg_create_thr.flags = 0;
+	msg_create_thr.stack_addr = NULL;
 	msg_create_thr.entry_point = timer;
 	msg_create_thr.interrupt = 38;
 	msg_create_thr.int_priority = 6;

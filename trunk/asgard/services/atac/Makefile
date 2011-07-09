@@ -2,7 +2,7 @@ include ../../include/dep_rule.mk
 
 CFLAGS += -I"../../include"
 
-objects = atac.o ata_find.o atac_stddev.o ataioint.o ataioisa.o ioctrl.o ataioreg.o ataiosub.o blockdev.o channelwp.o command_queue.o pio.o tmr.o logic_devices.o helpers.o $(extobjects)
+objects = atac.o ata_find.o atac_stddev.o ataioint.o ataioisa.o ioctrl.o ataioreg.o ataiosub.o blockdev.o channelwp.o command_queue.o int_start.o pio.o tmr.o logic_devices.o helpers.o $(extobjects)
 
 extobjects = ../../lib/structures/stdlibsim.o ../../lib/structures/lptree.o ../../klib/kserv.o ../../lib/signals.o ../../lib/io.o ../../lib/structures/string.o ../../lib/structures/int64.o ../../lib/malloc.o ../../lib/structures/list.o ../../lib/critical_section.o ../../lib/int.o ../../lib/scheduler.o ../../lib/sprintf.o ../../drivers/screen/screen.o ../../lib/debug.o
 

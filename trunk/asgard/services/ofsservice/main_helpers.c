@@ -159,7 +159,7 @@ int create_working_thread(int id)
 	msg_create_thr.req_id = 0;
 	msg_create_thr.response_port = OFS_PMAN_PORT;
 	msg_create_thr.task_id = get_current_task();
-	msg_create_thr.flags = 0;
+	msg_create_thr.stack_addr = NULL;
 	msg_create_thr.interrupt = 0;
 	msg_create_thr.entry_point = &working_process;
 

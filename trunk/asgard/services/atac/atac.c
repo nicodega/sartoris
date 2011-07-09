@@ -115,7 +115,6 @@ void _start()
 			struct pm_msg_response msg_res;
 
 			get_msg(ATAC_THREAD_ACK_PORT, &msg_res, &id);
-
 			/* Generate an event :) */
 			send_event(get_current_task(), THREAD_CREATED_EVENT, msg_res.req_id, 0, (msg_res.status == PM_THREAD_OK), 0);
 		}
@@ -152,9 +151,10 @@ void _start()
 		{
 			get_msg(STDDEV_PORT, &stddev_msg, &id);
 
-			struct stddev_res res = process_stddev(stddev_msg, id);
-
-			send_msg(id, stddev_msg.ret_port, &res);
+			struct stddev_res res;
+                        
+            if(process_stddev(&stddev_msg, id, &res))
+			    send_msg(id, stddev_msg.ret_port, &res);
 
 			stddev_count--;
 		}
@@ -176,7 +176,5 @@ void _start()
 			
 			stdblockdev_count--;
 		}
-
 	}
-
 }

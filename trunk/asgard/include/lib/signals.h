@@ -58,7 +58,7 @@ struct signal_response
 
 void sleep(unsigned int milliseconds);
 int wait_signal(unsigned short event_type, unsigned short task, unsigned int timeout, unsigned short param1, unsigned short param2, unsigned short *res0, unsigned short *res1);
-SIGNALHANDLER wait_signal_async(unsigned short event_type, unsigned short task, unsigned int timeout, unsigned short param1, unsigned short param2, unsigned short *res0, unsigned short *res1);
+SIGNALHANDLER wait_signal_async(unsigned short event_type, unsigned short task, unsigned int timeout, unsigned short param1, unsigned short param2);
 int check_signal(SIGNALHANDLER sigh, unsigned short *res0, unsigned short *res1);
 void discard_signal(SIGNALHANDLER sigh);
 

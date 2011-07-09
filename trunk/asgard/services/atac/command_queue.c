@@ -53,9 +53,10 @@ struct device_command *queue_getnext(struct command_queue *queue, int channelid)
 	if(dev == -1)
 	{
 		/* If there are no commands queued Wait for signal (we will be signaled when there are pending messages on our queue) */
-		SIGNALHANDLER sigh = wait_signal_async(CHANNEL_COMMAND_EVENT, get_current_task(), SIGNAL_TIMEOUT_INFINITE, channelid, SIGNAL_PARAM_IGNORE, NULL, NULL);
+		SIGNALHANDLER sigh = wait_signal_async(CHANNEL_COMMAND_EVENT, get_current_task(), SIGNAL_TIMEOUT_INFINITE, channelid, SIGNAL_PARAM_IGNORE);
 			
 		leave_mutex(&queue->queue_mutex);
+
         /* wait for the signal */
 		while(check_signal(sigh, NULL, NULL) == 0) { reschedule(); }
         
@@ -108,8 +109,8 @@ void queue_enqueue(struct ata_channel *channel, int device, struct device_comman
 	Also use command possition.
 	*/
 	int ttl;
-
-	CPOSITION it = get_insert_pos(&channel->queue, device, cmd->task, cmd->block_msg.pos, &ttl);
+            
+	CPOSITION it = get_insert_pos(&channel->queue, device, cmd->task, ((cmd->type == DEVICE_COMMAND_BLOCK)? ((struct stdblockdev_cmd *)cmd->msg)->pos : cmd->ldev->ptlba), &ttl);
 
 	cmd->ttl = ttl;
 
@@ -122,7 +123,6 @@ void queue_enqueue(struct ata_channel *channel, int device, struct device_comman
 	{
         send_event(get_current_task(), CHANNEL_COMMAND_EVENT, channel->id, 0, 0, 0);		
 	}
-
 	leave_mutex(&channel->queue.queue_mutex);
 }
 
@@ -136,7 +136,6 @@ CPOSITION get_insert_pos(struct command_queue *queue, int dev, int task, unsigne
 	int ttl_pos = length(&queue->queue[dev]) - queue->ttl_pos[dev];
 	
 	/* Initially the item will be placed at the list tail */
-
 	int range = QUEUE_REORDER_RANGE;
 
 	/* Now reorder item possition based on lba */
@@ -153,9 +152,12 @@ CPOSITION get_insert_pos(struct command_queue *queue, int dev, int task, unsigne
 			return rit;
 		}
 
+        if(task == cmd->task) return rit;
+
 		/* We must guarantee commands for a same task maintain order */
-		if(cmd->block_msg.pos < lba && task != cmd->task)
-		{
+        if(  ((cmd->type == DEVICE_COMMAND_BLOCK && ((struct stdblockdev_cmd *)cmd->msg)->pos < lba)
+            || (cmd->type == DEVICE_COMMAND_IOCTRL && cmd->ldev->ptlba < lba)))
+        {
 			ttl_pos--;
 			rit = it;
 			get_prev(&it);

@@ -23,6 +23,11 @@
 /* If this define is commented, ata initial operations (like identify device) 
 will be performed with CHS. If not, LBA will be used. */
 #define ATAC_LBAOP	
+/*
+If this define is set, devices will be accessed through an interrupt. Otherwise
+PIO will be used.
+*/
+#define ATA_INTS_ENABLED
 
 #include <lib/debug.h>
 #include <lib/sprintf.h>
@@ -69,6 +74,8 @@ extern int dma_man_task;
 
 #define DMA_MAN_TASK dma_man_task
 
+#define INT_STACK_SIZE 512
+
 struct logic_device
 {
 	int adapter;	// adapter on which the channel is located
@@ -90,13 +97,15 @@ struct logic_device
 	int ptentry;
 };
 
-
+#define DEVICE_COMMAND_BLOCK    0x1
+#define DEVICE_COMMAND_IOCTRL   0x2
 
 struct device_command
 {
-	struct stdblockdev_cmd block_msg;	// original block msg.
-	int task;								// task for whom the command is intended.
+	int msg[4]; 	                    // message to be executed
+	int task;							// task for whom the command is intended.
 	struct logic_device *ldev;			// logic device where the command is being performed
+    int type;                           // type of command
 	int ttl;							// time to live. used to prevent starvation because of reordering.
 };
 
@@ -327,7 +336,8 @@ struct ata_channel
 	int irq;					// irq number assigned to the channel
 	int int_intr_cntr;			// incremented each time there is an interrupt (this will be used for signaling on param0)
 								// check its not equal to SIGNAL_IGNORE_PARAM once incremented.
-	int int_intr_flag;
+	int int_intr_flag;          // interrupt thread was created
+	int int_thread_created;		// set to 1 when channel interrupt thread has been created.
 
 	struct ata_device devices[2];	// devices on channel 
 	int devices_count;
@@ -357,7 +367,6 @@ struct ata_channel
 	struct command_queue queue;	// a thread safe command queue for the channel
 	int thread;					// thread id for the channel working process.
 	int initialized;			// set to 1 when the working process for the channel is initialized.
-	int int_thread_created;		// set to 1 when channel interrupt thread has been created.
 	int data_adapterid;			// set to the data adapter id of the channel.
 };
 
@@ -409,13 +418,14 @@ void pio_drq_block_out(struct ata_channel *channel, unsigned int addr_datareg, u
 
 /* tmr.c */
 int tmr_wait_timeout(struct ata_channel *channel);
+SIGNALHANDLER tmr_set_timeout_int(struct ata_channel *channel);
 SIGNALHANDLER tmr_set_timeout(struct ata_channel *channel);
 int tmr_check_timeout(SIGNALHANDLER sigh);
 void tmr_discard_timeout(SIGNALHANDLER sigh);
 
 /* ataioint.c */
 int int_enable_irq(struct ata_channel *channel);
-static void int_handler( void );
+void int_handler( struct ata_channel *channel );
 
 /* ataioreg.c */
 static void reg_wait_poll(struct ata_channel *channel, int waiterror, int pollerror );
@@ -475,8 +485,8 @@ void create_channel_wp(struct ata_channel *channel);
 
 /* channelwp.c */
 void channel_wp();
-int wpread(struct ata_channel *channel, struct device_command *cmd, int multiple, int count);
-int wpwrite(struct ata_channel *channel, struct device_command *cmd, int multiple, int count);
+int wpread(struct ata_channel *channel, struct logic_device *ldev, struct stdblockdev_cmd *bcmd, int multiple, int count);
+int wpwrite(struct ata_channel *channel, struct logic_device *ldev, struct stdblockdev_cmd *bcmd, int multiple, int count);
 
 /* logic_devices.c */
 int ldev_valdid(int id);
@@ -494,7 +504,7 @@ CPOSITION get_insert_pos(struct command_queue *queue, int dev, int task, unsigne
 
 /* atac_stddev.c */
 void process_query_interface(struct stdservice_query_interface *query_cmd, int task);
-struct stddev_res process_stddev(struct stddev_cmd stddev_msg, int sender_id);
+int process_stddev(struct stddev_cmd *stddev_msg, int sender_id, struct stddev_res *res);
 int check_ownership(int process_id, int logic_device);
 int check_ownershipex(int task, int logic_device, int exclusive);
 

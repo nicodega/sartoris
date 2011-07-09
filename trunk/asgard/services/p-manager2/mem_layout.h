@@ -39,7 +39,7 @@ extern int edata[];
 #define PMAN_TASK_SIZE              (0xFFFFFFFF - SARTORIS_PROCBASE_LINEAR)
 #define PMAN_THREAD_STACK_BASE      0xC0000000                  // 3GB (and down)
 #define PMAN_MAPPING_BASE           0xC0000000                  // 3GB from here we will start mapping libs
-#define PMAN_TSK_MAX_ADDR           (0xFFFFFFFF - SARTORIS_PROCBASE_LINEAR) 
+#define PMAN_TSK_MAX_ADDR           0x80000000 
 
 /* Memory regions size */
 #define PMAN_CODE_SIZE              0x200000                    // 2 MB for pman code (the stacks for PMAN will start here, so everything on PMAN must fit in less than 2MB)

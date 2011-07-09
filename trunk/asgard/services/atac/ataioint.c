@@ -30,9 +30,6 @@
 
 #include "atac.h"
 
-
-static void int_handler( void );        // our INT handler
-
 // system interrupt controller data...
 
 #define PIC0_CTRL 0x20           // PIC0 i/o address
@@ -54,56 +51,61 @@ static pic_enable_irq[8] =       // mask to enable
 //
 //*************************************************************
 
+unsigned int int_stacks[4][INT_STACK_SIZE];
+
+void _int_start();
+
 int int_enable_irq(struct ata_channel *channel)
 //  irq: 1 to 15
 //  bm_addr: i/o address for BMCR/BMIDE Status register
 //  ata_addr: i/o address for the ATA Status register
 {
-
-	// error if interrupts enabled now
+	unsigned short res = 0;
+    SIGNALHANDLER sigh = NULL;
+    
 	// error if invalid irq number
-	if ( channel->int_use_intr_flag )
-		return 1;
 	if ( ( channel->irq < 1 ) || ( channel->irq > 15 ) )
 		return 2;
 	if ( channel->irq == 2 )
 		return 2;
-
-	// create the int handler thread
+    // create the int handler thread
 	struct pm_msg_create_thread msg_create_thr;
 	
 	msg_create_thr.pm_type = PM_CREATE_THREAD;
 	msg_create_thr.req_id = channel->id;
 	msg_create_thr.response_port = ATAC_THREAD_ACK_PORT;
 	msg_create_thr.task_id = get_current_task();
-	msg_create_thr.flags = 0;
+	msg_create_thr.stack_addr = (void*)(((unsigned int)int_stacks[channel->id])+(INT_STACK_SIZE << 2));
 	msg_create_thr.interrupt = channel->irq + 32;
-	msg_create_thr.entry_point = &channel_wp;
-
+	msg_create_thr.entry_point = &_int_start;
+    	
+    sigh = wait_signal_async(THREAD_CREATED_EVENT, get_current_task(), SIGNAL_TIMEOUT_INFINITE, msg_create_thr.req_id, SIGNAL_PARAM_IGNORE);
+    
 	send_msg(PMAN_TASK, PMAN_COMMAND_PORT, &msg_create_thr);
 
-	unsigned short res = 0;
-	// wait for THREAD_CREATED_EVENT driven signal
-	wait_signal(THREAD_CREATED_EVENT, get_current_task(), SIGNAL_TIMEOUT_INFINITE, msg_create_thr.req_id, SIGNAL_PARAM_IGNORE, &res, NULL);
-
+    // wait for THREAD_CREATED_EVENT driven signal
+    while(check_signal(sigh, &res, NULL) == 0)
+    {
+        reschedule();
+    }
+	
 	if (!res) 
 	{
 		return 1; // FAIL!
 	}
-
+    
 	// interrupts use is now enabled
-
-	channel->int_use_intr_flag = 1;
 	channel->int_intr_flag = 0;
-	
-	// put channel address on the stack (ajjjjjjjjjjj!)
+    channel->int_thread_created = 1;
 
-	__asm__ __volatile__("movl %0, %%eax;movl %%eax, -256(%%esp) " : : "m" (channel) : "eax");
+    // reset the device, so it enables ints!
+    reg_reset( &ata_adapters[0].channels[0], 0, 1 );
+	
+	// put channel address on the stack
+    int_stacks[channel->id][INT_STACK_SIZE-1] = (unsigned int)channel;
 
 	return 0;
 }
-
-
 
 //*************************************************************
 //
@@ -111,19 +113,10 @@ int int_enable_irq(struct ata_channel *channel)
 //
 //*************************************************************
 
-static void int_handler( void )
+void int_handler( struct ata_channel *channel )
 {
-	// ok... I really didn't know how to do this, hence I'll do it in an 
-	// awful way. What I have to do is tell this interrupt handler
-	// which channel it's in charge of, and I will do that
-	// by leaving it's pointer on the stack space, upon creation.
-	// Pointer will be left at esp - 256... it ugly I know that :D, but it works.
-	struct ata_channel *channel = NULL;
-
-	__asm__ __volatile__("movl -256(%%esp),%0 " : "=r" (channel) :);
-
 	for(;;)
-	{
+	{ 
 		// increment the interrupt counter
 		channel->int_intr_cntr ++ ;
 		// check it's not like SIGNAL_IGNORE_PARAM

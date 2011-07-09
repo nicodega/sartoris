@@ -41,74 +41,82 @@ void channel_wp()
 
 		res = 0;
 
-		/* Execute command */
-		switch(cmd->block_msg.command)
-		{
-			case BLOCK_STDDEV_READ:
-			case BLOCK_STDDEV_READM:					
-				res = wpread(channel, cmd, cmd->block_msg.command == BLOCK_STDDEV_READM, ((cmd->block_msg.command == BLOCK_STDDEV_READM)? ((struct stdblockdev_readm_cmd*)&cmd->block_msg)->count : 1) );				
-				break;
-			case BLOCK_STDDEV_WRITE:
-			case BLOCK_STDDEV_WRITEM:
-				res = wpwrite(channel, cmd, cmd->block_msg.command == BLOCK_STDDEV_WRITEM, ((cmd->block_msg.command == BLOCK_STDDEV_WRITEM)? ((struct stdblockdev_writem_cmd*)&cmd->block_msg)->count : 1));				
-				break;
-		}
+        switch(cmd->type)
+        {
+            case DEVICE_COMMAND_BLOCK:
+            {
+                struct stdblockdev_cmd *bcmd = (struct stdblockdev_cmd *)cmd->msg;
+                
+		        /* Execute command */
+		        switch(bcmd->command)
+		        {
+			        case BLOCK_STDDEV_READ:
+			        case BLOCK_STDDEV_READM:
+				        res = wpread(channel, cmd->ldev, bcmd, bcmd->command == BLOCK_STDDEV_READM, ((bcmd->command == BLOCK_STDDEV_READM)? ((struct stdblockdev_readm_cmd*)bcmd)->count : 1) );				
+				        break;
+			        case BLOCK_STDDEV_WRITE:
+			        case BLOCK_STDDEV_WRITEM:
+				        res = wpwrite(channel, cmd->ldev, bcmd, bcmd->command == BLOCK_STDDEV_WRITEM, ((bcmd->command == BLOCK_STDDEV_WRITEM)? ((struct stdblockdev_writem_cmd*)bcmd)->count : 1));				
+				        break;
+		        }
 
-		bres.command = cmd->block_msg.command;
-		bres.msg_id = cmd->block_msg.msg_id;
-		bres.dev = cmd->block_msg.dev;
-
-		free(cmd);
-
-		/* Send response */
-		if(res)
-		{
-			/* Error */
-			bres.ret = STDBLOCKDEV_ERR;
-			/* Build extended error */
-			// FIXME: Implement.
-		}
-		else
-		{
-			/* Ok */
-			bres.ret = STDBLOCKDEV_OK;
-		}
-		send_msg(cmd->task, cmd->block_msg.ret_port, &bres);
+		        bres.command = bcmd->command;
+		        bres.msg_id = bcmd->msg_id;
+		        bres.dev = bcmd->dev;
+                
+		        /* Send response */
+		        if(res) /* Error */
+		            bres.ret = STDBLOCKDEV_ERR;
+		        else
+		            bres.ret = STDBLOCKDEV_OK;
+		        send_msg(cmd->task, bcmd->ret_port, &bres);
+                break;
+            }
+            case DEVICE_COMMAND_IOCTRL:
+            {
+                struct stddev_ioctrl_res res;
+                process_ioctrl((struct stddev_ioctl_cmd *)cmd->msg, cmd->task, &res);
+                send_msg(cmd->task, ((struct stddev_ioctl_cmd *)cmd->msg)->ret_port, &res);
+                break;
+            }
+        }
+        
+        free(cmd);
 	}
 }
 
-int wpread(struct ata_channel *channel, struct device_command *cmd, int multiple, int count)
+int wpread(struct ata_channel *channel, struct logic_device *ldev, struct stdblockdev_cmd *bcmd, int multiple, int count)
 {
 	/* Execute read on channel buffer */
 	// FIXME: the way this is implemented right now, transfers can't be bigger than
 	// channel buffer size
 
-	unsigned int lba = cmd->block_msg.pos + cmd->ldev->slba;
-	if(channel_read(channel, cmd->ldev->drive, (unsigned int)channel->reg_buffer, lba, count))
+	unsigned int lba = bcmd->pos + ldev->slba;
+	if(channel_read(channel, ldev->drive, (unsigned int)channel->reg_buffer, lba, count))
 	{
 		return 1;
 	}
 
 	/* Write on the smo */
-	if(write_mem( cmd->block_msg.buffer_smo, 0, count * 512, channel->reg_buffer)) return 1;
+	if(write_mem( bcmd->buffer_smo, 0, count * 512, channel->reg_buffer)) return 1;
 
 	return 0;
 }
 
-int wpwrite(struct ata_channel *channel, struct device_command *cmd, int multiple, int count)
+int wpwrite(struct ata_channel *channel, struct logic_device *ldev, struct stdblockdev_cmd *bcmd, int multiple, int count)
 {
 	/* Execute write on channel buffer */
 	// FIXME: the way this is implemented right now, transfers can't be bigger than
 	// channel buffer size
 
 	/* read the smo */
-	if(read_mem( cmd->block_msg.buffer_smo, 0, count * 512, channel->reg_buffer))
+	if(read_mem( bcmd->buffer_smo, 0, count * 512, channel->reg_buffer))
 	{
 		print("channelwp smo reading failed", count);
 		return 1;
 	}
 
-	unsigned int lba = cmd->block_msg.pos + cmd->ldev->slba;				
-	return channel_write(channel, cmd->ldev->drive, (unsigned int)channel->reg_buffer, lba, count);
+	unsigned int lba = bcmd->pos + ldev->slba;				
+	return channel_write(channel, ldev->drive, (unsigned int)channel->reg_buffer, lba, count);
 }
 

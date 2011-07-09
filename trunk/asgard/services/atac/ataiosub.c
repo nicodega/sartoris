@@ -64,6 +64,8 @@ void sub_setup_command( struct ata_channel *channel )
    * (unsigned int *) ( lba48 + 4 ) = channel->reg_cmd_info.lbaHigh1;
    * (unsigned int *) ( lba48 + 0 ) = channel->reg_cmd_info.lbaLow1;
 
+   channel->int_ata_status = CB_STAT_BSY;
+
    pio_outbyte( channel, CB_DC, channel->reg_cmd_info.dc1 );
 
    if ( channel->reg_cmd_info.lbaSize == LBA28 )
