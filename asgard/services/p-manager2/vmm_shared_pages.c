@@ -211,7 +211,6 @@ BOOL vmm_share_create(struct pm_task *task, ADDR laddr, UINT32 length, UINT16 pe
 	else
 		perms = 0;
 	
-
 	/* 
 	Remember to set TAKEN_PG_FLAG_SHARED on each shared page.
 	*/

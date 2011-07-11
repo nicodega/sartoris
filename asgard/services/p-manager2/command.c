@@ -1302,7 +1302,6 @@ INT32 cmd_finished__callback(struct pm_task *task, INT32 ioret)
 	if(task->command_inf.executing->msg.pm_type == PM_SHARE_MEM)
 		msg_ans.new_id = task->command_inf.ret_value;
 	
-
 	if(ioret == IO_RET_OK)
 	{
 		send_msg(task->id, task->command_inf.command_ret_port, &msg_ans);	

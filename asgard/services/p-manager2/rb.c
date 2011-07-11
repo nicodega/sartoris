@@ -438,6 +438,9 @@ BOOL rb_free_value(rbt *t, UINT32 *value)
 		{
             if( n->value > cand || n == t->max )
             {
+                if(n == t->max && n->value == cand)
+                    cand = n->value + 1;
+
 			    while(n)
                 {
 				    if(n->link[0])
@@ -485,6 +488,7 @@ BOOL rb_free_value(rbt *t, UINT32 *value)
 		    n = n->parent;
 		}
     }
+    *value = cand;
 }
 
     
