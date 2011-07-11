@@ -45,8 +45,8 @@ BOOL vmm_ld_mapped(struct pm_task *task, UINT32 vlow, UINT32 vhigh)
 
     mreg->owner_task = task->id;
     mreg->next = mreg->prev = NULL;
-	mreg->tsk_node.high = vhigh;
-	mreg->tsk_node.low = vlow;
+	mreg->tsk_node.high = TRANSLATE_ADDR(vhigh, UINT32);
+	mreg->tsk_node.low = TRANSLATE_ADDR(vlow, UINT32);
 	mreg->flags = VMM_MEM_REGION_FLAG_NONE;
 	mreg->type = VMM_MEMREGION_LIB;
     mreg->descriptor = NULL;
@@ -66,7 +66,7 @@ This function will return:
 int vmm_page_lib(struct pm_task *task, struct pm_thread *thread, ADDR proc_laddr, struct vmm_memory_region *mreg)
 {
     struct pm_task *ltask = tsk_get(((struct vmm_slib_descriptor*)mreg->descriptor)->task);
-    UINT32 ld_addr = PG_ADDRESS(proc_laddr - mreg->tsk_node.low);
+    UINT32 ld_addr = TRANSLATE_ADDR(PG_ADDRESS(proc_laddr - mreg->tsk_node.low),UINT32);
     BOOL exec = 0;
     UINT32 filepos, readsize;
 	INT32 perms, page_displacement;
@@ -191,6 +191,9 @@ int vmm_lib_load(struct pm_task *task, char *path, int plength, UINT32 vlow, UIN
 	struct pm_task *libtsk = NULL;
 
     pman_print_dbg("PM: vmm_lib_load %s l: %x h: %x\n", path, vlow, vhigh);
+
+    vlow = TRANSLATE_ADDR(vlow,UINT32);
+    vhigh = TRANSLATE_ADDR(vhigh,UINT32);
 
     if(ma_collition(&task->vmm_info.regions, vlow, vhigh))
         return FALSE;
@@ -412,7 +415,6 @@ BOOL vmm_lib_unload(struct pm_task *task, struct vmm_memory_region *mreg)
 {
     struct vmm_slib_descriptor *lib = (struct vmm_slib_descriptor*)mreg->descriptor;
  
-    
     if(lib == NULL)
     {
         ma_remove(&task->vmm_info.regions, &mreg->tsk_node);
@@ -429,7 +431,7 @@ BOOL vmm_lib_unload(struct pm_task *task, struct vmm_memory_region *mreg)
 
     ma_remove(&task->vmm_info.regions, &mreg->tsk_node);
     rb_remove(&task->vmm_info.regions_id, &mreg->tsk_id_node);
-        
+    
     // fix regions list on the descriptor
     if(mreg->prev == NULL)
         lib->regions = mreg->next;

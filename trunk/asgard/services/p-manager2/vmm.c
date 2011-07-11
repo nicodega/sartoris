@@ -159,7 +159,7 @@ INT32 vmm_init(struct multiboot_info *multiboot, UINT32 ignore_start, UINT32 ign
     /* Stacks have been set up, take pages for our taken structure */
 	
 	/* 
-		First tables (200MB + PMAN + MALLOC + POOL TABLES) will be taken by pman 
+		First tables (SARTORIS MB + PMAN + MALLOC + POOL TABLES) will be taken by pman 
         and pool page tables, and should never be used/accessed on the structure.
 		They'll remain to be 0.
 	*/
@@ -673,8 +673,8 @@ void vmm_claim_region(struct pm_task *task, struct vmm_memory_region *mreg)
 	dir = task->vmm_info.page_directory;
 	table = NULL;
     
-    addr = mreg->tsk_node.low + SARTORIS_PROCBASE_LINEAR;
-    max = mreg->tsk_node.high + SARTORIS_PROCBASE_LINEAR;
+    addr = mreg->tsk_node.low;
+    max = mreg->tsk_node.high;
 
     for(table_idx = PM_LINEAR_TO_DIR(addr); table_idx < 1024 && addr < max; table_idx++) 
 	{

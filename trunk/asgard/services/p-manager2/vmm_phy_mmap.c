@@ -76,21 +76,44 @@ BOOL vmm_phy_mmap(struct pm_task *task, ADDR py_start, ADDR py_end, ADDR lstart,
 	/* Check address is not above max_addr */
 	if((task->vmm_info.max_addr <= (UINT32)lend)
         || ((UINT32)lstart % 0x1000 != 0 || ((UINT32)lend) % 0x1000 != 0)
-        || ((UINT32)py_start < FIRST_PAGE(PMAN_POOL_PHYS) && (UINT32)py_start > 0x1000))
+        || ((UINT32)py_start < FIRST_PAGE(PMAN_POOL_PHYS) && (UINT32)py_start > 0x1000)
+        || !(task->flags & TSK_FLAG_SERVICE))
 		return FALSE;
+
+    // frind a free ID for MREG
+    mreg = (struct vmm_memory_region*)kmalloc(sizeof(struct vmm_memory_region));
+    
+    if(!mreg)
+        return FALSE;
+
+	mreg->next = NULL;
+    mreg->prev = NULL;
+	mreg->owner_task = task->id;
+
+    // find a free if for the memory region
+    if(!rb_free_value(&task->vmm_info.regions_id, &mreg->tsk_id_node.value))
+	{
+		kfree(mreg);
+		return FALSE;
+	}
 
     lstart = TRANSLATE_ADDR(lstart, ADDR);
 	lend = TRANSLATE_ADDR(lend, ADDR);
 
     // check lstart and lend are "safe" to map
     if(loader_collides(task, lstart, lend))
-        return FALSE;
+    {
+		kfree(mreg);
+		return FALSE;
+	}
 
     // check there are no other memory regions overlapping on the same task
-    if(ma_collition(&task->vmm_info.regions, (UINT32)py_start, (UINT32)py_end))
-        return FALSE;
+    if(ma_collition(&task->vmm_info.regions, (UINT32)lstart, (UINT32)lend))
+    {
+		kfree(mreg);
+		return FALSE;
+	}
     	
-	
 	/* Check a thread is not page faulting on the region */
     check_low = (UINT32)laddr;
     check_high = (UINT32)lend;
@@ -98,16 +121,21 @@ BOOL vmm_phy_mmap(struct pm_task *task, ADDR py_start, ADDR py_end, ADDR lstart,
     rb_inorder(&task->vmm_info.wait_root, wmm_phy_checkpf);
 
     if(result)
-        return FALSE;
+    {
+		kfree(mreg);
+		return FALSE;
+	}
     
     // Check if it's already mapped to another task (or the same?)
-    ma_node *n = ma_collition(&vmm.phy_mem_areas, (UINT32)py_start, (UINT32)py_end);
     result = 0;
     cexclusive = exclusive;
     ma_overlaps(&vmm.phy_mem_areas, (UINT32)py_start, (UINT32)py_end, wmm_phy_overlaps);
 
     if(result)
-        return FALSE;
+    {
+		kfree(mreg);
+		return FALSE;
+	}
     
 	/* 
 	Check if required physical range is mappeable.
@@ -118,24 +146,99 @@ BOOL vmm_phy_mmap(struct pm_task *task, ADDR py_start, ADDR py_end, ADDR lstart,
 	*/
 	while(pstart < pend)
 	{
-		tentry = vmm_taken_get((ADDR)PHYSICAL2LINEAR(pstart));
+		tentry = vmm_taken_get((ADDR)pstart);
 
 		if(tentry->data.b_pg.taken == 1)
 		{
-			if(tentry->data.b_pg.dir == 1 || tentry->data.b_pg.tbl == 1 || (tentry->data.b_pg.flags & (TAKEN_PG_FLAG_FILE | TAKEN_PG_FLAG_PMAN)))
+			if(tentry->data.b_pg.dir == 1 || tentry->data.b_pg.tbl == 1 || (tentry->data.b_pg.flags & (TAKEN_PG_FLAG_SHARED | TAKEN_PG_FLAG_FILE | TAKEN_PG_FLAG_PMAN)))
 			{
-				return FALSE;	// taken and cannot be mapped
+                // try to move the page (for now we won't move shared and file pages)!
+                // PMAN pages cannot be moved because pman has a 1 on 1 mapping with memory on it's
+                // linear memory.
+                if(tentry->data.b_pg.dir == 1)
+                {
+                    struct pm_task *t = tsk_get(tentry->data.b_pdir.taskid);
+
+                    /*
+                    FIXME: What if here we got a page on the physical range??
+                    */
+                    pg_addr = (UINT32)vmm_get_dirpage(t->id);
+                    
+                    if(pg_addr == NULL)
+                    {
+                        kfree(mreg);
+				        return FALSE;
+                    }
+
+                    pm_page_in(t->id, 0, (ADDR)LINEAR2PHYSICAL(pg_addr), 0, PGATT_WRITE_ENA);
+
+                    UINT32 *src = (UINT32*)pstart, 
+                           *dst = (UINT32*)pg_addr;
+                    int i = 0;
+
+                    for(i = 0; i < 0x400; i++)
+                        dst[i] = src[i];
+                                        
+                    pdir = t->vmm_info.page_directory;
+                                        
+                    t->vmm_info.page_directory = (struct vmm_page_directory *)pg_addr; 
+                    				    
+				    /* Put page on VMM */
+				    vmm_put_page((ADDR)pdir);
+                }
+                else if(tentry->data.b_pg.tbl == 1)
+                {   
+                    if(tentry->data.b_ptbl.eflags & (TAKEN_EFLAG_IOLOCK | TAKEN_EFLAG_PF))
+                    {
+                        kfree(mreg);
+				        return FALSE;
+                    }
+
+                    struct pm_task *t = tsk_get(tentry->data.b_ptbl.taskid);
+
+                    /*
+                    FIXME: What if here we got a page on the physical range??
+                    */
+                    pg_addr = (UINT32)vmm_get_tblpage(t->id, tentry->data.b_ptbl.dir_index * 0x400000);
+                
+                    if(pg_addr == NULL)
+                    {
+                        kfree(mreg);
+				        return FALSE;
+                    }
+
+                    pm_page_in(t->id, (ADDR)PG_ADDRESS(tentry->data.b_ptbl.dir_index * 0x400000), (ADDR)LINEAR2PHYSICAL(pg_addr), 1, PGATT_WRITE_ENA);
+
+                    UINT32 *src = (UINT32*)pstart, 
+                           *dst = (UINT32*)pg_addr;
+                    int i = 0;
+
+                    for(i = 0; i < 0x400; i++)
+                        dst[i] = src[i];
+                    				    
+				    /* Put page on VMM */
+				    vmm_put_page((ADDR)pstart);
+                }
+                else
+                {
+                    kfree(mreg);
+				    return FALSE;	// taken and cannot be mapped
+                }
 			}
 
-			if(!(tentry->data.b_pg.flags & TAKEN_PG_FLAG_SHARED) && !(tentry->data.b_pg.flags & TAKEN_PG_FLAG_PHYMAP))
+			if(!(tentry->data.b_pg.flags & TAKEN_PG_FLAG_PHYMAP))
 			{
 				/* 
 				It's being used by a task but not physically mapped or shared... Unmap it!! :@
 				NOTE: If a thread was working on this page, it'll page fault wen runned again.
 				*/
-				assigned = &vmm.assigned_dir.table[PM_LINEAR_TO_DIR(PHYSICAL2LINEAR(TRANSLATE_ADDR(pstart,UINT32)))]->entries[PM_LINEAR_TO_TAB(PHYSICAL2LINEAR(TRANSLATE_ADDR(pstart,UINT32)))];
+				assigned = &vmm.assigned_dir.table[PM_LINEAR_TO_DIR(TRANSLATE_ADDR(pstart,UINT32))]->entries[PM_LINEAR_TO_TAB(TRANSLATE_ADDR(pstart,UINT32))];
 
-                if(tsk_get(assigned->task_id) == NULL) return 0;
+                if(tsk_get(assigned->task_id) == NULL)
+                {
+                    kfree(mreg);
+                    return FALSE;
+                }
 
                 struct pm_task *t = tsk_get(assigned->task_id);
 				pdir = t->vmm_info.page_directory;
@@ -143,7 +246,10 @@ BOOL vmm_phy_mmap(struct pm_task *task, ADDR py_start, ADDR py_end, ADDR lstart,
 
 				/* Check page is not dirty. */
 				if(ptbl->pages[tentry->data.b_pg.tbl_index].entry.ia32entry.dirty == 1)
+                {
+                    kfree(mreg);
 					return FALSE;
+                }
 
 				pg_addr = PG_ADDRESS(PHYSICAL2LINEAR(ptbl->pages[tentry->data.b_pg.tbl_index].entry.phy_page_addr));
 				
@@ -159,21 +265,25 @@ BOOL vmm_phy_mmap(struct pm_task *task, ADDR py_start, ADDR py_end, ADDR lstart,
 		pstart += PAGE_SIZE;
 	}
 
+    pdir = task->vmm_info.page_directory;
+
 	/* Check task address space can be mapped. */
 	while(laddr < (UINT32)lend)
 	{
-		/* If page table is not present check it's not swapped */
-		if(task->vmm_info.page_directory->tables[PM_LINEAR_TO_DIR(laddr)].ia32entry.present == 1)
+		if(pdir->tables[PM_LINEAR_TO_DIR(laddr)].ia32entry.present == 1)
 		{
-			tbl = (struct vmm_page_table*)PHYSICAL2LINEAR(PG_ADDRESS(task->vmm_info.page_directory->tables[PM_LINEAR_TO_DIR(laddr)].b));
+			tbl = (struct vmm_page_table*)PHYSICAL2LINEAR(PG_ADDRESS(pdir->tables[PM_LINEAR_TO_DIR(laddr)].b));
 
 			if(tbl->pages[PM_LINEAR_TO_TAB(laddr)].entry.ia32entry.present == 1)
 			{
 				/* Page is present, check it's not IOLOCKED, etc */
 				tentry = vmm_taken_get((ADDR)PHYSICAL2LINEAR(PG_ADDRESS(tbl->pages[PM_LINEAR_TO_TAB(laddr)].entry.phy_page_addr)));
 
-				if(tentry->data.b_pg.dir == 1 || tentry->data.b_pg.tbl == 1 || tentry->data.b_pg.eflags != 0 || (tentry->data.b_pg.flags & (TAKEN_PG_FLAG_FILE | TAKEN_PG_FLAG_PMAN)))
+				if(tentry->data.b_pg.eflags != 0 || (tentry->data.b_pg.flags & TAKEN_PG_FLAG_FILE))
+                {
+                    kfree(mreg);
 					return FALSE;	// taken and cannot be mapped
+                }
 				
 				/* Unmap table and return physical address to PMAN */
 				vmm_put_page((ADDR)PHYSICAL2LINEAR(PG_ADDRESS(tbl->pages[PM_LINEAR_TO_TAB(laddr)].entry.phy_page_addr)));
@@ -184,11 +294,14 @@ BOOL vmm_phy_mmap(struct pm_task *task, ADDR py_start, ADDR py_end, ADDR lstart,
 			}
 			else if(tbl->pages[PM_LINEAR_TO_TAB(laddr)].entry.record.swapped == 1)
 			{
+                kfree(mreg);
 				return FALSE;	// page is swapped
 			}
 		}
-		else if(task->vmm_info.page_directory->tables[PM_LINEAR_TO_DIR(laddr)].record.swapped == 1)
+        /* If page table is not present check it's not swapped */
+		else if(pdir->tables[PM_LINEAR_TO_DIR(laddr)].record.swapped == 1)
 		{
+            kfree(mreg);
 			return FALSE;	// page table is swapped
 		}
 		laddr += PAGE_SIZE;
@@ -199,7 +312,7 @@ BOOL vmm_phy_mmap(struct pm_task *task, ADDR py_start, ADDR py_end, ADDR lstart,
     great! lets have those physical pages!! 
 	*/
 	laddr = (UINT32)lstart;
-	pstart = PHYSICAL2LINEAR(py_start);
+    pstart = PHYSICAL2LINEAR(py_start);
 
 	/* Remove address range from stacks. */
 	remove_range(&vmm.low_pstack, (ADDR)pstart, (ADDR)pend);
@@ -218,8 +331,8 @@ BOOL vmm_phy_mmap(struct pm_task *task, ADDR py_start, ADDR py_end, ADDR lstart,
 			task->vmm_info.page_count++;
 		}
 
-		/* Now map the page. */
-		page_in(task->id, (ADDR)lstart, (ADDR)pstart, 2, PGATT_WRITE_ENA);
+		/* Map the page. */
+		page_in(task->id, (ADDR)lstart, (ADDR)LINEAR2PHYSICAL(pstart), 2, (PGATT_WRITE_ENA | PGATT_CACHE_DIS));
 
 		/* Set taken. */
 		tentry = vmm_taken_get((ADDR)pstart);
@@ -229,31 +342,15 @@ BOOL vmm_phy_mmap(struct pm_task *task, ADDR py_start, ADDR py_end, ADDR lstart,
 		tentry->data.b_pg.flags = TAKEN_PG_FLAG_PHYMAP;
 
 		/* Unmap page from PMAN address space. */
-		vmm_unmap_page(task->id, (UINT32)lstart);
+		vmm_unmap_page(task->id, pstart);
 
 		pstart += 0x1000;
 		lstart = (ADDR)((UINT32)lstart + 0x1000);
 	}
 
-    // is there a physical map descripto with exactly the same bounds?
-    n = ma_search(&vmm.phy_mem_areas, (UINT32)py_start, (UINT32)py_end);
-
-    mreg = (struct vmm_memory_region*)kmalloc(sizeof(struct vmm_memory_region));
-    
-    if(!mreg)
-        return FALSE;
-
-	mreg->next = NULL;
-    mreg->prev = NULL;
-	mreg->owner_task = task->id;
-
-    // find a free if for the memory region
-    if(!rb_free_value(&task->vmm_info.regions_id, &mreg->tsk_id_node.value))
-	{
-		kfree(mreg);
-		return FALSE;
-	}
-    
+    // is there a physical map descriptor with exactly the same bounds?
+    ma_node *n = ma_search(&vmm.phy_mem_areas, (UINT32)py_start, (UINT32)py_end);
+            
     if(n)
     {
         pmap = MAREA2PHYMDESC(n);
@@ -293,6 +390,9 @@ BOOL vmm_phy_mmap(struct pm_task *task, ADDR py_start, ADDR py_end, ADDR lstart,
 	
 	rb_insert(&task->vmm_info.regions_id, &mreg->tsk_id_node, FALSE);
     ma_insert(&task->vmm_info.regions, &mreg->tsk_node);
+
+    if(task->command_inf.callback != NULL) 
+		task->command_inf.callback(task, IO_RET_OK);
 	
 	return TRUE;
 }
@@ -363,6 +463,9 @@ void vmm_phy_umap(struct pm_task *task, ADDR lstart)
     ma_remove(&task->vmm_info.regions, &mreg->tsk_node);
 
 	kfree(mreg);
+
+    if(task->command_inf.callback != NULL) 
+		task->command_inf.callback(task, IO_RET_OK);
 
 	return;
 }

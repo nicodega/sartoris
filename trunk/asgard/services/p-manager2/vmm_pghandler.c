@@ -191,7 +191,7 @@ BOOL vmm_handle_page_fault(UINT16 *thr_id, BOOL internal)
     */
     if(task->vmm_info.regions != NULL)
     {
-        ma_node *n = ma_search_point(&task->vmm_info.regions, (UINT32)pf.linear - SARTORIS_PROCBASE_LINEAR);
+        ma_node *n = ma_search_point(&task->vmm_info.regions, (UINT32)pf.linear);
         int libret;
 
 	    if(n != NULL)
@@ -241,16 +241,20 @@ BOOL vmm_handle_page_fault(UINT16 *thr_id, BOOL internal)
     }
 
     /* 
-    Check PF is not above PMAN_MAPPING_BASE.
-    We should maintain valid stack addresses for the task and check PF is 
-    above max_addr and not on a stack.
+    Check Page fault is on a valid memory area.
     */
-	if((UINT32)pf.linear - SARTORIS_PROCBASE_LINEAR >= PMAN_MAPPING_BASE)
-	{
-        pman_print_dbg("PF: to high %x\n", pf.linear);
-		fatal_exception(thread->task_id, MAXADDR_ERROR);
-		return TRUE;
-	}
+    if((UINT32)pf.linear - SARTORIS_PROCBASE_LINEAR >= task->vmm_info.max_addr)
+    {
+        // ok it's above max addr.. is it a stack?
+
+
+	    if((UINT32)pf.linear - SARTORIS_PROCBASE_LINEAR >= PMAN_MAPPING_BASE)
+	    {
+            pman_print_dbg("PF: to high %x\n", pf.linear);
+		    fatal_exception(thread->task_id, MAXADDR_ERROR);
+		    return TRUE;
+	    }
+    }
 
 	/* Lets see if the page table is present on the page directory and if not give it one */
 	if(task->vmm_info.page_directory->tables[PM_LINEAR_TO_DIR(pf.linear)].ia32entry.present == 0)
