@@ -87,6 +87,7 @@
 #define PM_ALREADY_DEBUGGING            0x001d
 #define PM_NOT_DEBUGGING                0x001e
 #define PM_NOT_BLOCKED                  0x001f
+#define PM_NO_PERMISSION                0x0020
 
 #define PM_THREAD_OK                0x0000
 #define PM_THREAD_ID_INVALID        0x0001
@@ -316,18 +317,19 @@ struct pm_msg_pmap_create	// PM_PMAP_CREATE
   unsigned int start_addr;
   unsigned int start_phy_addr;
   unsigned short length; 
-  unsigned char perms;
+  unsigned char flags;
 } PACKED_ATT;
 
-#define PM_PMAP_EXCLUSIVE 0x1
-#define PM_PMAP_WRITE	  0x2
+#define PM_PMAP_EXCLUSIVE 0x1   // exclusive mode
+#define PM_PMAP_WRITE	  0x2   // allow write to this area
+#define PM_PMAP_IO   	  0x3   // this will be an area used for a device IO
 
 struct pm_msg_pmap_remove   // PM_PMAP_REMOVE
 {
   unsigned char pm_type;
   short req_id;
   unsigned char response_port;
-  char padding0;
+  char safe;                // is it safe to give this physical pages to any proc? or is it stil IO mapped.
   unsigned int start_addr;	// linear address on task
   char padding[7];
 } PACKED_ATT;

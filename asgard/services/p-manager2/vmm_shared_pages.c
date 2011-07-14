@@ -93,7 +93,7 @@ void vmm_share_remove(struct pm_task *task, UINT32 lstart)
 
 	lstart = TRANSLATE_ADDR(lstart,UINT32);
 
-    ma_node *mn = rb_search_low(&task->vmm_info.regions, lstart);
+    ma_node *mn = ma_search_low(&task->vmm_info.regions, lstart);
 
     if(!mn) return;
 
