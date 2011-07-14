@@ -145,7 +145,7 @@ ma_node *ma_search_point(memareas *t, UINT32 p)
 	return current;
 }
 
-ma_node *rb_search_low(memareas *t, UINT32 low) 
+ma_node *ma_search_low(memareas *t, UINT32 low) 
 {
 	ma_node *current = *t;
 			
@@ -518,10 +518,10 @@ unsigned int ma_alloc(memareas *t, unsigned int start, unsigned int length)
                 while(n)
                 {
 				    if(n->link[0])
-					    n->link[0]->color &= ~3;
+					    n->link[0]->color &= ~2;
 				    if(n->link[1])
-					    n->link[1]->color &= ~3;
-				    n->color &= ~3;
+					    n->link[1]->color &= ~2;
+				    n->color &= ~2;
 				    n = n->parent;
                 }
                 if(n == t->max)
@@ -532,16 +532,16 @@ unsigned int ma_alloc(memareas *t, unsigned int start, unsigned int length)
             if(high < n->high)
                 high = n->high;
         }
-	    if(!(n->color & 3))
+	    if(!(n->color & 2))
         {
-		    n->color |= 3;
-		    if(n->link[0] && !(n->link[0]->color & 3))
+		    n->color |= 2;
+		    if(n->link[0] && !(n->link[0]->color & 2))
             {
 			    fromLeft = FALSE;
 			    n = n->link[0];
 			    continue;
             }
-		    if(n->link[1] && !(n->link[1]->color & 3))
+		    if(n->link[1] && !(n->link[1]->color & 2))
 			{
                 fromLeft = FALSE;
 			    n = n->link[1];
@@ -552,11 +552,12 @@ unsigned int ma_alloc(memareas *t, unsigned int start, unsigned int length)
         {
 		    fromLeft = (n->parent->link[0] == n);
 		    if( n->link[0] )
-			    n->link[0]->color &= ~3;
+			    n->link[0]->color &= ~2;
 		    if( n->link[1] )
-			    n->link[1]->color &= ~3;
+			    n->link[1]->color &= ~2;
 		    n = n->parent;
 		}
     }
+    return 0;
 }
 */

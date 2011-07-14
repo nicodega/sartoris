@@ -39,7 +39,7 @@ typedef struct _memarea_node* memareas;
 ma_node *ma_collition(memareas *t, UINT32 low, UINT32 high);
 ma_node *ma_search(memareas *t, UINT32 low, UINT32 high);
 ma_node *ma_search_point(memareas *t, UINT32 p);
-ma_node *rb_search_low(memareas *t, UINT32 low);
+ma_node *ma_search_low(memareas *t, UINT32 low);
 int ma_insert(memareas *t, ma_node *n);
 void ma_remove(memareas *t, ma_node *n);
 BOOL ma_inorder(memareas *t, void (*callback)(ma_node *n));

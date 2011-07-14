@@ -449,7 +449,7 @@ BOOL vmm_fmap_release(struct pm_task *task, ADDR tsk_lstart);
 void vmm_fmap_close_all(struct pm_task *task);
 
 /* PHY MAP */
-BOOL vmm_phy_mmap(struct pm_task *task, ADDR py_start, ADDR py_end, ADDR lstart, ADDR lend, BOOL exclusive);
+BOOL vmm_phy_mmap(struct pm_task *task, ADDR py_start, ADDR py_end, ADDR lstart, ADDR lend, char flags);
 void vmm_phy_umap(struct pm_task *task, ADDR lstart);
 
 /* SHARED PAGES */

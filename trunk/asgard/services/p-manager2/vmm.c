@@ -66,6 +66,10 @@ INT32 vmm_init(struct multiboot_info *multiboot, UINT32 ignore_start, UINT32 ign
 	UINT32 page_count, lo_page_count, ignore_s, ignore_e, add;
 	UINT32 dentry, k, *addr, start, offset, i, ignored;
 
+    ignore_s = PHYSICAL2LINEAR(ignore_start);
+    ignore_e = PHYSICAL2LINEAR(ignore_end);
+	ignored = 0;
+
 	pman_print("Calculating memory...");
 
 	calc_mem(multiboot);
@@ -100,8 +104,57 @@ INT32 vmm_init(struct multiboot_info *multiboot, UINT32 ignore_start, UINT32 ign
 	
 	vmm.available_mem = 0;
 
+    pman_print_dbg("VMM: New Code for getting TAKEN... CAREFUL! %x\n", (UINT32)PMAN_POOL_LINEAR + page_count * 0x1000);
+
+    /*
+    Get physical pages for taken structure.
+    */
+    UINT32 taken_start = page_count-1;
+    UINT32 taken_got_a16 = 0, taken_got_b16 = 0, taken_got = 0;
+    dentry = PM_LINEAR_TO_DIR(FIRST_PAGE(PMAN_POOL_LINEAR));
+
+    page_count = vmm.vmm_tables;
+
+	for(i = 0; i < page_count; i++)
+	{
+		vmm.taken.tables[i] = NULL;
+	}
+
+    i = 0;
+
+    while(taken_got != vmm.vmm_tables)
+    {
+        add = PMAN_POOL_LINEAR + taken_start * 0x1000;
+        
+        if((add < ignore_s || add >= ignore_e) && avaliablePage(multiboot, (ADDR)(PMAN_POOL_PHYS + taken_start * 0x1000)))
+        {            
+            k = 0;
+		    addr = (UINT32*)add;
+	
+            // zero the taken table
+		    for(k = 0; k < 0x400; k++){ addr[k] = 0;}
+
+            vmm.taken.tables[dentry + i] = (struct taken_table*)addr;
+
+            if(add < 0x1000000)
+                taken_got_b16++;
+            else
+                taken_got_a16++;
+            taken_got++;
+
+            i++;
+        }
+        else
+        {
+            ignored++;
+        }
+        taken_start--;
+    }
+	    
+	pman_print("VMM: Taken Directory allocated. pages: %i(b16) - %i(a16), size: %x ", taken_got_b16, taken_got_a16, page_count * 0x1000);
+
 	/* Load the low pages stack */
-	lo_page_count = (PHYSICAL2LINEAR(0x1000000) - FIRST_PAGE(PMAN_POOL_LINEAR)) / 0x1000;	// first 16MB - (sartoris + pman + pman tables)
+	lo_page_count = (PHYSICAL2LINEAR(0x1000000) - FIRST_PAGE(PMAN_POOL_LINEAR)) / 0x1000 - taken_got_b16;	// first 16MB - (sartoris + pman + pman tables)
 	
 	init_page_stack(&vmm.low_pstack);
 
@@ -109,11 +162,7 @@ INT32 vmm_init(struct multiboot_info *multiboot, UINT32 ignore_start, UINT32 ign
     (they'll be added later once they are initialized) */
 	
     /* Low mem stack will be loaded bottom-up */
-    ignore_s = PHYSICAL2LINEAR(ignore_start);
-    ignore_e = PHYSICAL2LINEAR(ignore_end);
-	ignored = 0;
-	
-	for(offset = lo_page_count; offset > 0; offset--) 
+    for(offset = lo_page_count; offset > 0; offset--) 
 	{
       	 add = FIRST_PAGE(PMAN_POOL_LINEAR) + (offset-1) * 0x1000;
 		 
@@ -132,7 +181,7 @@ INT32 vmm_init(struct multiboot_info *multiboot, UINT32 ignore_start, UINT32 ign
 	pman_print("VMM: Loaded low stack, total: %i, ignored: %i, pushed: %i ", lo_page_count, ignored, lo_page_count - ignored);
 
 	/* Now load high memory pages */
-	page_count = vmm.vmm_size / 0x1000 - vmm.vmm_tables - lo_page_count;
+	page_count = vmm.vmm_size / 0x1000 - vmm.vmm_tables - (lo_page_count + taken_got_b16) - taken_got_a16;
 
     init_page_stack(&vmm.pstack);
     
@@ -163,27 +212,6 @@ INT32 vmm_init(struct multiboot_info *multiboot, UINT32 ignore_start, UINT32 ign
         and pool page tables, and should never be used/accessed on the structure.
 		They'll remain to be 0.
 	*/
-	page_count = vmm.vmm_tables;
-
-	for(i = 0; i < page_count; i++)
-	{
-		vmm.taken.tables[i] = NULL;
-	}
-	
-    dentry = PM_LINEAR_TO_DIR(FIRST_PAGE(PMAN_POOL_LINEAR));
-
-	for(i = 0; i <= page_count; i++) 
-	{
-		k = 0;
-		addr = (UINT32*)pop_page(&vmm.pstack);
-	
-		for(k = 0; k < 0x400; k++){ addr[k] = 0;}
-        vmm.available_mem -= 0x1000;
-		
-		vmm.taken.tables[dentry + i] = (struct taken_table*)addr;
-    }
-
-	pman_print("VMM: Taken Directory allocated. pages: %i, size: %x ", page_count, page_count * 0x1000);
 	
     start = PMAN_POOL_LINEAR;
     i = PM_LINEAR_TO_DIR(PMAN_POOL_LINEAR + (UINT32)SARTORIS_PROCBASE_LINEAR);
@@ -298,7 +326,7 @@ void calc_mem(struct multiboot_info *mbinf)
 
     vmm.vmm_start = (ADDR)PMAN_POOL_LINEAR;
 	vmm.vmm_size = POOL_MEGABYTES * 0x100000;	// size of the pool in bytes
-	vmm.vmm_tables = POOL_MEGABYTES / 4;        // tables needed for the addressing all memory on the system
+	vmm.vmm_tables = POOL_MEGABYTES / 4;        // tables needed for addressing all memory on the system
 
 }
 

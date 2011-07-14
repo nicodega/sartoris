@@ -380,7 +380,10 @@ void cmd_process_msg()
 				}
 				else
 				{
-					cmd_inform_result(&msg, task_id, PM_ERROR, 0, 0);
+                    if(!(tsk->flags & TSK_FLAG_SERVICE))
+                        cmd_inform_result(&msg, task_id, PM_NO_PERMISSION, 0, 0);
+                    else
+                        cmd_inform_result(&msg, task_id, PM_ERROR, 0, 0);
 				}
 
 				break;
@@ -446,7 +449,8 @@ void cmd_process_msg()
 				cmd_queue_remove(cmd);
 				tsk->command_inf.executing = cmd;
 
-				if(tsk->state == TSK_NORMAL)
+				if(tsk->state == TSK_NORMAL 
+                    && (tsk->flags & TSK_FLAG_SERVICE))
 				{
 					tsk->command_inf.callback = cmd_finished__callback;
 					if(!vmm_phy_mmap(tsk, 
@@ -454,7 +458,7 @@ void cmd_process_msg()
 						(ADDR)(((struct pm_msg_pmap_create*)&msg)->start_phy_addr + ((struct pm_msg_pmap_create*)&msg)->length),
 						(ADDR)((struct pm_msg_pmap_create*)&msg)->start_addr, 
 						(ADDR)(((struct pm_msg_pmap_create*)&msg)->start_addr + ((struct pm_msg_pmap_create*)&msg)->length), 
-						(((struct pm_msg_pmap_create*)&msg)->perms & PM_PMAP_EXCLUSIVE)))
+						((struct pm_msg_pmap_create*)&msg)->flags))
 					{
 						cmd_inform_result(&msg, task_id, PM_ERROR, 0, 0);
 					}
@@ -478,7 +482,8 @@ void cmd_process_msg()
 				cmd_queue_remove(cmd);
 				tsk->command_inf.executing = cmd;
 
-				if(tsk->state == TSK_NORMAL)
+				if(tsk->state == TSK_NORMAL 
+                    && (tsk->flags & TSK_FLAG_SERVICE))
 				{
 					tsk->command_inf.callback = cmd_finished__callback;
 					vmm_phy_umap(tsk, (ADDR)((struct pm_msg_pmap_remove*)&msg)->start_addr);					

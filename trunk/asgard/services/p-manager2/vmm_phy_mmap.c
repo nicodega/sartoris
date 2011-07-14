@@ -27,6 +27,7 @@
 #include "kmalloc.h"
 #include "rb.h"
 #include "loader.h"
+#include <services/pmanager/services.h>
 
 UINT32 check_low;
 UINT32 check_high;
@@ -56,7 +57,7 @@ BOOL wmm_phy_overlaps(ma_node *n)
 /*
 This function will map a physical address range to the task address space.
 */
-BOOL vmm_phy_mmap(struct pm_task *task, ADDR py_start, ADDR py_end, ADDR lstart, ADDR lend, BOOL exclusive)
+BOOL vmm_phy_mmap(struct pm_task *task, ADDR py_start, ADDR py_end, ADDR lstart, ADDR lend, char flags)
 {
 	UINT32 pstart = PHYSICAL2LINEAR(py_start);
 	UINT32 pend = PHYSICAL2LINEAR(py_end);
@@ -128,7 +129,7 @@ BOOL vmm_phy_mmap(struct pm_task *task, ADDR py_start, ADDR py_end, ADDR lstart,
     
     // Check if it's already mapped to another task (or the same?)
     result = 0;
-    cexclusive = exclusive;
+    cexclusive = (flags & PM_PMAP_EXCLUSIVE)? 1 : 0;
     ma_overlaps(&vmm.phy_mem_areas, (UINT32)py_start, (UINT32)py_end, wmm_phy_overlaps);
 
     if(result)
@@ -285,7 +286,7 @@ BOOL vmm_phy_mmap(struct pm_task *task, ADDR py_start, ADDR py_end, ADDR lstart,
 					return FALSE;	// taken and cannot be mapped
                 }
 				
-				/* Unmap table and return physical address to PMAN */
+				/* Unmap page and return physical address to PMAN */
 				vmm_put_page((ADDR)PHYSICAL2LINEAR(PG_ADDRESS(tbl->pages[PM_LINEAR_TO_TAB(laddr)].entry.phy_page_addr)));
 
 				page_out(task->id, (ADDR)laddr, 2);
@@ -294,8 +295,9 @@ BOOL vmm_phy_mmap(struct pm_task *task, ADDR py_start, ADDR py_end, ADDR lstart,
 			}
 			else if(tbl->pages[PM_LINEAR_TO_TAB(laddr)].entry.record.swapped == 1)
 			{
-                kfree(mreg);
-				return FALSE;	// page is swapped
+                // page is swapped.. remove it from swap
+                swap_free_addr( tbl->pages[PM_LINEAR_TO_TAB(laddr)].entry.record.addr );
+                tbl->pages[PM_LINEAR_TO_TAB(laddr)].entry.record.swapped = 0;
 			}
 		}
         /* If page table is not present check it's not swapped */
@@ -370,7 +372,7 @@ BOOL vmm_phy_mmap(struct pm_task *task, ADDR py_start, ADDR py_end, ADDR lstart,
             return FALSE;
         }
 
-		pmap->exclusive = exclusive;
+		pmap->exclusive = ((flags & PM_PMAP_EXCLUSIVE) == PM_PMAP_EXCLUSIVE);
 		pmap->area.low = (UINT32)py_start;
 		pmap->area.high = (UINT32)py_end;
 		pmap->references = 0;
@@ -383,7 +385,7 @@ BOOL vmm_phy_mmap(struct pm_task *task, ADDR py_start, ADDR py_end, ADDR lstart,
 
 	/* Add task region */
 	mreg->descriptor = pmap;
-	mreg->flags = VMM_MEM_REGION_FLAG_NONE | ((exclusive)? VMM_MEM_REGION_FLAG_EXCLUSIVE : VMM_MEM_REGION_FLAG_NONE);
+	mreg->flags = VMM_MEM_REGION_FLAG_NONE | ((flags & PM_PMAP_EXCLUSIVE)? VMM_MEM_REGION_FLAG_EXCLUSIVE : VMM_MEM_REGION_FLAG_NONE);
 	mreg->tsk_node.low = laddr;
 	mreg->tsk_node.high = (UINT32)lend;
 	mreg->type = VMM_MEMREGION_MMAP;
@@ -406,7 +408,7 @@ void vmm_phy_umap(struct pm_task *task, ADDR lstart)
 	
 	lstart = TRANSLATE_ADDR(lstart, ADDR);
 
-    ma_node *n = rb_search_low(&task->vmm_info.regions, (UINT32)lstart);
+    ma_node *n = ma_search_low(&task->vmm_info.regions, (UINT32)lstart);
 
     if(!n) return;
 
