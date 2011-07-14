@@ -611,8 +611,6 @@ void vmm_put_page(ADDR page_laddress)
 	if((UINT32)page_laddress < FIRST_PAGE(PMAN_POOL_LINEAR))
 		pman_print_and_stop("PMAN: Assert 1");
 
-	/* Return the page to the Stack */
-	push_page(vmm_addr_stack(page_laddress), page_laddress);
 	
 	/* Set the taken structure */
 	tentry = vmm_taken_get(page_laddress);
@@ -622,6 +620,9 @@ void vmm_put_page(ADDR page_laddress)
 	{
 		page_in(PMAN_TASK, (ADDR)((UINT32)page_laddress + SARTORIS_PROCBASE_LINEAR), (ADDR)LINEAR2PHYSICAL(page_laddress), 2, PGATT_WRITE_ENA);
 	}
+    
+    /* Return the page to the Stack */
+	push_page(vmm_addr_stack(page_laddress), page_laddress);
 
 	tentry->data.b = 0;	
 
