@@ -112,19 +112,19 @@ struct kmem_directory_page
 
 	struct kmem_page_descriptor d[PAGE_DESCRIPTORS];
 	unsigned int magic;
-	unsigned int free_alloc_descriptors; // NOT USED... but can be used to improve performance (will prevent some pageout/pagein)
-	UINT32 padding[3];
+	UINT32 padding[4];
 } PACKED_ATT;
 
-#define BUCKET_SIZE_INDEX(bsize) ( ((bsize == 32)? 0 : ((bsize == 64)? 1 : ((bsize == 128)? 2 : ((bsize == 256)? 3 : ((bsize == 512)? 4 : ((bsize == 1024)? 5 : ((bsize == 2048)? 6 : -1))))))) )
-#define BUCKET_SIZE(bsize) ( ((bsize <= 24)? 32 : ((bsize <= 56)? 64 : ((bsize <= 120)? 128 : ((bsize <= 248)? 256 : ((bsize <= 504)? 512 : ((bsize <= 1016)? 1024 : ((bsize <= 2040)? 2048 : -1))))))) )
+#define BUCKET_SIZE_INDEX(bsize) ( (32 -__builtin_clz(bsize >> 5)) - 1 )
+#define BUCKET_SIZE(size) ((size < 16)? 32 : (0x1 << (32 -__builtin_clz(size+7))))
+//#define BUCKET_SIZE(size) ( ((size <= 24)? 32 : ((size <= 56)? 64 : ((size <= 120)? 128 : ((size <= 248)? 256 : ((size <= 504)? 512 : ((size <= 1016)? 1024 : ((size <= 2040)? 2048 : -1))))))) )
 
 struct kmem
 {
 	/* Directories for bucket sizes */
 	struct kmem_directory_page *directory[7];
 	UINT32 total_directories[7];	// Total directories allocated
-	UINT32 free_directories[7];	// Total directories allocated
+	UINT32 free_directories[7];	    // Total free directories allocated
 
 	/* Statistics */
 	UINT32 total_pages;				// Total pages allocated for memory management

@@ -24,7 +24,7 @@
 #include "types.h"
 #include "taken.h"
 #include "io.h"
-#include "page_stack.h"
+#include "vmm_phy_alloc.h"
 #include "formats/ia32paging.h"
 #include "rb.h"
 #include "vmm_memarea.h"
@@ -34,7 +34,7 @@
 /* how many megabytes we are feeding into the pool, must be a multiple of 4 */
 #define POOL_MEGABYTES 				vmm.pool_MB
 /* How many bytes of the pool are being used for page tables */
-#define POOL_TABLES_SIZE			(vmm.vmm_tables * 0x1000)
+#define POOL_TABLES_SIZE			(vmm.vmm_tables << 12)
 /* first actual page, since we are using the first few */
 /* as page tables to access the page pool itself       */
 #define FIRST_PAGE(x) 	(((unsigned int)x) + POOL_TABLES_SIZE)
@@ -278,11 +278,11 @@ struct vmm_main
 	Low memory stack. 
 	Pages below the 16MB mark will be kept on this stack.
 	*/
-	struct page_stack low_pstack;
+	phy_allocator low_pstack;
 	/* 
 	Page stack (above 16 MB) 
 	*/
-	struct page_stack pstack;
+	phy_allocator pstack;
 	/*
 	Taken structure 
 	*/

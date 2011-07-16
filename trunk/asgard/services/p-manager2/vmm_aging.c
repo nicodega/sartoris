@@ -71,7 +71,7 @@ void vmm_page_aging()
 				if(entry->data.b_pdir.tbl == 0 && !(entry->data.b_pg.flags & TAKEN_PG_FLAG_PMAN))
 				{
 					/* It's a page entry. Get the page table. */
-					pman_laddr = curr_ag_region * 0x400000 + tindex * 0x1000;	// this is the linear address of the page on pman space
+					pman_laddr = curr_ag_region * 0x400000 + (tindex << 12);	// this is the linear address of the page on pman space
 					assigned = &vmm.assigned_dir.table[PM_LINEAR_TO_DIR(pman_laddr + (UINT32)SARTORIS_PROCBASE_LINEAR)]->entries[PM_LINEAR_TO_TAB(pman_laddr + (UINT32)SARTORIS_PROCBASE_LINEAR)];
 
 					/* We can now read the entry on pman table, and get the table */

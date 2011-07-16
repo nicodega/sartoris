@@ -94,7 +94,7 @@ UINT32 vmm_fmap(UINT16 task_id, UINT32 fileid, UINT16 fs_task, ADDR start, UINT3
     if(task == NULL) return PM_TASK_ID_INVALID;
 
 	/* On this implementation we will require start to be page aligned along with start + size */
-	if((UINT32)start % 0x1000 != 0 || ((UINT32)start + size) % 0x1000 != 0)
+	if(((UINT32)start & 0x00000FFF) || (((UINT32)start + size) & 0x00000FFF))
 		return PM_INVALID_PARAMS;
 
 	/* Check address is not above max_addr */
@@ -203,7 +203,7 @@ UINT32 vmm_fmap(UINT16 task_id, UINT32 fileid, UINT16 fs_task, ADDR start, UINT3
 					pg_addr = PHYSICAL2LINEAR(PG_ADDRESS(ptbl->pages[tindex].entry.phy_page_addr));
 
 					/* Page will be paged out */
-					page_out(task->id, (ADDR)(dindex * 0x400000 + tindex * 0x1000), 2);
+					page_out(task->id, (ADDR)(dindex * 0x400000 + (tindex << 12)), 2);
 					
 					/* Put page onto PMAN */
 					vmm_put_page((ADDR)pg_addr);

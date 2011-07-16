@@ -33,6 +33,7 @@
 #include "rb.h"
 
 void calc_mem(struct multiboot_info *mbinf);
+phy_allocator *vmm_addr_stack(ADDR pman_laddress);
 
 /* 
 Returns TRUE if this page can be used. False if BIOS has assigned for mapped IO.
@@ -93,7 +94,7 @@ INT32 vmm_init(struct multiboot_info *multiboot, UINT32 ignore_start, UINT32 ign
 
 	/* Now pagein whatever is left on the pool into the page tables. 
     (Here we also map our own page tables, thats why I dont do: vmm.vmm_size / 0x1000 - vmm.vmm_tables) */
-  	page_count = vmm.vmm_size / 0x1000;
+  	page_count = (vmm.vmm_size >> 12);
 
 	map_pages(PMAN_TASK
 				, (UINT32)PMAN_POOL_LINEAR + (UINT32)SARTORIS_PROCBASE_LINEAR
@@ -103,8 +104,6 @@ INT32 vmm_init(struct multiboot_info *multiboot, UINT32 ignore_start, UINT32 ign
 				, 2);
 	
 	vmm.available_mem = 0;
-
-    pman_print_dbg("VMM: New Code for getting TAKEN... CAREFUL! %x\n", (UINT32)PMAN_POOL_LINEAR + page_count * 0x1000);
 
     /*
     Get physical pages for taken structure.
@@ -124,18 +123,18 @@ INT32 vmm_init(struct multiboot_info *multiboot, UINT32 ignore_start, UINT32 ign
 
     while(taken_got != vmm.vmm_tables)
     {
-        add = PMAN_POOL_LINEAR + taken_start * 0x1000;
+        add = PMAN_POOL_LINEAR + (taken_start << 12);
         
-        if((add < ignore_s || add >= ignore_e) && avaliablePage(multiboot, (ADDR)(PMAN_POOL_PHYS + taken_start * 0x1000)))
+        if((add < ignore_s || add >= ignore_e) && avaliablePage(multiboot, (ADDR)(PMAN_POOL_PHYS + (taken_start << 12))))
         {            
             k = 0;
 		    addr = (UINT32*)add;
 	
-            // zero the taken table
-		    for(k = 0; k < 0x400; k++){ addr[k] = 0;}
+            // all pages will initially be taken
+		    for(k = 0; k < 0x400; k++){ addr[k] = 1;}
 
             vmm.taken.tables[dentry + i] = (struct taken_table*)addr;
-
+            
             if(add < 0x1000000)
                 taken_got_b16++;
             else
@@ -153,23 +152,25 @@ INT32 vmm_init(struct multiboot_info *multiboot, UINT32 ignore_start, UINT32 ign
 	    
 	pman_print("VMM: Taken Directory allocated. pages: %i(b16) - %i(a16), size: %x ", taken_got_b16, taken_got_a16, page_count * 0x1000);
 
-	/* Load the low pages stack */
-	lo_page_count = (PHYSICAL2LINEAR(0x1000000) - FIRST_PAGE(PMAN_POOL_LINEAR)) / 0x1000 - taken_got_b16;	// first 16MB - (sartoris + pman + pman tables)
-	
-	init_page_stack(&vmm.low_pstack);
+    /* Initialize physical memory allocator */
+    pya_init(&vmm.low_pstack);
+    pya_init(&vmm.pstack);
 
+	/* Load the low pages stack */
+	lo_page_count = ((PHYSICAL2LINEAR(0x1000000) - FIRST_PAGE(PMAN_POOL_LINEAR)) >> 12) - taken_got_b16;	// first 16MB - (sartoris + pman + pman tables)
+		
     /* We must be careful here not to put services image pages on the pool 
     (they'll be added later once they are initialized) */
 	
     /* Low mem stack will be loaded bottom-up */
     for(offset = lo_page_count; offset > 0; offset--) 
 	{
-      	 add = FIRST_PAGE(PMAN_POOL_LINEAR) + (offset-1) * 0x1000;
+      	 add = FIRST_PAGE(PMAN_POOL_LINEAR) + ((offset-1) << 12);
 		 
 		 // Check we are not inserting the init physical pages 
-		 if((add < ignore_s || add >= ignore_e) && avaliablePage(multiboot, (ADDR)(FIRST_PAGE(PMAN_POOL_PHYS) + (offset-1) * 0x1000)))
+		 if((add < ignore_s || add >= ignore_e) && avaliablePage(multiboot, (ADDR)(FIRST_PAGE(PMAN_POOL_PHYS) + ((offset-1) << 12))))
          {
-		 	push_page(&vmm.low_pstack, (ADDR)add);
+            pya_put_page(&vmm.low_pstack, (ADDR)add, PHY_NONE);
 		    vmm.available_mem += 0x1000; 
          }
 		 else
@@ -181,26 +182,24 @@ INT32 vmm_init(struct multiboot_info *multiboot, UINT32 ignore_start, UINT32 ign
 	pman_print("VMM: Loaded low stack, total: %i, ignored: %i, pushed: %i ", lo_page_count, ignored, lo_page_count - ignored);
 
 	/* Now load high memory pages */
-	page_count = vmm.vmm_size / 0x1000 - vmm.vmm_tables - (lo_page_count + taken_got_b16) - taken_got_a16;
-
-    init_page_stack(&vmm.pstack);
-    
+	page_count = (vmm.vmm_size >> 12) - vmm.vmm_tables - (lo_page_count + taken_got_b16) - taken_got_a16;
+        
 	ignored = 0;
 
     /* We must be careful here not to put services image pages on the pool */	     
     for(offset = 0; offset < page_count; offset++) 
 	{
-      	 add = PHYSICAL2LINEAR(0x1000000) + offset * 0x1000;
+      	 add = PHYSICAL2LINEAR(0x1000000) + (offset << 12);
 
 		 // Check we are not inserting the init physical pages 
-		 if((add < ignore_s || add >= ignore_e) && avaliablePage(multiboot, (ADDR)(PHYSICAL2LINEAR(0x1000000) + offset * 0x1000)))
+		 if((add < ignore_s || add >= ignore_e) && avaliablePage(multiboot, (ADDR)(PHYSICAL2LINEAR(0x1000000) + (offset << 12))))
          {
-		 	push_page(&vmm.pstack, (ADDR) (add));
-		    vmm.available_mem += 0x1000;
+             pya_put_page(&vmm.pstack, (ADDR)add, PHY_NONE);
+		     vmm.available_mem += 0x1000;
          }
 		 else
          {
-		 	ignored++;
+             ignored++;
          }
     }
 
@@ -231,6 +230,39 @@ INT32 vmm_init(struct multiboot_info *multiboot, UINT32 ignore_start, UINT32 ign
     vmm.phy_mem_areas = NULL;
     /* Initialize libraries list */
     vmm.slibs = NULL;
+        
+    /* Add protected memory areas */
+    UINT32 size = 0, pgs;
+	struct mmap_entry *mbe = NULL;
+	UINT32 phy;
+
+	/* If there is a memory map present, go through it */
+	if((vmm.multiboot->flags & MB_INFO_MMAP) && vmm.multiboot->mmap_length > 0)
+	{
+		mbe = (struct mmap_entry*)multiboot->mmap_addr;
+		size = 0;
+        
+		while(size != multiboot->mmap_length)
+		{
+            phy = PHYSICAL2LINEAR(mbe->start);
+            pgs = ((UINT32)(mbe->end - mbe->start) >> 12);
+
+            if(((UINT32)(mbe->end - mbe->start)) & 0x00000FFF)
+                pgs++;
+            pman_print_dbg("VMM: IO page %x (phy %x - end %x)\n", (ADDR)phy, (UINT32)mbe->start, (UINT32)mbe->end);
+
+            if((UINT32)mbe->start > FIRST_PAGE(PMAN_POOL_PHYS)
+                && mbe->type != 1)
+                pya_put_pages(vmm_addr_stack((ADDR)phy), (ADDR)phy, pgs, PHY_IO);
+            else if(mbe->type != 1)
+                pman_print_dbg("VMM: Page is too low on phy mem.\n");
+            else
+                pman_print_dbg("VMM: Is free mem area.\n");
+            
+			size += mbe->size;
+			mbe = (struct mmap_entry*)( (UINT32)mbe + mbe->size);
+		}
+	}
 
 	pman_print("VMM: Init Finished");
 
@@ -254,7 +286,7 @@ INT32 vmm_add_mem(struct multiboot_info *multiboot, UINT32 start, UINT32 end)
 		{      
 			if(avaliablePage(multiboot, (ADDR)LINEAR2PHYSICAL(cstart))) 
             {
-				push_page(&vmm.low_pstack, (ADDR)cstart);
+                pya_put_page(&vmm.low_pstack, (ADDR)cstart, PHY_NONE);
 		        vmm.available_mem += 0x1000;
             }
 		}
@@ -268,15 +300,16 @@ INT32 vmm_add_mem(struct multiboot_info *multiboot, UINT32 start, UINT32 end)
 		{      
 			if(avaliablePage(multiboot, (ADDR)LINEAR2PHYSICAL(cstart)))
             {
-	      		push_page(&vmm.pstack, (ADDR)cstart);
+                pya_put_page(&vmm.pstack, (ADDR)cstart, PHY_NONE);
 		        vmm.available_mem += 0x1000;
             }
 		}
 	}
+        
 	return 1;
 }
 
-struct page_stack *vmm_addr_stack(ADDR pman_laddress)
+phy_allocator *vmm_addr_stack(ADDR pman_laddress)
 {
 	if((UINT32)pman_laddress < 0x1000000)
 		return &vmm.low_pstack;
@@ -293,7 +326,7 @@ void calc_mem(struct multiboot_info *mbinf)
 	// check mbinf flags
 	if(mbinf->flags & MB_INFO_MEM)
 	{
-		vmm.pysical_mem = (mbinf->mem_upper + 0x1000) * 0x1000;	// mem upper is memory above the MB and is in kb
+		vmm.pysical_mem = ((mbinf->mem_upper + 0x1000) << 12);	// mem upper is memory above the MB and is in kb
 	}
 
 	/* Attempt to improve memory limits */
@@ -345,7 +378,7 @@ ADDR vmm_pm_get_page(BOOL low_mem)
 	struct taken_entry *tentry = NULL;
 
 	/* Get a page from stack */
-	ADDR page = pop_page(((low_mem)? &vmm.low_pstack : &vmm.pstack));
+	ADDR page = pya_get_page(((low_mem)? &vmm.low_pstack : &vmm.pstack), FALSE);
 
 	if(page == NULL) return NULL;
 
@@ -353,6 +386,7 @@ ADDR vmm_pm_get_page(BOOL low_mem)
 	tentry = vmm_taken_get(page);
 
 	/* Set taken by PMAN */
+    tentry->data.b = 0;
 	tentry->data.b_pg.flags = TAKEN_PG_FLAG_PMAN;
 	tentry->data.b_pg.taken = 1;
 
@@ -368,14 +402,8 @@ void vmm_pm_put_page(ADDR page_laddr)
 	if(page_laddr == NULL) return;
 
 	/* Return the page to the Stack */
-	push_page(vmm_addr_stack(page_laddr), page_laddr);
-
-	/* Set the taken structure */
-	tentry = vmm_taken_get(page_laddr);
-
-	/* Set taken by PMAN */
-	tentry->data.b = 0;
-
+    pya_put_page(vmm_addr_stack(page_laddr), (ADDR)page_laddr, PHY_NONE);
+    
 	vmm.available_mem++;
 }
 
@@ -386,7 +414,7 @@ ADDR vmm_get_dirpage(UINT16 task_id)
 	struct taken_entry *tentry = NULL;
 
 	/* Get a page from High Stack */
-	ADDR page = pop_page(&vmm.pstack);
+	ADDR page = pya_get_page(&vmm.pstack, FALSE);
 
 	if(page == NULL) return NULL;
 
@@ -410,7 +438,7 @@ ADDR vmm_get_tblpage(UINT16 task_id, UINT32 proc_laddress)
 	struct taken_entry *tentry = NULL;
 
 	/* Get a page from High Stack */
-	ADDR page = pop_page(&vmm.pstack);
+	ADDR page = pya_get_page(&vmm.pstack, FALSE);
 
 	if(page == NULL) return NULL;
 
@@ -444,7 +472,7 @@ ADDR vmm_get_page_ex(UINT16 task_id, UINT32 proc_laddress, BOOL low_mem)
 	struct taken_entry *tentry = NULL;
 
 	/* Get a page */
-	ADDR page = pop_page(((low_mem)? &vmm.low_pstack : &vmm.pstack));
+	ADDR page = pya_get_page(((low_mem)? &vmm.low_pstack : &vmm.pstack), FALSE);
     
 	if(page == NULL)
     {
@@ -622,10 +650,8 @@ void vmm_put_page(ADDR page_laddress)
 	}
     
     /* Return the page to the Stack */
-	push_page(vmm_addr_stack(page_laddress), page_laddress);
-
-	tentry->data.b = 0;	
-
+    pya_put_page(vmm_addr_stack(page_laddress), (ADDR)page_laddress, PHY_NONE);
+    
 	vmm.available_mem++;
 }
 

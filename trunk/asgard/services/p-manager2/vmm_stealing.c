@@ -136,7 +136,7 @@ void vmm_page_stealer()
 							candidate_taken = entry;
 							candidate_points = points;
 							candidate_io = iorequired;
-							candidate_addr = curr_st_region * 0x400000 + tindex * 0x1000;
+							candidate_addr = curr_st_region * 0x400000 + (tindex << 12);
 							candidate_laddress = task_laddress;
 							candidate_task_id = task_id;
 						}
@@ -291,7 +291,7 @@ UINT32 calculate_points(struct taken_entry *entry, UINT32 pm_dir_index, UINT32 p
 	if(entry->data.b_pdir.tbl == 0)
 	{
 		/* It's a common page, get it's table entry */
-		UINT32 pman_laddr = pm_dir_index * 0x400000 + pm_tbl_index * 0x1000;	// this is the linear address of the page on pman space
+		UINT32 pman_laddr = pm_dir_index * 0x400000 + (pm_tbl_index << 12);	// this is the linear address of the page on pman space
 		assigned = &vmm.assigned_dir.table[PM_LINEAR_TO_DIR(pman_laddr + (UINT32)SARTORIS_PROCBASE_LINEAR)]->entries[PM_LINEAR_TO_TAB(pman_laddr + (UINT32)SARTORIS_PROCBASE_LINEAR)];
 
 		/* We can now read the entry on pman table, and get the table */
@@ -308,7 +308,7 @@ UINT32 calculate_points(struct taken_entry *entry, UINT32 pm_dir_index, UINT32 p
 		a_bit = (ptbl->pages[entry->data.b_pg.tbl_index].entry.ia32entry.accessed == 1);
 		age = ptbl->pages[entry->data.b_pg.tbl_index].entry.ia32entry.age;
 		tbl = FALSE;
-		*task_laddress = assigned->dir_index * 0x400000 + entry->data.b_pg.tbl_index * 0x1000;
+		*task_laddress = assigned->dir_index * 0x400000 + (entry->data.b_pg.tbl_index << 12);
 		*task_id = assigned->task_id;
 	}
 	else
@@ -333,7 +333,7 @@ UINT32 calculate_points(struct taken_entry *entry, UINT32 pm_dir_index, UINT32 p
 			if(ptbl->pages[i].entry.ia32entry.present == 1) break;
 			if(ptbl->pages[i].entry.record.swapped == 1) swapped = 1;
 
-            pmladdr = (UINT32)ptbl + i * 0x1000;
+            pmladdr = (UINT32)ptbl + (i << 12);
             if(ttable->entries[PM_LINEAR_TO_TAB(pmladdr)].data.b_pg.eflags & TAKEN_EFLAG_IOLOCK) break;
 		}
 

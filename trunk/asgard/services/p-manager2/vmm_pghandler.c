@@ -79,6 +79,8 @@ BOOL vmm_handle_page_fault(UINT16 *thr_id, BOOL internal)
         }
         else
         {
+            if(pf.task_id == PMAN_TASK)
+                pman_print_dbg("PMAN: PF linear %x  (without base), task: %i, thr: %i\n", pf.linear - SARTORIS_PROCBASE_LINEAR, pf.task_id, pf.thread_id);
 		    if(pf.task_id == PMAN_TASK)
 			    pman_print_and_stop("PMAN: INTERNAL PF linear: %x, task: %i, thr: %i ", pf.linear, pf.task_id, pf.thread_id);
 
@@ -246,8 +248,6 @@ BOOL vmm_handle_page_fault(UINT16 *thr_id, BOOL internal)
     if((UINT32)pf.linear - SARTORIS_PROCBASE_LINEAR >= task->vmm_info.max_addr)
     {
         // ok it's above max addr.. is it a stack?
-
-
 	    if((UINT32)pf.linear - SARTORIS_PROCBASE_LINEAR >= PMAN_MAPPING_BASE)
 	    {
             pman_print_dbg("PF: to high %x\n", pf.linear);

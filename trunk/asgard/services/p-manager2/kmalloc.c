@@ -99,7 +99,6 @@ struct kmem_directory_page *create_directory(UINT16 bucket_size)
 	p->first_na_descriptor = p->d;
 	p->first_descriptor = NULL;
 	p->allocated_descriptors = 0;
-	p->free_alloc_descriptors = 0;
 	p->magic = 0xDEADDEAD;
 	
 	for(i = 0; i < PAGE_DESCRIPTORS; i++)
@@ -214,10 +213,13 @@ ADDR kmalloc(UINT32 size)
 		i = 0;
 		if(des_dir == NULL)
 		{
-
 			return NULL;
 		}
 	}
+    else if(des_dir->allocated_descriptors == 0)
+    {
+        pman_mem.free_directories[BUCKET_SIZE_INDEX(bucket_size)] = 0;
+    }
 
 	/* Check if descriptor is allocated */
 	if(!(des_dir->d[i].flags & KMEM_DFLAG_ALLOCATED))
@@ -257,6 +259,7 @@ ADDR kmalloc(UINT32 size)
 
 		des_dir->allocated_descriptors++;
 	}
+
 	/* Allocate the bucket */
 	fnode = des_dir->d[i].free_first->next_free;
 	
@@ -308,58 +311,74 @@ void kfree(ADDR ptr)
 	{		
 		/* Free this descriptor */
 		INT32 index = BUCKET_SIZE_INDEX(desc->bucket_size);
-					
-		/* Remove descriptor from free list */
-		if(desc->directory->first_descriptor == desc)
-		{
-			desc->directory->first_descriptor = desc->next_descriptor;
-			if(desc->next_descriptor != NULL) desc->directory->first_descriptor->prev_descriptor = NULL;
-		}
-		else
-		{
-			if(desc->prev_descriptor != NULL)
-				desc->prev_descriptor->next_descriptor = desc->next_descriptor;
-
-			if(desc->next_descriptor != NULL)
-				desc->next_descriptor->prev_descriptor = desc->prev_descriptor;
-		}
-
-		/* Add descriptor to na list */
-		if(desc->directory->first_na_descriptor != NULL)
-			desc->directory->first_na_descriptor->prev_descriptor = desc;
-		desc->next_descriptor = desc->directory->first_na_descriptor;
-		desc->prev_descriptor = NULL;
-		desc->directory->first_na_descriptor = desc;
-
-		desc->directory->allocated_descriptors--;
-		pman_mem.total_pages--;
-
-		/* Free buckets page. */
-		vmm_pm_put_page(desc->page);
-		desc->page = NULL;
-		desc->free_first = NULL;
-		desc->flags = (desc->flags & (~KMEM_DFLAG_ALLOCATED));
 		
+        // if there are no free allocated directories for this size
+        // and this is the last allocated descriptor of the
+        // directory, keep the page.
+        if(!(desc->directory->allocated_descriptors == 1
+            && pman_mem.free_directories[index] == 0))
+        {
+		    /* Remove descriptor from free list */
+		    if(desc->directory->first_descriptor == desc)
+		    {
+			    desc->directory->first_descriptor = desc->next_descriptor;
+			    if(desc->next_descriptor != NULL) desc->directory->first_descriptor->prev_descriptor = NULL;
+		    }
+		    else
+		    {
+			    if(desc->prev_descriptor != NULL)
+				    desc->prev_descriptor->next_descriptor = desc->next_descriptor;
+
+			    if(desc->next_descriptor != NULL)
+				    desc->next_descriptor->prev_descriptor = desc->prev_descriptor;
+		    }
+
+		    /* Add descriptor to na list */
+		    if(desc->directory->first_na_descriptor != NULL)
+			    desc->directory->first_na_descriptor->prev_descriptor = desc;
+		    desc->next_descriptor = desc->directory->first_na_descriptor;
+		    desc->prev_descriptor = NULL;
+		    desc->directory->first_na_descriptor = desc;
+
+		    desc->directory->allocated_descriptors--;
+		    pman_mem.total_pages--;
+
+		    /* Free buckets page. */
+		    vmm_pm_put_page(desc->page);
+		    desc->page = NULL;
+		    desc->free_first = NULL;
+		    desc->flags = (desc->flags & (~KMEM_DFLAG_ALLOCATED));
+        }
+
 		/* Check if there are no more descriptors on this directory */		
 		if(desc->directory->allocated_descriptors == 0)
 		{
-			/* Remove this directory */
-			pman_mem.total_directories[index]--;
+            // if there are no free directories allocated, we will levea one 
+            // to avoid too many pagein/pageout operations.
+            if(pman_mem.free_directories[index] == 0)
+            {
+                pman_mem.free_directories[index] == 1;
+            }
+            else
+            {
+			    /* Remove this directory */
+			    pman_mem.total_directories[index]--;
 
-			// fix directory pages list
-			if(desc->directory == pman_mem.directory[index])
-				pman_mem.directory[index] = desc->directory->next;
-			else
-				desc->directory->prev->next = desc->directory->next;
+			    // fix directory pages list
+			    if(desc->directory == pman_mem.directory[index])
+				    pman_mem.directory[index] = desc->directory->next;
+			    else
+				    desc->directory->prev->next = desc->directory->next;
 
-			if(desc->directory->next != NULL)
-				desc->directory->next->prev = desc->directory->prev;
+			    if(desc->directory->next != NULL)
+				    desc->directory->next->prev = desc->directory->prev;
 
-			// free the page
-			vmm_pm_put_page(desc->directory);
-			desc->directory = NULL;
+			    // free the page
+			    vmm_pm_put_page(desc->directory);
+			    desc->directory = NULL;
 
-			pman_mem.total_pages--;
+			    pman_mem.total_pages--;
+            }
 		}		
 	}
 }

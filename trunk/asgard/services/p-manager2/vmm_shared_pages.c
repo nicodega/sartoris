@@ -218,7 +218,7 @@ BOOL vmm_share_create(struct pm_task *task, ADDR laddr, UINT32 length, UINT16 pe
 		return FALSE;
 
 	/* Check start is page aligned and length is divisible by 0x1000 */
-	if((UINT32)laddr % 0x1000 != 0 || length % 0x1000 != 0) return FALSE;
+	if(((UINT32)laddr & 0x00000FFF) || (length & 0x00000FFF)) return FALSE;
 	
 	laddr = TRANSLATE_ADDR(laddr, ADDR);
 

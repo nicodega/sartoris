@@ -1080,7 +1080,7 @@ void cmd_create_thread(struct pm_msg_create_thread *msg, UINT16 creator_task_id)
         // set init data at the begining of the stack
 		if(pg != NULL && msg->interrupt == 0)
 		{			
-			UINT32 stackpad = (UINT32)thread->stack_addr % 0x1000;
+			UINT32 stackpad = ((UINT32)thread->stack_addr & 0x00000FFF);
 			UINT32 *size = (UINT32*)((UINT32)pg + stackpad);
 
             if(task->flags & TSK_DYNAMIC)
@@ -1168,7 +1168,6 @@ void cmd_create_thread(struct pm_msg_create_thread *msg, UINT16 creator_task_id)
 		/* Begin scheduling! */
 		sch_activate(thread);
 	}
-
 	cmd_inform_result(msg, creator_task_id, PM_THREAD_OK, new_thread_id, msg->task_id);
 }
 

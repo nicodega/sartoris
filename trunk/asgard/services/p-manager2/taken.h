@@ -88,6 +88,7 @@ struct taken_directory
 #define TAKEN_PG_FLAG_FILE		0x4     // file mapping
 #define TAKEN_PG_FLAG_PMAN		0x8     // taken for pman
 #define TAKEN_PG_FLAG_LIBEXE	0x10    // taken for a library executable
+#define TAKEN_PG_FLAG_IO	    0x20    // if a page has this flag set (whether taken or not) it's an IO page and cannot be given to a task
 
 /* eflags */
 #define TAKEN_EFLAG_NONE		0x0
