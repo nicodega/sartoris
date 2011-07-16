@@ -249,7 +249,7 @@ get_mmap:
 	
 	int 0x15
 
-	;; if this is not the first attempt (meaning esp != 0)
+	;; if this is not the first attempt (meaning ebp != 0)
 	cmp ebp, 0
 	jne get_mmap_not_first
 		
