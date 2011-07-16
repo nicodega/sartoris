@@ -195,18 +195,18 @@ void vmm_swap_empty(struct pm_task *task, BOOL iocall)
 
 	UINT32 i = ((UINT32)task->vmm_info.swap_free_addr) / 0x400000;
 
-	while((UINT32)task->vmm_info.swap_free_addr < 0xFFFFFFFF && task->vmm_info.swap_page_count > 0)
+	while((UINT32)task->vmm_info.swap_free_addr <= 0xFFFFF000 && task->vmm_info.swap_page_count > 0)
 	{
 		if( pdir->tables[i].record.present == 0 && pdir->tables[i].record.swapped == 1 )
 		{
-			ADDR tbl_page = vmm_get_tblpage(task->id, i * 0x100000);
+			ADDR tbl_page = vmm_get_tblpage(task->id, i * 0x400000);
 
 			task->vmm_info.table_swap_addr = pdir->tables[i].record.addr;
 
 			/* 
 			Table is swapped, get a page for it and load from swap.
 			*/
-			pm_page_in(task->id, (ADDR)(i * 0x100000), (ADDR)LINEAR2PHYSICAL(tbl_page), 1, PGATT_WRITE_ENA);
+			pm_page_in(task->id, (ADDR)(i * 0x400000), (ADDR)LINEAR2PHYSICAL(tbl_page), 1, PGATT_WRITE_ENA);
 
 			task->swp_io_finished.callback = swap_free_table_callback;
 			io_begin_task_pg_read( (pdir->tables[i].record.addr << 3), tbl_page, task);
@@ -232,7 +232,7 @@ void vmm_swap_empty(struct pm_task *task, BOOL iocall)
 			/* If we came from a page table Swap IO, free the page paged in for this operation */
 			if(iocall)
 			{
-				page_out(task->id, (ADDR)(i * 0x100000), 1);
+				page_out(task->id, (ADDR)(i * 0x400000), 1);
 				vmm_put_page((ADDR)PHYSICAL2LINEAR(PG_ADDRESS(pdir->tables[i].b)));
                 task->vmm_info.page_count--;
 			}

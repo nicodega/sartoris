@@ -35,8 +35,8 @@ void swap_free_addr(UINT32 swap_addr)
 
 	slinaddr = swap_addr / 8;
 
-	pindex = slinaddr / 0x1000;
-	index = slinaddr % 0x1000;
+	pindex = (slinaddr >> 12);
+	index = (slinaddr & 0x00000FFF);
 	shift = 7 - (swap_addr % 8);
 
 	swapbitmap.storage->addr[pindex][index] = swapbitmap.storage->addr[pindex][index] & ~(0x1 << shift);
@@ -58,8 +58,8 @@ void swap_use_addr(UINT32 swap_addr, UINT32 perms)
 
 	slinaddr = swap_addr / 8;
 
-	pindex = slinaddr / 0x1000;
-	index = (slinaddr % 0x1000);
+	pindex = (slinaddr >> 12);
+	index = (slinaddr );
 	shift = 7 - (swap_addr % 8);
 
 	swapbitmap.storage->addr[pindex][index] = swapbitmap.storage->addr[pindex][index] | (0x1 << shift);
@@ -80,7 +80,7 @@ void swap_use_addr(UINT32 swap_addr, UINT32 perms)
 				}
 			}
 		}
-		swapbitmap.storage_free = pindex * 0x1000 + index;
+		swapbitmap.storage_free = (pindex << 12) + index;
 	}
 }
 
@@ -91,8 +91,8 @@ UINT32 swap_get_addr()
 
 	if(swapbitmap.storage_free == 0xFFFFFFFF) return 0xFFFFFFFF;
 
-	pindex = swapbitmap.storage_free / 0x1000;
-	index = swapbitmap.storage_free % 0x1000;
+	pindex = (swapbitmap.storage_free >> 12);
+	index = (swapbitmap.storage_free & 0x00000FFF);
 	i = 7;
 
 	while(i >= 0)
@@ -101,7 +101,7 @@ UINT32 swap_get_addr()
 		i++;
 	}
 
-	return (pindex * 0x1000 + index) * 0x1000;
+	return (((pindex << 12) + index) << 12);
 }
 
 void init_swap_bitmap()

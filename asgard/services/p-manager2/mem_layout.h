@@ -29,7 +29,7 @@ Memory Layout Defines
 **********************************************/
 extern int edata[];
 
-#define PMAN_SIZE (((int)edata % 0x1000 == 0)? (int)edata : (int)edata - ((int)edata % 0x1000) + 0x1000)
+#define PMAN_SIZE ((((int)edata & 0x00000FFF) == 0)? (int)edata : (int)edata - ((int)edata & 0x00000FFF) + 0x1000)
 
 #define PMAN_DEFAULT_MEM_SIZE       0x2000000                   // Default memory size = 32 MB 
 

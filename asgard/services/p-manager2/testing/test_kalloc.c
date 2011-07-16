@@ -321,7 +321,7 @@ int main(int argc, char **args)
 	for(i = 0; i < 20; i++)
 	{
 		fpages[i] = TRUE;
-		for(j = 0; j < 0x1000; j++){pages[i * 0x1000 + j] = 0;}
+		for(j = 0; j < 0x1000; j++){pages[(i << 12) + j] = 0;}
 	}
 
 	kmem_init(0, 0);
@@ -360,9 +360,9 @@ int main(int argc, char **args)
 
 void vmm_pm_put_page(ADDR addr)
 {
-	int i = ((UINT32)addr - (UINT32)pages) / 0x1000, j;
+	int i = (((UINT32)addr - (UINT32)pages) >> 12), j;
 	fpages[i] = TRUE;
-	for(j = 0; j < 0x1000; j++){pages[i * 0x1000 + j] = 0;}
+	for(j = 0; j < 0x1000; j++){pages[(i << 12) + j] = 0;}
 }
 
 ADDR vmm_pm_get_page(BOOL lowmem)
@@ -374,7 +374,7 @@ ADDR vmm_pm_get_page(BOOL lowmem)
 		if(fpages[i] == TRUE)
 		{
 			fpages[i] = FALSE;
-			ptr = i * 0x1000;
+			ptr = (i << 12);
 			return (ADDR)((UINT32)pages + ptr);
 		}
 	}

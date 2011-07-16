@@ -232,16 +232,16 @@ UINT32 put_pages(struct pm_task *task, BOOL use_fsize, BOOL low_mem, BOOL lib)
             if((UINT32)prog_header->p_vaddr + (UINT32)prog_header->p_memsz > max_addr)
                    max_addr = (UINT32)prog_header->p_vaddr + (UINT32)prog_header->p_memsz;
 
-			page_addr = (unsigned int)prog_header->p_vaddr - ((unsigned int)prog_header->p_vaddr % 0x1000);
+			page_addr = (unsigned int)prog_header->p_vaddr - ((unsigned int)prog_header->p_vaddr & 0x00000FFF);
 			pagecount = 0;
 			foffset = prog_header->p_offset;
 
 			page_addr += SARTORIS_PROCBASE_LINEAR;	// our elf files will begin at 0, so add the base
 
 			if(use_fsize)
-				pagecount = (UINT32)(prog_header->p_filesz / 0x1000) + ((prog_header->p_filesz % 0x1000 == 0)? 0 : 1);
+				pagecount = (UINT32)(prog_header->p_filesz >> 12) + (((prog_header->p_filesz & 0x00000FFF) == 0)? 0 : 1);
 			else
-				pagecount = (UINT32)(prog_header->p_memsz / 0x1000) + ((prog_header->p_memsz % 0x1000 == 0)? 0 : 1);
+				pagecount = (UINT32)(prog_header->p_memsz >> 12) + (((prog_header->p_memsz & 0x00000FFF) == 0)? 0 : 1);
 			
 			/* Load as many pages as needed. */
 			for(j = 0; j < pagecount; j++)
@@ -249,8 +249,6 @@ UINT32 put_pages(struct pm_task *task, BOOL use_fsize, BOOL low_mem, BOOL lib)
 				// if page table is not present, add it
 				if(pdir->tables[PM_LINEAR_TO_DIR(page_addr)].ia32entry.present == 0)
 				{
-					if(page_addr == 0x800000) pman_print("Loading page table for address %x ", page_addr);
-
 					/* Insert a page for the page table */
 					// low mem is only considered for pages, not here
 					// because it does not make any difference 
@@ -288,7 +286,7 @@ UINT32 put_pages(struct pm_task *task, BOOL use_fsize, BOOL low_mem, BOOL lib)
 					pminit_elf_seek(&task->io_event_src, foffset);
                     if(j == 0) 
                     {
-					    pminit_elf_read(&task->io_event_src, PAGE_SIZE - ((UINT32)prog_header->p_vaddr % 0x1000), (ADDR)((UINT32)pgp + ((UINT32)prog_header->p_vaddr % 0x1000)));  // add page displacement
+					    pminit_elf_read(&task->io_event_src, PAGE_SIZE - ((UINT32)prog_header->p_vaddr & 0x00000FFF), (ADDR)((UINT32)pgp + ((UINT32)prog_header->p_vaddr & 0x00000FFF)));  // add page displacement
                     }
                     else
                     {

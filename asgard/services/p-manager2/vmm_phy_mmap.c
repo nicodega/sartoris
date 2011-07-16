@@ -76,7 +76,7 @@ BOOL vmm_phy_mmap(struct pm_task *task, ADDR py_start, ADDR py_end, ADDR lstart,
 
 	/* Check address is not above max_addr */
 	if((task->vmm_info.max_addr <= (UINT32)lend)
-        || ((UINT32)lstart % 0x1000 != 0 || ((UINT32)lend) % 0x1000 != 0)
+        || (((UINT32)lstart & 0x00000FFF) || ((UINT32)lend & 0x00000FFF))
         || ((UINT32)py_start < FIRST_PAGE(PMAN_POOL_PHYS) && (UINT32)py_start > 0x1000)
         || !(task->flags & TSK_FLAG_SERVICE))
 		return FALSE;
@@ -316,9 +316,11 @@ BOOL vmm_phy_mmap(struct pm_task *task, ADDR py_start, ADDR py_end, ADDR lstart,
 	laddr = (UINT32)lstart;
     pstart = PHYSICAL2LINEAR(py_start);
 
-	/* Remove address range from stacks. */
-	remove_range(&vmm.low_pstack, (ADDR)pstart, (ADDR)pend);
-	remove_range(&vmm.pstack, (ADDR)pstart, (ADDR)pend);
+	/* Remove address range from stacks. 
+    MISSING: since the page stack has been deprecated this code has not been redone.
+    */
+	/*remove_range(&vmm.low_pstack, (ADDR)pstart, (ADDR)pend);
+	remove_range(&vmm.pstack, (ADDR)pstart, (ADDR)pend);*/
 
 	/* Now Map physical pages onto the task address space */
 	while(pstart < pend)

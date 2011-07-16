@@ -27,9 +27,7 @@ int channel_configure(struct ata_channel *channel, int dev)
 	/* If device interrupts are enabled, set the flag */
 	if((channel->devices[dev].mode & ATAC_DEVMODE_INT)
         && channel->int_use_intr_flag)	
-	{
-		print("ATAC: creating int handler for channel %i\n", channel->id);
-		
+	{		
 		channel->int_intr_flag = 1;
 
 		/* If interrupt handler has not been created yet, create it */

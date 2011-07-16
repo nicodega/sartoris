@@ -36,7 +36,7 @@ UINT32 loader_create_task(struct pm_task *task, char *path, UINT32 plength, int 
 {
 	struct task mk_task;
 	ADDR pg_address;
-
+    
 	/* Get a Page for the Directory */
 	task->vmm_info.page_directory = (struct vmm_page_directory*)vmm_get_dirpage(task->id);
     
@@ -84,7 +84,7 @@ UINT32 loader_create_task(struct pm_task *task, char *path, UINT32 plength, int 
 
     /* Pagein the Page directory on task address space */
     pm_page_in(task->id, 0, (ADDR)LINEAR2PHYSICAL(task->vmm_info.page_directory), 0, 0);
-    
+
     /* Get a Page Table for the task */
 	pg_address = vmm_get_tblpage(task->id, SARTORIS_PROCBASE_LINEAR);
     
@@ -96,7 +96,7 @@ UINT32 loader_create_task(struct pm_task *task, char *path, UINT32 plength, int 
 	}
 
 	pm_page_in(task->id, (ADDR)SARTORIS_PROCBASE_LINEAR, (ADDR)LINEAR2PHYSICAL(pg_address), 1, PGATT_WRITE_ENA);
-
+ 
     // we will only open programs
 	if(flags != LOADER_CTASK_TYPE_SYS)
 	{
@@ -148,7 +148,7 @@ BOOL loader_filepos(struct pm_task *task, ADDR linear, UINT32 *outpos, UINT32 *o
 		// align (to the next page boundary) the end of the segment, in order to load a page if it has something
 		// on file
 		aligned_seg_end = (UINT32)phdr->p_vaddr + (UINT32)phdr->p_memsz;
-		aligned_seg_end += (0x1000 - aligned_seg_end % 0x1000);
+		aligned_seg_end += (0x1000 - (aligned_seg_end & 0x00000FFF));
 
 		/* See if address is inside the segment */
 		if((UINT32)phdr->p_vaddr <= (UINT32)linear && (UINT32)linear < aligned_seg_end)
@@ -160,11 +160,11 @@ BOOL loader_filepos(struct pm_task *task, ADDR linear, UINT32 *outpos, UINT32 *o
 			// Section offset is our address substracting the begining (in memory) of the section 
 			// and page aligned (down)
 			section_offset = ((UINT32)linear - (UINT32)phdr->p_vaddr);
-			section_offset -= section_offset % 0x1000;
+			section_offset -= (section_offset & 0x00000FFF);
 
-			if( ((UINT32)phdr->p_vaddr % 0x1000 != 0) && (section_offset == 0) )
+			if( ((UINT32)phdr->p_vaddr & 0x00000FFF) && (section_offset == 0) )
 			{
-				*page_displacement = phdr->p_offset % 0x1000;
+				*page_displacement = (phdr->p_offset & 0x00000FFF);
 			}
 
 			if(section_offset < phdr->p_filesz)
@@ -309,7 +309,7 @@ void loader_calculate_working_set(struct pm_task *task)
 		}
 
 		/* Calculate pages needed for this segment */
-		task->vmm_info.expected_working_set += (UINT32)(phdr->p_memsz / 0x1000) + ((phdr->p_memsz % 0x1000 == 0)? 0 : 1);
+		task->vmm_info.expected_working_set += (UINT32)(phdr->p_memsz >> 12) + (((phdr->p_memsz & 0x00000FFF) == 0)? 0 : 1);
 		
 		/* This is the end of the loadable segment */
 		new_end = (UINT32)phdr->p_vaddr + (UINT32)phdr->p_memsz;
@@ -387,7 +387,7 @@ BOOL loader_task_loaded(struct pm_task *task, char *interpreter)
             else
             {
                 // now tell vmm to create the library memory region
-                if(!vmm_ld_mapped(task, PMAN_MAPPING_BASE, PMAN_MAPPING_BASE+(ld_size % 0x1000 == 0? ld_size : ld_size + (0x1000 - ld_size % 0x1000))))
+                if(!vmm_ld_mapped(task, PMAN_MAPPING_BASE, PMAN_MAPPING_BASE+((ld_size & 0x00000FFF)? ld_size + (0x1000 - (ld_size & 0x00000FFF)) : ld_size)))
                     return FALSE;
 
                 ldtsk = tsk_get(ld_task);
@@ -490,9 +490,9 @@ BOOL loader_task_loaded(struct pm_task *task, char *interpreter)
                                 UINT32 ass_bck = vmm_temp_pgmap(ldtsk, (ADDR)laddr_ld);
                                                                 
                                 if(laddr_ld == SARTORIS_PROCBASE_LINEAR + (UINT32)phdr->p_vaddr 
-                                    && laddr_ld % 0x1000 != 0)
+                                    && (laddr_ld & 0x00000FFF) != 0)
                                 {
-                                    UINT32 disp = (laddr_ld % 0x1000) / 4;
+                                    UINT32 disp = (laddr_ld & 0x00000FFF) / 4;
 
                                     // there is a displacement
                                     for(i = 0; i < 0x400 - disp; i++)
