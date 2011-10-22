@@ -20,6 +20,7 @@
 
 /* interrupt management implementation */
 extern unsigned int exc_error_code; // it's defined on arch interrupt.c
+extern void *exc_int_addr;   // it's defined on arch interrupt.c
 
 int create_int_handler(int number, int thread_id, int nesting, int priority) 
 {
@@ -205,7 +206,7 @@ int ret_from_int(void)
     
     x = mk_enter(); /* enter critical block */
 
-    if(arch_is_soft_int())
+    if(arch_is_soft_int() || !int_active[curr_thread])
     {
         mk_leave(x);
         return;
@@ -229,7 +230,10 @@ int ret_from_int(void)
 
         // this should never happen.. if it does, die.
         if(result == FAILURE)
+        {
             kprintf(12, "An interrupt tried to go back to a dead thread!!");
+            for(;;);
+        }
     }
     
     mk_leave(x); /* exit critical block */
@@ -243,6 +247,12 @@ int get_last_int(unsigned int *error_code)
          *((unsigned int*)MAKE_KRN_PTR(error_code)) = exc_error_code;
     set_error(SERR_OK);
     return last_int;
+}
+
+void *get_last_int_addr() 
+{
+    set_error(SERR_OK);
+    return exc_int_addr;
 }
 
 /* remove a nested int from the stack, but keep it active.

@@ -25,6 +25,7 @@ global int_32 ;; remove!
 global no_copro
 		
 extern exc_error_code
+extern exc_int_addr
 	
 extern handle_int
 
@@ -73,28 +74,69 @@ extern stack_unwind_int
 	jmp int_run
 %endmacro
 
+%macro int_hook_pop_error_addr 1
+	push ds
+	push eax
+
+	mov eax, 0x10
+	mov ds, eax
+	
+    mov eax, [esp+12]
+	mov [exc_int_addr], eax
+	mov eax, [esp+8]
+	mov [exc_error_code], eax
+
+	mov eax, [esp]
+	mov [esp+8], eax	; set error code position with eax val
+	pop eax             ; ignore our eax push (dont use add for it touches the flags)
+    pop ds
+	pop eax             ; now eax has its original value which was stored on esp+8
+	
+	call stack_winding_int
+    push dword %1
+	jmp int_run
+%endmacro
+
+%macro int_hook_get_addr 1
+	push ds
+	push eax
+    
+	mov eax, 0x10
+	mov ds, eax
+		
+	mov eax, [esp+8]
+	mov [exc_int_addr], eax
+
+	pop eax
+	pop ds
+	
+	call stack_winding_int
+    push dword %1
+	jmp int_run
+%endmacro
+
 int_code_start:
 	
-int_0:  int_hook 0		; divide error
-int_1:  int_hook 1		; debug exception	
-int_2:  int_hook 2		; NMI interrupt
-int_3:  int_hook 3		; breakpoint exception
-int_4:  int_hook 4		; overflow exception
-int_5:  int_hook 5		; BOUND range exceeded exception
-int_6:	int_hook 6		; invalid opcode exception
-int_7:  int_hook 7		; device not available exception
-int_8:  int_hook_pop_error 8	; double fault exception
-int_9:  int_hook 9		; copro segment overrun
-int_10: int_hook_pop_error 10	; invalid TSS exception
-int_11: int_hook_pop_error 11	; segment not present
-int_12:	int_hook_pop_error 12	; stack_fault_exception
-int_13: int_hook_pop_error 13	; general protection fault
-int_14: int_hook_pop_error 14	; page-fault exception
-int_15:	int_hook 15		; reserved
-int_16:	int_hook 16		; floating-point error exception
-int_17:	int_hook_pop_error 17	; alignament check exception
-int_18: int_hook 18		; machine check exception
-int_19: int_hook 19		; SIMD floating-point exception
+int_0:  int_hook_get_addr       0   ; divide error
+int_1:  int_hook_get_addr       1   ; debug exception	
+int_2:  int_hook                2   ; NMI interrupt
+int_3:  int_hook_get_addr       3   ; breakpoint exception
+int_4:  int_hook_get_addr       4   ; overflow exception
+int_5:  int_hook_get_addr       5   ; BOUND range exceeded exception
+int_6:	int_hook_get_addr       6   ; invalid opcode exception
+int_7:  int_hook_get_addr       7   ; device not available exception
+int_8:  int_hook_pop_error      8	; double fault exception
+int_9:  int_hook_get_addr       9   ; copro segment overrun
+int_10: int_hook_pop_error      10  ; invalid TSS exception
+int_11: int_hook_pop_error      11  ; segment not present
+int_12:	int_hook_pop_error_addr 12  ; stack_fault_exception
+int_13: int_hook_pop_error_addr 13  ; general protection fault
+int_14: int_hook_pop_error      14  ; page-fault exception
+int_15:	int_hook                15  ; reserved
+int_16:	int_hook_get_addr       16	; floating-point error exception
+int_17:	int_hook_pop_error      17	; alignment check exception
+int_18: int_hook_get_addr       18	; machine check exception
+int_19: int_hook_get_addr       19	; SIMD floating-point exception
 int_20: int_hook 20
 int_21: int_hook 21
 int_22: int_hook 22
