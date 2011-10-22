@@ -339,8 +339,8 @@ void sub_atapi_delay( struct ata_channel *channel, int dev )
 void sub_xfer_delay( struct ata_channel *channel )
 
 {
-  long lw;
+    long lw;
 
-  sleep(55);
+    sleep(55);
 }
 

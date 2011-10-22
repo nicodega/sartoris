@@ -43,7 +43,7 @@
 int tmr_wait_timeout(struct ata_channel *channel)
 {
 	/* Wait for our interrupt service signal, or timeout */
-	return wait_signal(IRQ_EVENT, get_current_task(), COMMAND_TIMEOUT, channel->id, SIGNAL_PARAM_IGNORE, NULL, NULL);
+	return wait_signal(IRQ_EVENT, get_current_task(), COMMAND_TIMEOUT, (0x00000000 | (unsigned int)channel->id), NULL);
 }
 
 //******************************************************************
@@ -55,7 +55,7 @@ int tmr_wait_timeout(struct ata_channel *channel)
 SIGNALHANDLER tmr_set_timeout_int(struct ata_channel *channel)
 {
 	/* Wait for our interrupt service signal, or timeout */
-	return wait_signal_async(IRQ_EVENT, get_current_task(), COMMAND_TIMEOUT, channel->id, SIGNAL_PARAM_IGNORE);
+	return wait_signal_async(IRQ_EVENT, get_current_task(), COMMAND_TIMEOUT, channel->id);
 }
 
 //******************************************************************
@@ -67,7 +67,7 @@ SIGNALHANDLER tmr_set_timeout_int(struct ata_channel *channel)
 SIGNALHANDLER tmr_set_timeout(struct ata_channel *channel)
 {
 	/* Wait for our interrupt service signal, or timeout */
-	return wait_signal_async(PMAN_SLEEP, PMAN_TASK, COMMAND_TIMEOUT, SIGNAL_PARAM_IGNORE, SIGNAL_PARAM_IGNORE);
+	return wait_signal_async(PMAN_SLEEP, PMAN_TASK, COMMAND_TIMEOUT, SIGNAL_PARAM_IGNORE);
 }
 
 //******************************************************************
@@ -78,7 +78,7 @@ SIGNALHANDLER tmr_set_timeout(struct ata_channel *channel)
 //******************************************************************
 int tmr_check_timeout(SIGNALHANDLER sigh)
 {
-	return check_signal(sigh, NULL, NULL);
+	return check_signal(sigh, NULL);
 }
 
 //******************************************************************

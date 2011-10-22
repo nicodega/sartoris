@@ -202,7 +202,7 @@ BOOL loader_filepos(struct pm_task *task, ADDR linear, UINT32 *outpos, UINT32 *o
 }
 
 
-/* This function will return TRUE if there is an executable section
+/* This function will return TRUE if there is a section
 overlapping the provided interval with readonly or executable flag.
 NOTE: The way this has been made, we will require sections to be page aligned.
 */
@@ -232,6 +232,30 @@ BOOL loader_collides(struct pm_task *task, ADDR lstart, ADDR lend)
 	    }
         lstart += PAGE_SIZE;
     }
+	return FALSE;
+}
+
+BOOL loader_is_exec(struct pm_task *task, ADDR laddr)
+{
+	BYTE *headers = task->loader_inf.elf_pheaders;
+	UINT32 i = 0;
+	struct Elf32_Phdr *phdr = NULL;
+
+	while(i < task->loader_inf.elf_header.e_phnum)
+	{
+		phdr = (struct Elf32_Phdr*) &headers[i * task->loader_inf.elf_header.e_phentsize];
+
+		// consider only loadable segments
+		if(phdr->p_type == PT_LOAD && (phdr->p_flags & PF_EXEC)
+            && ((UINT32)phdr->p_vaddr <= (UINT32)laddr
+            && (UINT32)laddr < (UINT32)phdr->p_vaddr + (UINT32)phdr->p_memsz))
+        {
+            return TRUE;
+        }
+            
+		i++;
+	}
+    
 	return FALSE;
 }
 

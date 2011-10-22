@@ -36,11 +36,13 @@
 #define SIMD_FAULT      19
 
 void fatal_exception(UINT16 task_id, INT32 ret_value);
+void exception_signal(UINT16 task_id, UINT16 thread_id, UINT16 exception, ADDR last_exception_addr);
 
-/* Information on what to do when an exception is generated on a task */
 struct exception_management
 {
-	UINT16 exceptions_port;	// if 0xFFFF all exceptions will be fatal
+    unsigned short exceptions_port;
+    unsigned short ecount;
+    ADDR last_exception_addr;
 };
 
 #endif

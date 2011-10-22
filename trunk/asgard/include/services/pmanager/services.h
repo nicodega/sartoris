@@ -311,18 +311,20 @@ struct pm_msg_fmap_flush
 struct pm_msg_pmap_create	// PM_PMAP_CREATE
 {
   unsigned char pm_type;
+  unsigned char padding0;  
   short req_id;
   unsigned char response_port;
-  char padding0;
-  unsigned int start_addr;
-  unsigned int start_phy_addr;
-  unsigned short length; 
   unsigned char flags;
+  unsigned short pages;         // size in pages the process wants to map
+  unsigned int start_addr;          
+  unsigned int start_phy_addr;  // can be 0xFFFFFFFF if the service does not want a 
+                                // particular physical address but just a chunk of memory
 } PACKED_ATT;
 
-#define PM_PMAP_EXCLUSIVE 0x1   // exclusive mode
+#define PM_PMAP_CACHEDIS  0x1   // disable cache for this region
 #define PM_PMAP_WRITE	  0x2   // allow write to this area
-#define PM_PMAP_IO   	  0x3   // this will be an area used for a device IO
+#define PM_PMAP_IO   	  0x4   // this will be an area used for a device IO
+#define PM_PMAP_LOW_MEM   0x8
 
 struct pm_msg_pmap_remove   // PM_PMAP_REMOVE
 {

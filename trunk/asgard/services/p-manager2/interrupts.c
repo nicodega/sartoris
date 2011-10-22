@@ -112,12 +112,14 @@ void gen_ex_handler()
 	struct pm_thread *thr;
 	struct pm_task *tsk;
     int error_code;
+    void *eaddr;
 
 	for(;;) 
 	{
         error_code = 0;
 		/* Get last exception raised */
         exception = get_last_int(&error_code);
+        eaddr = get_last_int_addr();
 
 		/* Get running thread */
 		running_thr = sch_running();
@@ -189,9 +191,16 @@ void gen_ex_handler()
         }
         else if(!(tsk->flags & TSK_FLAG_SYS_SERVICE))
 		{
-			pman_print_dbg("PROCESS EXCEPTION task %i, thread %i, exception %i \n", tsk->id, thr->id, exception);
+            if(tsk->signals.handler_ep != NULL)
+            {
+                exception_signal(tsk->id, running_thr, rval, eaddr);
+            }
+            else
+            {
+			    pman_print_dbg("PROCESS EXCEPTION task %i, thread %i, exception %i at: %x \n", tsk->id, thr->id, exception, eaddr);
 			
-			fatal_exception( tsk->id, rval );
+			    fatal_exception( tsk->id, rval );
+            }
 		}
 		else
 		{
@@ -281,7 +290,8 @@ This handler will send a signal to each process waiting for the interrupt.
 */
 void int_common_handler()
 {
-	pman_print_and_stop("INT COMMON HANDLER!");
+	pman_print_dbg("INT COMMON HANDLER!\n");
+    for(;;);
 	
 	INT32 interrupt, i = 0;
 	struct event_cmd evt;
@@ -292,8 +302,7 @@ void int_common_handler()
 	evt.command = EVENT;
 	evt.event_type = PMAN_INTR;
 	evt.task = PMAN_GLOBAL_EVENT;
-	evt.event_res0 = 0;
-	evt.event_res1 = 0;
+	evt.event_res = 0;
 
 	for(;;)
 	{
@@ -302,8 +311,7 @@ void int_common_handler()
 		/* Find tasks waiting for an interrupt signal, and send it. */
 		if(interrupt_signals[interrupt].total != 0)
 		{
-			evt.param1 = interrupt;
-            evt.param2 = last_error;
+			evt.param = interrupt;
 
 			isignal = interrupt_signals[interrupt].first;
 
@@ -311,6 +319,16 @@ void int_common_handler()
 			{
 				/* Send the signal */
 				send_signal(isignal, &evt, SIGNAL_OK);
+
+                /* Update thread status */
+	            if(isignal->thread->signals.blocking_signal == isignal)
+	            {
+                    if(isignal->timeout != PMAN_SIGNAL_REPEATING)
+                        isignal->thread->signals.blocking_signal = NULL;
+
+		            /* Reactivate thread */
+		            sch_activate(isignal->thread);
+	            }
 
 				/* Reschedule thread so it executes before other threads. */
 				sch_reschedule(isignal->thread, i);
@@ -320,7 +338,7 @@ void int_common_handler()
 				/* Discard signal if not repeating */
 				if(isignal->timeout != PMAN_SIGNAL_REPEATING)
 				{
-					remove_signal(isignal, isignal->thread->id);
+					remove_signal(isignal, isignal->thread);
 
 					/* Remove from interrupt signals */
 					if(last_isignal == NULL)
@@ -353,10 +371,11 @@ void int_common_handler()
 	}
 }
 
-
-BOOL int_signal(struct pm_thread *thread, struct thr_signal *signal, INT32 interrupt)
+BOOL int_signal(struct pm_thread *thread, struct thr_signal *signal)
 {
-	if(interrupt_signals[interrupt].total > 0 || int_can_attach(thread, interrupt))
+    int interrupt = signal->signal_param;
+
+	if(int_can_attach(thread, interrupt))
 	{
 		/* Add signal to the list */
 		if(interrupt_signals[interrupt].first == NULL)
@@ -375,4 +394,24 @@ BOOL int_signal(struct pm_thread *thread, struct thr_signal *signal, INT32 inter
 		return TRUE;
 	}
 	return FALSE;
+}
+
+void int_signal_remove(struct thr_signal *signal)
+{
+    struct thr_signal *is = interrupt_signals[signal->signal_param].first,
+            *ois = NULL;
+
+    while(is != signal)
+    {            
+        ois = is;
+        is = is->inext;
+    }
+
+    if(is == signal)
+    {
+        if(ois) 
+            ois->inext = is->inext;
+        else
+            interrupt_signals[signal->signal_param].first = is->next;
+    }
 }

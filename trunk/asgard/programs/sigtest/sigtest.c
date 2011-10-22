@@ -27,9 +27,13 @@ int main(int argc, char **argv)
 	int i = 0;
 	char buff[50];
 
+    init_signals();
+    open_port(1, 2, PRIV_LEVEL_ONLY);
+    set_signals_port(1);
+
 	printf("Blocking sleep signal for 5 seconds\n");
 
-	if(wait_signal(PMAN_SLEEP, PMAN_TASK, 5000, PMAN_SIGNAL_PARAM_IGNORE, PMAN_SIGNAL_PARAM_IGNORE, NULL, NULL))
+	if(wait_signal(PMAN_SLEEP, PMAN_TASK, 5000, PMAN_SIGNAL_PARAM_IGNORE, NULL))
 	{
 		printf("timed out\n");
 	}
@@ -40,9 +44,9 @@ int main(int argc, char **argv)
 
 	printf("Non Blocking sleep signal for 5 seconds\n");
 
-	SIGNALHANDLER sh = wait_signal_async(PMAN_SLEEP, PMAN_TASK, 5000, PMAN_SIGNAL_PARAM_IGNORE, PMAN_SIGNAL_PARAM_IGNORE);
+	SIGNALHANDLER sh = wait_signal_async(PMAN_SLEEP, PMAN_TASK, 5000, PMAN_SIGNAL_PARAM_IGNORE);
 	
-	while( check_signal(sh, NULL, NULL) == 0);
+	while( check_signal(sh, NULL) == 0);
 
 	printf("back again!\n");
 
@@ -50,7 +54,7 @@ int main(int argc, char **argv)
 
 	printf("Non Blocking sleep signal for 60 seconds\n");
 
-	sh = wait_signal_async(PMAN_SLEEP, PMAN_TASK, 60000, PMAN_SIGNAL_PARAM_IGNORE, PMAN_SIGNAL_PARAM_IGNORE);
+	sh = wait_signal_async(PMAN_SLEEP, PMAN_TASK, 60000, PMAN_SIGNAL_PARAM_IGNORE);
 	
 	printf("still running discarding signal!\n");
 

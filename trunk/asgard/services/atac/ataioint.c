@@ -60,7 +60,7 @@ int int_enable_irq(struct ata_channel *channel)
 //  bm_addr: i/o address for BMCR/BMIDE Status register
 //  ata_addr: i/o address for the ATA Status register
 {
-	unsigned short res = 0;
+	unsigned int res = 0;
     SIGNALHANDLER sigh = NULL;
     
 	// error if invalid irq number
@@ -78,13 +78,13 @@ int int_enable_irq(struct ata_channel *channel)
 	msg_create_thr.stack_addr = (void*)(((unsigned int)int_stacks[channel->id])+(INT_STACK_SIZE << 2));
 	msg_create_thr.interrupt = channel->irq + 32;
 	msg_create_thr.entry_point = &_int_start;
-    	
-    sigh = wait_signal_async(THREAD_CREATED_EVENT, get_current_task(), SIGNAL_TIMEOUT_INFINITE, msg_create_thr.req_id, SIGNAL_PARAM_IGNORE);
+
+    sigh = wait_signal_async(THREAD_CREATED_EVENT, get_current_task(), SIGNAL_TIMEOUT_INFINITE, msg_create_thr.req_id);
     
 	send_msg(PMAN_TASK, PMAN_COMMAND_PORT, &msg_create_thr);
 
     // wait for THREAD_CREATED_EVENT driven signal
-    while(check_signal(sigh, &res, NULL) == 0)
+    while(check_signal(sigh, &res) == 0)
     {
         reschedule();
     }
@@ -93,7 +93,7 @@ int int_enable_irq(struct ata_channel *channel)
 	{
 		return 1; // FAIL!
 	}
-    
+
 	// interrupts use is now enabled
 	channel->int_intr_flag = 0;
     channel->int_thread_created = 1;
@@ -141,7 +141,7 @@ void int_handler( struct ata_channel *channel )
 				channel->int_ata_status = inb( channel->int_ata_addr );
 				outb( channel->int_bmcr_addr, 0x04 );
 
-				send_event(get_current_task(), IRQ_EVENT, channel->id, 0, 0, 0);
+				send_event(get_current_task(), IRQ_EVENT, channel->id, 0);
 			}
 		}
 		else
@@ -152,7 +152,7 @@ void int_handler( struct ata_channel *channel )
 			channel->int_intr_flag++;
 			channel->int_ata_status = inb( channel->int_ata_addr );
 
-			send_event(get_current_task(), IRQ_EVENT, channel->id, 0, 0, 0);
+			send_event(get_current_task(), IRQ_EVENT, channel->id, 0);
 		}
 
 		  

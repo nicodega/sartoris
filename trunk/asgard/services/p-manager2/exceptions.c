@@ -59,7 +59,7 @@ void fatal_exception(UINT16 task_id, INT32 ret_value)
 /*
 Send an exception signal.
 */
-void exception_signal(UINT16 task_id, UINT16 thread_id, UINT16 exception)
+void exception_signal(UINT16 task_id, UINT16 thread_id, UINT16 exception, ADDR last_exception_addr)
 {
 	struct pm_task *tsk = tsk_get(task_id);
     struct pm_thread *thr = thr_get(thread_id);
@@ -74,23 +74,34 @@ void exception_signal(UINT16 task_id, UINT16 thread_id, UINT16 exception)
 	
 	if(tsk->state != TSK_NOTHING) 
 	{
-        thr->state = THR_EXCEPTION;
-        sch_deactivate(thr);
-
+        if(last_exception_addr == tsk->exeptions.last_exception_addr)
+        {
+            ecount++;
+            if(ecount == 3)
+            {
+                fatal_exception(task_id, exception);
+                return;
+            }
+        }
+        else
+        {
+            ecount = 1;
+            tsk->exeptions.last_exception_addr = last_exception_addr;
+        }
+        
 		signal.signal_port = tsk->exeptions.exceptions_port;
 		signal.thread = thr_get(thread_id);
 		signal.id = 0;
-		signal.task = task_id;
+		signal.task = PMAN_TASK;
 
         if(signal.thread == NULL) return;
 
 		evt.command = EVENT;
 		evt.event_type = PMAN_EXCEPTION;
 		evt.task = PMAN_GLOBAL_EVENT;
-		evt.event_res0 = exception;
-		evt.event_res1 = thread_id;
-	
-		send_signal(&signal, &evt, SIGNAL_OK);
+		evt.event_res = (UINT32)exception;
+
+		send_signal_ex(&signal, &evt, SIGNAL_OK, last_exception_addr);
 	}
 }
 
