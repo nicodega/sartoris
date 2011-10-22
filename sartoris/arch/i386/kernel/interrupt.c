@@ -17,6 +17,7 @@
 struct seg_desc idt[MAX_IRQ] __align(8); // (intel says its better if its 8 byte aligned)
 
 unsigned int exc_error_code;
+unsigned int exc_int_addr;
 int int7handler;                // if it's 1 then there's a handler for int7
 int int1handler;                // if it's 1 then there's a handler for int1
 extern void default_int();

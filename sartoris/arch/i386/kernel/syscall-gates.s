@@ -59,7 +59,10 @@ global ret_from_int_c
 
 extern get_last_int
 global get_last_int_c
-		
+
+extern get_last_int_addr
+global get_last_int_addr_c	
+
 extern open_port
 global open_port_c
 
@@ -240,7 +243,10 @@ ret_from_int_c:
 
 get_last_int_c:	
 	syscall_def 1, get_last_int
-		
+
+get_last_int_addr_c:
+	syscall_def_np get_last_int_addr
+    		
 	;; messaging
 	
 close_port_c:

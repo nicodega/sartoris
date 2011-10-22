@@ -37,6 +37,7 @@ extern int create_int_handler_c(int number, int thread, int nesting, int priorit
 extern int destroy_int_handler_c(int number, int thread);
 extern int ret_from_int_c(void);
 extern int get_last_int_c(unsigned int *error_code);
+extern void *get_last_int_addr_c();
 
 extern int open_port_c(int port, int priv, int mode);
 extern int close_port_c(int port);

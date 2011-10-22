@@ -44,6 +44,7 @@ int create_int_handler(int number, int thread, int nesting, int priority);
 int destroy_int_handler(int number, int thread);
 int ret_from_int(void);
 int get_last_int(unsigned int *error_code);
+void *get_last_int_addr();
 
 /* message passing */
 int open_port(int port, int priv, int mode);

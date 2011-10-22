@@ -34,7 +34,8 @@ global create_int_handler
 global destroy_int_handler
 global ret_from_int
 global get_last_int
-	
+global get_last_int_addr
+
 global open_port
 global close_port
 global set_port_perm
@@ -214,7 +215,14 @@ get_last_int:
 	call GET_LAST_INT : 0x00000000
 	pop ebp
 	ret
-	
+
+get_last_int_addr:
+	push ebp
+	mov ebp, esp
+	call GET_LAST_INT_ADDR : 0x00000000
+	pop ebp
+	ret	
+
 open_port:
 	push ebp
 	mov ebp, esp
