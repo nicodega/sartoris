@@ -218,8 +218,7 @@ UINT32 vmm_fmap(UINT16 task_id, UINT32 fileid, UINT16 fs_task, ADDR start, UINT3
     ma_insert(&task->vmm_info.regions, &new_mreg->tsk_node);
     rb_insert(&task->vmm_info.regions_id, &new_mreg->tsk_id_node, FALSE);
 
-	/* Once takeover is OK, new_fm will be added to the global list. 
-    I can't add it now, because I don't have a */
+	/* Once takeover is OK, new_fm will be added to the global list. */
 
 	/* Tell stdfss we are taking control of the file. */
     new_fm->io_finished.params[0] = task->id;
@@ -239,7 +238,7 @@ UINT32 vmm_fmap(UINT16 task_id, UINT32 fileid, UINT16 fs_task, ADDR start, UINT3
 	return PM_OK;
 }
 
-BOOL vmm_fmap_release_mreg(struct pm_task *task, struct vmm_memory_region *mreg);
+int vmm_fmap_release_mreg(struct pm_task *task, struct vmm_memory_region *mreg);
 
 /* Release an FMAP */
 BOOL vmm_fmap_release(struct pm_task *task, ADDR lstart)
@@ -268,10 +267,29 @@ BOOL vmm_fmap_release(struct pm_task *task, ADDR lstart)
 		thread = thread->next_thread;
 	}
 
-    vmm_fmap_release_mreg(task, mreg);
+    switch(vmm_fmap_release_mreg(task, mreg))
+    {
+        case 0:
+            return FALSE;
+            break;
+        case 1:
+            if(task->command_inf.callback != NULL) 
+		        task->command_inf.callback(task, IO_RET_OK);
+            break;
+        default:
+            break;
+    }
+    
+    return TRUE;
 }
 
-BOOL vmm_fmap_release_mreg(struct pm_task *task, struct vmm_memory_region *mreg)
+/*
+This function will return:
+0 - if failed
+1 - if fmap was removed without IO
+2 - if fmap removal begun and has IO (i.e async)
+*/
+int vmm_fmap_release_mreg(struct pm_task *task, struct vmm_memory_region *mreg)
 {
 	struct vmm_fmap_descriptor *fmd = (struct vmm_fmap_descriptor*)mreg->descriptor;
 
@@ -282,53 +300,50 @@ BOOL vmm_fmap_release_mreg(struct pm_task *task, struct vmm_memory_region *mreg)
         // fmap is flushing.. we must wait until it completes
         // but let's tell the current action we intend to close the FMAP
         fmd->status = VMM_FMAP_CLOSING_RELEASE;
-        return FALSE;
+        return 0;
     }
 	else if(fmd->status != VMM_FMAP_ACTIVE)
     {
-        return FALSE;
+        return 0;
     }
 
 	/* Begin removal only if references is 1 */
 	fmd->references--;
+        
+	/* Unmap Pages from task address space */
+	UINT32 addr = (UINT32)mreg->tsk_node.low;
 
-	if(fmd->references > 0)
+	for(; addr < (UINT32)mreg->tsk_node.high; addr += 0x1000)
 	{
-        // this fmap still has references from other task
-
-		/* Unmap Pages from task address space */
-		UINT32 addr = (UINT32)mreg->tsk_node.low;
-
-		for(; addr < (UINT32)mreg->tsk_node.high; addr += 0x1000)
-		{
-			page_out(task->id, (ADDR)addr, 2);
-		}
-
-		/* Remove memory region from trees */
-		ma_remove(&task->vmm_info.regions, &mreg->tsk_node);
-        rb_remove(&task->vmm_info.regions_id, &mreg->tsk_id_node);
-
-        fmd->regions = fmd->regions->next;
-		if(fmd->regions)
-			fmd->regions->prev = NULL;
-		kfree(mreg);
-
-		return TRUE;
+		page_out(task->id, (ADDR)addr, 2);
 	}
 
-	/* Set FMAP as shutting down */
-	fmd->status = VMM_FMAP_CLOSING;
+	/* Remove memory region from trees */
+	ma_remove(&task->vmm_info.regions, &mreg->tsk_node);
+    rb_remove(&task->vmm_info.regions_id, &mreg->tsk_id_node);
 
-	/* Write all dirty pages */
-	fmd->io_finished.params[0] = 0;	// 0 will indicate we are closing and not flushing
-	fmd->io_finished.callback = vmm_fmap_flush_callback;
+    fmd->regions = fmd->regions->next;
+	if(fmd->regions)
+		fmd->regions->prev = NULL;
+	kfree(mreg);
 
-	fmd->release_addr = (UINT32)mreg->tsk_node.low - 0x1000;
-	fmd->creating_task = task->id;
+	if(fmd->references == 0)
+	{
+	    /* Set FMAP as shutting down */
+	    fmd->status = VMM_FMAP_CLOSING;
 
-	vmm_fmap_flush_callback(&fmd->iosrc, IO_RET_OK);
+	    /* Write all dirty pages */
+	    fmd->io_finished.params[0] = 0;	// 0 will indicate we are closing and not flushing
+	    fmd->io_finished.callback = vmm_fmap_flush_callback;
 
-	return TRUE;
+	    fmd->release_addr = (UINT32)mreg->tsk_node.low - 0x1000;
+	    fmd->creating_task = task->id;
+
+	    vmm_fmap_flush_callback(&fmd->iosrc, IO_RET_OK);
+
+        return 2;
+    }
+	return 1;
 }
 
 /*
@@ -371,11 +386,17 @@ BOOL vmm_fmap_flush(struct pm_task *task, ADDR lstart)
 	return TRUE;
 }
 
-/* Release the specified fmap */
-void vmm_fmap_task_closing(struct pm_task *task, struct vmm_memory_region *mreg)
+/* 
+Release the specified fmap when a task is closing.
+This function will return:
+0 - if failed
+1 - if fmap was removed without IO
+2 - if fmap removal begun and has IO (i.e async)
+*/
+int vmm_fmap_task_closing(struct pm_task *task, struct vmm_memory_region *mreg)
 {	
     task->command_inf.callback = vmm_fmap_closed_callback;
-    vmm_fmap_release_mreg(task, mreg);
+    return vmm_fmap_release_mreg(task, mreg);
 }
 
 /* Callback invoked when closing an fmap because the task is being killed */
@@ -485,8 +506,20 @@ INT32 vmm_fmap_flush_callback(struct fsio_event_source *iosrc, INT32 ioret)
         // dirty pages will be written
         if(fm->status == VMM_FMAP_CLOSING_RELEASE)
         {
-            vmm_fmap_task_closing(task, mreg);
-            return 0;        
+            switch(vmm_fmap_task_closing(task, mreg))
+            {
+                case 0:
+                    if(task->command_inf.callback != NULL) 
+	                    task->command_inf.callback(task, IO_RET_ERR);
+                    break;
+                case 1:
+                    if(task->command_inf.callback != NULL) 
+	                    task->command_inf.callback(task, IO_RET_OK);
+                    break;
+                default:
+                    break;
+            }
+            return 0;
         }
 
 		fm->release_addr += 0x1000;
@@ -569,7 +602,19 @@ INT32 vmm_fmap_flush_callback(struct fsio_event_source *iosrc, INT32 ioret)
 	{
         if(fm->status == VMM_FMAP_CLOSING_RELEASE)
         {
-            vmm_fmap_task_closing(task, mreg);
+            switch(vmm_fmap_task_closing(task, mreg))
+            {
+                case 0:
+                    if(task->command_inf.callback != NULL) 
+	                    task->command_inf.callback(task, IO_RET_ERR);
+                    break;
+                case 1:
+                    if(task->command_inf.callback != NULL) 
+	                    task->command_inf.callback(task, IO_RET_OK);
+                    break;
+                default:
+                    break;
+            }
             return 0;        
         }
 
@@ -607,8 +652,7 @@ INT32 vmm_fmap_flush_seek_callback(struct fsio_event_source *iosrc, INT32 ioret)
 		}
 
 		/* 
-		Map page onto pman space (WARNING: We are loosing assigned record here... but 
-		it doesn´t matter for we are not swapping out this pages)
+		Map page onto pman space. (assigned record is preserved on fm->io_finished.params[1])
 		*/
 		page_in(PMAN_TASK, (ADDR)PHYSICAL2LINEAR(PG_ADDRESS(tbl->pages[PM_LINEAR_TO_TAB(fm->release_addr)].entry.phy_page_addr)), 
                 (ADDR)tbl->pages[PM_LINEAR_TO_TAB(fm->release_addr)].entry.phy_page_addr, 2, PGATT_WRITE_ENA);

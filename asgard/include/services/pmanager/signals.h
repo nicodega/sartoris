@@ -39,12 +39,13 @@ will override the current signal.
 #define PMAN_SIGNALS_PORT	3		// port where pman will listen for WAIT_FOR_SIGNAL
 #define PMAN_EVENTS_PORT	4		// port where pman will listen for EVENTs
 
-#define WAIT_FOR_SIGNAL	0x1		// a thread will send this msg when it wants to sleep until a given signal arrives
-#define WAIT_FOR_SIGNAL_NBLOCK	0x2		// a thread will send this msg when it wants to wait for a signal, but it wants to keep running
-#define EVENT			0x3		// an event is sent by threads and it will trigger signals
-#define SIGNAL			0x4		// a signal has ocurred
-#define DISCARD_SIGNAL	0x5		// tell the process manager to dicard a given signal
-
+#define WAIT_FOR_SIGNAL	        0x1     // a thread will send this msg when it wants to sleep until a given signal arrives
+#define WAIT_FOR_SIGNAL_NBLOCK	0x2     // a thread will send this msg when it wants to wait for a signal, but it wants to keep running
+#define EVENT			        0x3     // an event is sent by threads and it will trigger signals
+#define SIGNAL			        0x4     // a signal has ocurred
+#define DISCARD_SIGNAL	        0x5     // tell the process manager to dicard a given signal
+#define SET_SIGNAL_HANDLER	    0x6     // Set a task wide exceptions signal handler.
+#define SET_SIGNAL_STACK	    0x7     // Set a stack for the thread signal handler.
 
 /* Errors */
 #define SIGNAL_OK		0x0
@@ -57,7 +58,7 @@ will override the current signal.
 														// or task is removed
 
 /* Define to ignore a param of an event (i.e. generate the signal ignoring the param) */
-#define PMAN_SIGNAL_PARAM_IGNORE	-1
+#define PMAN_SIGNAL_PARAM_IGNORE	0xFFFFFFFF
 
 /* Pman special signals (when task is set to PMAN_TASK) */
 #define PMAN_SLEEP			0x1		// this will just wait for timeout (timeout sent cannot be infinite)
@@ -65,19 +66,18 @@ will override the current signal.
 #define PMAN_EXCEPTION		0x3		// This signal will be sent to a task when a thread provokes an exception
 
 #define PMAN_GLOBAL_EVENT	((unsigned short)0xFFFF)	// if this value is set to the task identifier of an event
-													// all threads with a pending signal for this event
-													// will be signaled.
+													    // all threads with a pending signal for this event
+													    // will be signaled.
 
 struct wait_for_signal_cmd
 {
 	unsigned char command;		// set to WAIT_FOR_SIGNAL
 	unsigned short thr_id;		// a thread identifier
 	unsigned char event_type;	// event which will trigger the signal
-	unsigned char id;	// an identifier number (can be set to anything and it will be returned as is)
+	unsigned char id;	        // an identifier number (can be set to anything and it will be returned as is)
 	unsigned short task;		// task from which the signal is expected (can be the same task)
 	unsigned int timeout;		// timeout in milliseconds. 
-	unsigned short signal_param0;
-	unsigned short signal_param1;
+	unsigned int signal_param;
 	unsigned char signal_port;	// port where the signal response must be sent (including errors)
 } PACKED_ATT;
 
@@ -86,15 +86,52 @@ struct discard_signal_cmd
 	unsigned char command;		// set to DISCARD_SIGNAL
 	unsigned short thr_id;		// a thread identifier
 	unsigned char event_type;	// event which will trigger the signal
-	unsigned char id;	// an identifier number (can be set to anything and it will be returned as is)
+	unsigned char id;	        // an identifier number (can be set to anything and it will be returned as is)
 	unsigned short task;		// task from which the signal is expected (can be the same task)
-	unsigned int padding;		// timeout in milliseconds. 
-	unsigned short signal_param0;
-	unsigned short signal_param1;
+	unsigned int padding;		 
+	unsigned int signal_param;
 	unsigned char signal_port;	// port where the signal response must be sent (including errors)
 } PACKED_ATT;
 
+struct set_signal_handler_cmd
+{
+	unsigned char command;		// set to SET_SIGNAL_HANDLER
+	unsigned short exceptions_port;
+    unsigned char ret_port;
+	unsigned int padding;
+	void *handler_ep;           // the entry point of the signals handler
+	unsigned int padding1;
+} PACKED_ATT;
 
+struct set_signal_handler_res
+{
+	unsigned char command;		// set to SET_SIGNAL_HANDLER
+	unsigned short padding;
+    unsigned char result;
+	unsigned int padding[3];
+} PACKED_ATT;
+
+struct set_signal_stack_cmd
+{
+	unsigned char command;		// set to SET_SIGNAL_STACK
+	unsigned short thr_id;
+    unsigned char ret_port;
+	unsigned int padding;
+	unsigned int size;          // stack size in pages
+	void *stack;                // the stack address for the signals handler. If NULL, it will use the same stack the thread is using.    
+} PACKED_ATT;
+
+struct set_signal_stack_res
+{
+	unsigned char command;		// set to SET_SIGNAL_STACK
+	unsigned short thr_id;
+    unsigned char result;
+	unsigned int padding[3];
+} PACKED_ATT;
+
+/*
+This is the message sent to a task when a signal occurs.
+*/
 struct signal_cmd
 {
 	unsigned char command;		// set to SIGNAL
@@ -102,20 +139,21 @@ struct signal_cmd
 	unsigned char event_type;	// event which triggered the signal (the one that woke up the thread)
 	unsigned char id;
 	unsigned short task;		// task who originated the signal
-	unsigned int padding0;
-	unsigned short res0;
-	unsigned short res1;
+	void *eaddr;                // this will be used only on pman exceptions, and will contain the address at whitch the exception raised.
+	unsigned int res;
 	unsigned char ret;			// if signal timed out it will hold SIGNAL_TIMEOUT. else SIGNAL_OK
 } PACKED_ATT;
 
+/*
+This is the message a task/thread must send to trigger a signal.
+*/
 struct event_cmd
 {
-	unsigned char command;		// set to EVENT
-	unsigned short param1;	
+	unsigned char  command;		// set to EVENT
+	unsigned short padding0;	
 	unsigned short event_type;	// event type
-	unsigned int   param2;
-	unsigned short event_res0;
-	unsigned short event_res1;
+	unsigned int   param;
+	unsigned int   event_res;
 	unsigned short task;		// if task is not -1, this event will only apply for a given task.
 								// if set to -1 this will be considered a global event, affecting
 								// all tasks.

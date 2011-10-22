@@ -169,14 +169,9 @@ INT32 vmm_init(struct multiboot_info *multiboot, UINT32 ignore_start, UINT32 ign
 		 
 		 // Check we are not inserting the init physical pages 
 		 if((add < ignore_s || add >= ignore_e) && avaliablePage(multiboot, (ADDR)(FIRST_PAGE(PMAN_POOL_PHYS) + ((offset-1) << 12))))
-         {
             pya_put_page(&vmm.low_pstack, (ADDR)add, PHY_NONE);
-		    vmm.available_mem += 0x1000; 
-         }
-		 else
-         {
-		 	ignored++;
-         }		 
+         else
+         	ignored++;
     }
 
 	pman_print("VMM: Loaded low stack, total: %i, ignored: %i, pushed: %i ", lo_page_count, ignored, lo_page_count - ignored);
@@ -193,14 +188,9 @@ INT32 vmm_init(struct multiboot_info *multiboot, UINT32 ignore_start, UINT32 ign
 
 		 // Check we are not inserting the init physical pages 
 		 if((add < ignore_s || add >= ignore_e) && avaliablePage(multiboot, (ADDR)(PHYSICAL2LINEAR(0x1000000) + (offset << 12))))
-         {
              pya_put_page(&vmm.pstack, (ADDR)add, PHY_NONE);
-		     vmm.available_mem += 0x1000;
-         }
-		 else
-         {
+         else
              ignored++;
-         }
     }
 
 	pman_print("VMM: Loaded High Stack, total: %i, ignored: %i, pushed: %i ", page_count, ignored, page_count - ignored);
@@ -287,7 +277,6 @@ INT32 vmm_add_mem(struct multiboot_info *multiboot, UINT32 start, UINT32 end)
 			if(avaliablePage(multiboot, (ADDR)LINEAR2PHYSICAL(cstart))) 
             {
                 pya_put_page(&vmm.low_pstack, (ADDR)cstart, PHY_NONE);
-		        vmm.available_mem += 0x1000;
             }
 		}
 	}
@@ -301,7 +290,6 @@ INT32 vmm_add_mem(struct multiboot_info *multiboot, UINT32 start, UINT32 end)
 			if(avaliablePage(multiboot, (ADDR)LINEAR2PHYSICAL(cstart)))
             {
                 pya_put_page(&vmm.pstack, (ADDR)cstart, PHY_NONE);
-		        vmm.available_mem += 0x1000;
             }
 		}
 	}
@@ -638,21 +626,29 @@ void vmm_put_page(ADDR page_laddress)
 
 	if((UINT32)page_laddress < FIRST_PAGE(PMAN_POOL_LINEAR))
 		pman_print_and_stop("PMAN: Assert 1");
-
-	
-	/* Set the taken structure */
-	tentry = vmm_taken_get(page_laddress);
-
-	/* If it was a common page, page it in */
-	if(!tentry->data.b_pg.dir && !tentry->data.b_pg.tbl)
-	{
-		page_in(PMAN_TASK, (ADDR)((UINT32)page_laddress + SARTORIS_PROCBASE_LINEAR), (ADDR)LINEAR2PHYSICAL(page_laddress), 2, PGATT_WRITE_ENA);
-	}
-    
+    	
     /* Return the page to the Stack */
-    pya_put_page(vmm_addr_stack(page_laddress), (ADDR)page_laddress, PHY_NONE);
+    pya_put_page(vmm_addr_stack(page_laddress), (ADDR)page_laddress, PHY_REMAP);
     
 	vmm.available_mem++;
+}
+
+void vmm_put_pages(ADDR page_laddress, int pages, int io, int free_io)
+{
+	struct taken_entry *tentry = NULL;
+    int flags = PHY_REMAP;
+
+	if(page_laddress == NULL) return;
+
+	if((UINT32)page_laddress < FIRST_PAGE(PMAN_POOL_LINEAR))
+		pman_print_and_stop("PMAN: Assert 1");
+
+    if(io)
+        flags |= PHY_IO;
+    if(free_io)
+        flags |= PHY_FREE_IO;
+
+	pya_put_pages(vmm_addr_stack(page_laddress), page_laddress, pages, flags);
 }
 
 // claim a task address space completely
@@ -880,12 +876,12 @@ void vmm_close_task(struct pm_task *task)
         if(mreg->type == VMM_MEMREGION_FMAP)
 		{
             // this will be processed async
-            vmm_fmap_task_closing(task, mreg);
-            return;
+            if(vmm_fmap_task_closing(task, mreg) == 2)
+                return;
 		}
 		else if(mreg->type == VMM_MEMREGION_MMAP)
 		{
-			vmm_phy_umap(task, (ADDR)mreg->tsk_node.low);
+			vmm_phy_umap(task, (ADDR)mreg->tsk_node.low, 0);
 		}
         else if(mreg->type == VMM_MEMREGION_LIB)
 		{

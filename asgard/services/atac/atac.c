@@ -116,7 +116,7 @@ void _start()
 
 			get_msg(ATAC_THREAD_ACK_PORT, &msg_res, &id);
 			/* Generate an event :) */
-			send_event(get_current_task(), THREAD_CREATED_EVENT, msg_res.req_id, 0, (msg_res.status == PM_THREAD_OK), 0);
+			send_event(get_current_task(), THREAD_CREATED_EVENT, msg_res.req_id, (msg_res.status == PM_THREAD_OK));
 		}
 
 		/* Process std service messages */

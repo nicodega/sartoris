@@ -45,7 +45,7 @@ struct interrupt_signals_container
 	UINT32 total;
 } PACKED_ATT;
 
-BOOL int_signal(struct pm_thread *thread, struct thr_signal *signal, INT32 interrupt);
-
+BOOL int_signal(struct pm_thread *thread, struct thr_signal *signal);
+void int_signal_remove(struct thr_signal *signal);
 
 #endif

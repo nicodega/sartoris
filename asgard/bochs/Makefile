@@ -33,6 +33,7 @@ all : 1.44a 10MB.hd.ofs
 	../tools/mkofs a 10MB.hdb.ofs /bin/more ../programs/more/more.raw
 	../tools/mkofs a 10MB.hdb.ofs /bin/stest ../programs/stest/stest.raw
 	../tools/mkofs a 10MB.hdb.ofs /lib/libstest.so ../lib/libstest.so
+	../tools/mkofs a 10MB.hdb.ofs /bin/sigtest ../programs/sigtest/sigtest.raw
 	../tools/mkofs a 10MB.hdb.ofs /testtxt ./testtxt
 
 	#create boot sector (modify stage 1.5 possition on it and set partition table)

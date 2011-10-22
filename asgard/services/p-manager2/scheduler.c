@@ -53,6 +53,7 @@ int sch_schedule()
 {	
 	static BOOL intraised = FALSE;
 	struct pm_thread *thread = NULL;
+    struct pm_task *task = NULL;
 	
 	/* Deal with last_runned thread */
 	if(scheduler.last_runned != NULL)
@@ -90,13 +91,29 @@ int sch_schedule()
 		scheduler.list_selector = (scheduler.list_selector == SCHED_MAXPRIORITY-1)? 0 : scheduler.list_selector + 1;			
 	}
 	
-	scheduler.running = scheduler.first[scheduler.list_selector];
-	scheduler.running->sch.quantums--; // spent a quantum
+	thread = scheduler.running = scheduler.first[scheduler.list_selector];
+	thread->sch.quantums--; // spent a quantum
     	
-	scheduler.running->state = THR_RUNNING;
+	thread->state = THR_RUNNING;
 	
 	/* Run next thread */
-	run_thread(scheduler.running->id);
+    if(thread->signals.pending_int)
+    {
+        task = tsk_get(thread->task_id);
+
+        // try to run the soft int
+        // NOTE: If the thread is already on an int run_thread_int
+        // will fail, then we must just run_thread.
+        thread->signals.pending_int = run_thread_int(thread->id, task->signals.handler_ep, thread->signals.stack);
+        if(thread->signals.pending_int)
+        {
+            run_thread(thread->id);
+        }
+    }
+    else
+    {
+	    run_thread(thread->id);
+    }
 
 	/* Next time we are runned either by an int or run_thread, we will start here! */
 	intraised = is_int0_active();
@@ -106,7 +123,7 @@ int sch_schedule()
 
 	scheduler.last_runned = scheduler.running;
 	scheduler.running = NULL;
-
+        
 	return intraised;
 }
 
@@ -307,7 +324,7 @@ possition schedules at most
 void sch_reschedule(struct pm_thread *thr, UINT32 possition)
 {
 	struct pm_thread *thread = scheduler.first[thr->sch.priority];
-	UINT32 i = 0 ,lsdiff;
+	UINT32 i = 0, lsdiff;
 
 	/* If thread is blocked (this should not happen.. but it can happen) don't reschedule */
 	if(thread->state != THR_WAITING) return;

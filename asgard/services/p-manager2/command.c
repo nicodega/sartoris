@@ -403,7 +403,8 @@ void cmd_process_msg()
 				if(tsk->state == TSK_NORMAL)
 				{
 					tsk->command_inf.callback = cmd_finished__callback;
-					vmm_fmap_release(tsk, ((struct pm_msg_fmap_finish*)&msg)->address);
+					if(!vmm_fmap_release(tsk, ((struct pm_msg_fmap_finish*)&msg)->address))
+                        cmd_inform_result(&msg, task_id, PM_ERROR, 0, 0);
 				}
 				else
 				{
@@ -452,13 +453,17 @@ void cmd_process_msg()
 				if(tsk->state == TSK_NORMAL 
                     && (tsk->flags & TSK_FLAG_SERVICE))
 				{
+                    struct pm_msg_pmap_create *pmapcmd = (struct pm_msg_pmap_create*)&msg;
+
 					tsk->command_inf.callback = cmd_finished__callback;
-					if(!vmm_phy_mmap(tsk, 
-						(ADDR)((struct pm_msg_pmap_create*)&msg)->start_phy_addr, 
-						(ADDR)(((struct pm_msg_pmap_create*)&msg)->start_phy_addr + ((struct pm_msg_pmap_create*)&msg)->length),
-						(ADDR)((struct pm_msg_pmap_create*)&msg)->start_addr, 
-						(ADDR)(((struct pm_msg_pmap_create*)&msg)->start_addr + ((struct pm_msg_pmap_create*)&msg)->length), 
-						((struct pm_msg_pmap_create*)&msg)->flags))
+					
+                    if(!vmm_phy_mmap(tsk, 
+						(ADDR)pmapcmd->start_phy_addr, 
+						(ADDR)(pmapcmd->start_phy_addr + (pmapcmd->pages << 12)),
+						(ADDR)pmapcmd->start_addr, 
+						(ADDR)(pmapcmd->start_addr + (pmapcmd->pages << 12)), 
+                        pmapcmd->pages,
+						pmapcmd->flags))
 					{
 						cmd_inform_result(&msg, task_id, PM_ERROR, 0, 0);
 					}
@@ -486,7 +491,7 @@ void cmd_process_msg()
                     && (tsk->flags & TSK_FLAG_SERVICE))
 				{
 					tsk->command_inf.callback = cmd_finished__callback;
-					vmm_phy_umap(tsk, (ADDR)((struct pm_msg_pmap_remove*)&msg)->start_addr);					
+					vmm_phy_umap(tsk, (ADDR)((struct pm_msg_pmap_remove*)&msg)->start_addr, ((struct pm_msg_pmap_remove*)&msg)->safe);
 				}
 				else
 				{
@@ -525,10 +530,8 @@ void cmd_process_msg()
 			{
 				/* Close MMAP */
 				tsk = tsk_get(task_id);
-
-                if(!tsk) continue;
-
-				if(tsk->command_inf.executing != NULL)
+                                
+				if(!tsk || tsk->command_inf.executing != NULL)
 					break;
 				cmd_queue_remove(cmd);
 				tsk->command_inf.executing = cmd;

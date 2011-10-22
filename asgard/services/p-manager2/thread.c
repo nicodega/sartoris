@@ -28,6 +28,7 @@
 #include "interrupts.h"
 #include "vm.h"
 #include "layout.h"
+#include "signals.h"
 
 static struct pm_thread *thread_info[MAX_THR];
 static struct pm_thread pman_sched_thr;
@@ -162,6 +163,9 @@ int thr_destroy_thread(UINT16 thread_id)
 				    currTrhead->next_thread = thr->next_thread;
 			    }
             }
+
+            // remove the thread signals
+            remove_thr_signals(thr);
 
 			if(thr->state != THR_KILLED && (thr->flags & (THR_FLAG_PAGEFAULT | THR_FLAG_PAGEFAULT_TBL)))
 			{

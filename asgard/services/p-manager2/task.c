@@ -27,6 +27,7 @@
 #include "vm.h"
 #include "kmalloc.h"
 #include "layout.h"
+#include "signals.h"
 
 static struct pm_task *task_info[MAX_TSK];
 static struct pm_task pman_task;
@@ -40,10 +41,6 @@ void tsk_init()
 	for(i=0; i<MAX_TSK; i++) 
 	{
         task_info[i] = NULL;
-        /*
-        task_info[i].id = i;
-		init_task();
-        */
 	}
 }
 
@@ -73,6 +70,8 @@ struct pm_task *tsk_create(UINT16 id)
 
 	// Exceptions send port //
 	t->exeptions.exceptions_port = 0xFFFF;
+    t->exeptions.ecount = 0;
+    t->exeptions.last_exception_addr = NULL;
 
 	// Init Command Info //
 	cmd_info_init(&t->command_inf);
@@ -82,7 +81,10 @@ struct pm_task *tsk_create(UINT16 id)
 
 	// Init vmm info //
 	vmm_init_task_info(&t->vmm_info);
-		
+
+    // init signals info //
+    init_tsk_signals(t);
+
 	// Init IO info //
 	io_init_source(&t->io_event_src, FILE_IO_TASK, id);
 	io_init_event(&t->io_finished, &t->io_event_src);

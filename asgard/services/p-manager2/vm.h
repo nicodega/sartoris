@@ -148,7 +148,7 @@ struct vmm_memory_region
 #define VMM_MEM_REGION_FLAG_NONE		0
 #define VMM_MEM_REGION_FLAG_EXCLUSIVE	1
 #define VMM_MEM_REGION_FLAG_WRITE		2
-#define VMM_MEM_REGION_FLAG_EXECUTE		3
+#define VMM_MEM_REGION_FLAG_EXECUTE		4
 
 /*
 Generic descriptor
@@ -206,10 +206,9 @@ Physical to linear mapping. (a task might require to map a given physical addres
 
 struct vmm_phymap_descriptor
 {
-	struct vmm_memory_region *regions;  // memory regions referencing this descriptor
-    int exclusive;                      // 1 if region is assiged exclusively.
-    int references;
-    ma_node area;                       // physical memory area on vmm phy_mem_areas
+	struct vmm_memory_region *region;  // memory region referencing this descriptor
+    char flags;
+    ma_node area;                     // physical memory area on vmm phy_mem_areas
 } PACKED_ATT;
 
 /* Shared library descriptor */
@@ -348,6 +347,8 @@ void vmm_init_task_info(struct task_vmm_info *vmm_info);
 // Decide if a task can be loaded, based on the expected working set and physical/virtual memory available
 BOOL vmm_can_load(struct pm_task *task);
 
+phy_allocator *vmm_addr_stack(ADDR pman_laddress);
+
 /* Process Related PMAN paging functions */
 
 // Get taken entry for this (PMAN) linear address
@@ -362,6 +363,7 @@ ADDR vmm_get_page(UINT16 task_id, UINT32 proc_laddres);
 ADDR vmm_get_page_ex(UINT16 task_id, UINT32 proc_laddress, BOOL lowmem);
 // Return a process page to the pool
 void vmm_put_page(ADDR address);
+void vmm_put_pages(ADDR page_laddress, int pages, int io, int free_io);
 // map a page to a process linear address
 void vmm_map(ADDR page_addr, ADDR linear);
 // claim a task address space completely
@@ -446,11 +448,12 @@ BOOL vmm_fmap_flush(struct pm_task *task, ADDR tsk_lstart);
 BOOL vmm_page_filemapped(struct pm_task *task, struct pm_thread *thread, ADDR page_laddr, struct vmm_memory_region *mreg);
 UINT32 vmm_fmap(UINT16 task_id, UINT32 fileid, UINT16 fs_task, ADDR start, UINT32 size, UINT32 perms, UINT32 offset);
 BOOL vmm_fmap_release(struct pm_task *task, ADDR tsk_lstart);
+int vmm_fmap_task_closing(struct pm_task *task, struct vmm_memory_region *mreg);
 void vmm_fmap_close_all(struct pm_task *task);
 
 /* PHY MAP */
-BOOL vmm_phy_mmap(struct pm_task *task, ADDR py_start, ADDR py_end, ADDR lstart, ADDR lend, char flags);
-void vmm_phy_umap(struct pm_task *task, ADDR lstart);
+BOOL vmm_phy_mmap(struct pm_task *task, ADDR py_start, ADDR py_end, ADDR lstart, ADDR lend, UINT32 pages, char flags);
+void vmm_phy_umap(struct pm_task *task, ADDR lstart, int free_io);
 
 /* SHARED PAGES */
 BOOL vmm_page_shared(struct pm_task *task, ADDR proc_laddr, struct vmm_memory_region *mreg);

@@ -21,7 +21,7 @@
 #include "mem_layout.h"
 #include "vmm_phy_alloc.h"
 #include "types.h"
-
+#include "layout.h"
 
 void pya_insert(phy_allocator *pa, phy_page_node *a, INT32 pow, INT32 flags);
 BOOL pya_check_buddies(phy_page_node *a, INT32 pow, phy_page_node **pj);
@@ -41,6 +41,7 @@ void pya_init(phy_allocator *pa)
 void pya_put_page(phy_allocator *pa, ADDR pg_laddr, INT32 flags)
 {
     pya_insert(pa, (phy_page_node*)pg_laddr, 0, flags);
+    vmm.available_mem++;
 }
 
 void pya_put_pages(phy_allocator *pa, ADDR pg_laddr, UINT32 pages, INT32 flags)
@@ -77,10 +78,17 @@ void pya_insert(phy_allocator *pa, phy_page_node *a, INT32 pow, INT32 flags)
     // set the page as not taken anymore (and clear IO flag if it was set)
     tentry->data.b = 0;
 
-    if(flags & PHY_IO)
+    if((flags & PHY_IO) && !(flags & PHY_FREE_IO))
     {
         tentry->data.b_pg.flags = TAKEN_PG_FLAG_IO;
         return;
+    }
+    
+    vmm.available_mem++;
+
+    if((flags & PHY_REMAP) && !tentry->data.b_pg.dir && !tentry->data.b_pg.tbl)
+	{
+		page_in(PMAN_TASK, (ADDR)((UINT32)a + SARTORIS_PROCBASE_LINEAR), (ADDR)LINEAR2PHYSICAL(a), 2, PGATT_WRITE_ENA);
     }
 
     a->index = 0;
@@ -207,6 +215,9 @@ phy_page_node *pya_get_pages_simple(phy_allocator *pa, INT32 pages, BOOL io);
 void *pya_get_page(phy_allocator *pa, BOOL io)
 {
     UINT32 *pg = (UINT32*)pya_get_pages_simple(pa, 1, io);
+
+    if(!pg) return NULL;
+
     int i = 0;
     if(!io)
     {
@@ -214,6 +225,7 @@ void *pya_get_page(phy_allocator *pa, BOOL io)
             pg[i] = 0;
     }
 
+    vmm.available_mem--;
     return pg;
 }
 
@@ -308,6 +320,8 @@ phy_page_node *pya_get_pages_simple(phy_allocator *pa, INT32 pages, BOOL io)
             pages--;
         }
     }
+    
+    vmm.available_mem -= pages;
 
     return a;
 }
@@ -490,6 +504,8 @@ void *pya_get_pages_addr(phy_allocator *pa, ADDR pg_laddr, UINT32 pages, BOOL io
             i++;
         }
     }
+
+    vmm.available_mem -= pages;
 
     return fa;
 }

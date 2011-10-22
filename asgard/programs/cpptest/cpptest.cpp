@@ -58,11 +58,11 @@ public:
 	}
     ~MyMult()
     {
-        test = 0;
+        test--;
     } 
 };
 
-MyAdd add(0xFDAB);
+MyAdd add(56);
 
 int main(int argc, char **argv) 
 {
@@ -71,11 +71,14 @@ int main(int argc, char **argv)
 	MyMult *mul = new MyMult();
 	MyMult *mul2 = new MyMult(6);
 
+    printf("test is %i (should be 45)\n", test);
+
     add2->Method(1);
     add3->Method(2);
     mul->Method(5);
     mul2->Method(6);
 
+    printf("add.Result() = %i (should be 56)\n",add.Result());
     printf("add2.Result() = %i (should be 1)\n",add2->Result());
     printf("add3.Result() = %i (should be 7)\n",add3->Result());
     printf("mul.Result() = %i (should be 0)\n",mul->Result());
@@ -86,7 +89,7 @@ int main(int argc, char **argv)
 	delete mul;
 	delete mul2;
 
-    printf("test = %i (should be 0 if dtors for mul where invoked)\n", test);
+    printf("test = %i (should be 43 if dtors for mul and mul2 where invoked)\n", test);
 
 	return 0;
 } 

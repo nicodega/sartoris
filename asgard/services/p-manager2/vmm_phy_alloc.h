@@ -33,6 +33,7 @@
 #define PHY_NONE              0
 #define PHY_FREE_IO           1
 #define PHY_IO                2
+#define PHY_REMAP             4
 
 /*
 This structure will be on the pages on the allocator. 
