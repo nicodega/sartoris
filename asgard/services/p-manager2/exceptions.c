@@ -76,8 +76,8 @@ void exception_signal(UINT16 task_id, UINT16 thread_id, UINT16 exception, ADDR l
 	{
         if(last_exception_addr == tsk->exeptions.last_exception_addr)
         {
-            ecount++;
-            if(ecount == 3)
+            tsk->exeptions.ecount++;
+            if(tsk->exeptions.ecount == 3)
             {
                 fatal_exception(task_id, exception);
                 return;
@@ -85,7 +85,7 @@ void exception_signal(UINT16 task_id, UINT16 thread_id, UINT16 exception, ADDR l
         }
         else
         {
-            ecount = 1;
+            tsk->exeptions.ecount = 1;
             tsk->exeptions.last_exception_addr = last_exception_addr;
         }
         

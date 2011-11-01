@@ -1,7 +1,7 @@
 CFLAGS += -I"../../include"
 CXXFLAGS += -I"../../include"
 
-subdirs = idle jedi misbehav sigtest atactest fdisk cpptest cat more stest
+subdirs = idle jedi misbehav sigtest atactest fdisk cpptest cat more stest fmaptst
 
 export CC CFLAGS CFLAGS CXX CXXFLAGS LD AS ASFLAGS
 
@@ -25,3 +25,4 @@ clean :
 	$(MAKE) -C cat clean
 	$(MAKE) -C more clean
 	$(MAKE) -C stest clean
+	$(MAKE) -C fmaptst clean

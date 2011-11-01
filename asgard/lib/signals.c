@@ -28,18 +28,20 @@
 #include <lib/malloc.h>
 #include <lib/critical_section.h>
 
+#ifndef _SERVICE_
 extern void _exit(int);
+#endif
 
 static int initialized = 0;
 static unsigned char last_id = 0;
 sighandler_t handlers[256+32];
 struct signal_response *signals[256+32];
-unsigned char ids[32];
+unsigned int ids[32];
 int has_handler = 0;
 
 // this structure will be used to place pending exceptions 
 // for a different thread on a list.
-struct _pending_exe
+typedef struct _pending_exe
 {
     int thread;
     int exception;
@@ -113,6 +115,8 @@ int wait_signal(unsigned short event_type, unsigned short task, unsigned int tim
 	SIGNALHANDLER sigh = prepare_send_signal(event_type, task, param, waitcmd.id);
 
 	send_msg(PMAN_TASK, PMAN_SIGNALS_PORT, &waitcmd);
+
+    struct signal_response *sentry = NULL;
 
 	for(;;)
 	{
@@ -202,7 +206,7 @@ void discard_signal(SIGNALHANDLER sigh)
         || (unsigned int)sigh < (unsigned int)signals 
         || (unsigned int)sigh > (unsigned int)signals + 1024
         || (((unsigned int)sigh - (unsigned int)signals) & 3)) 
-        return 0;
+        return;
 
     index = (((unsigned int)sigh - (unsigned int)signals) >> 2);
 
@@ -355,7 +359,7 @@ void process_signal_responses(int handler)
         ex = pe_first;
         while(ex)
         {
-            if(handlers[ex->exception] && ex->thr_id == currthr)
+            if(handlers[ex->exception] && ex->thread == currthr)
             {
                 handlers[ex->exception](ex->exception);
 
@@ -377,11 +381,11 @@ void process_signal_responses(int handler)
 	{
 		get_msg(signals_port, &signal, &id);
 
-		if(id != PMAN_TASK || signal->command != SIGNAL)
+		if(id != PMAN_TASK || signal.command != SIGNAL)
         {
-            if(signal->command == SET_SIGNAL_STACK)
+            if(signal.command == SET_SIGNAL_STACK)
             {
-                struct set_signal_stack_res *ss_res = (struct set_signal_stack_res*)signal;
+                struct set_signal_stack_res *ss_res = (struct set_signal_stack_res*)&signal;
                 signals_thr_info *ti = NULL;                
 #ifdef SIGNALS_MULTITHREADED
                 wait_mutex(&sigmutex);
@@ -408,7 +412,7 @@ void process_signal_responses(int handler)
 		wait_mutex(&sigmutex);	// we enter the mutex here, because get_msg_count is safe for multithreading
 #endif
 		{
-            if(signal.event_type = PMAN_EXCEPTION && signal.task = PMAN_GLOBAL_EVENT)
+            if(signal.event_type == PMAN_EXCEPTION && signal.task == PMAN_GLOBAL_EVENT)
             {
                 // these signals won't have an sentry..
                 if(handlers[signal.id] && handlers[signal.id] != SIG_IGN)
@@ -421,13 +425,13 @@ void process_signal_responses(int handler)
                     {
                         // add to the pending exceptions list
                         ex = (pending_exe*)malloc(sizeof(pending_exe));
-
+#ifndef _SERVICE_
                         if(!ex)
                             _exit(-1);
-
-                        ex->exception = signal->res;
-                        ex->addr = signal->eaddr;
-                        ex->thread = signal->thr_id;
+#endif
+                        ex->exception = signal.res;
+                        ex->addr = signal.eaddr;
+                        ex->thread = signal.thr_id;
 
                         ex->next = pe_first;
                         ex->prev = NULL;
@@ -444,7 +448,9 @@ void process_signal_responses(int handler)
 #ifdef SIGNALS_MULTITHREADED
                     leave_mutex(&sigmutex);
 #endif
+#ifndef _SERVICE_
                     _exit(-1);
+#endif
                     return;
                 }
             }
@@ -535,7 +541,7 @@ sighandler_t signal(int id, sighandler_t handler)
 	        waitcmd.signal_port = signals_port;
 	        waitcmd.id = id-32;
 
-	        SIGNALHANDLER sigh = prepare_send_signal(event_type, task, param, waitcmd.id);
+	        SIGNALHANDLER sigh = prepare_send_signal(0, waitcmd.task, 0, waitcmd.id);
 
 	        send_msg(PMAN_TASK, PMAN_SIGNALS_PORT, &waitcmd);
         }
@@ -621,7 +627,7 @@ int raise(int id)
 /*
 Set signals stack for current thread
 */
-int sigaltstack(const stack_t *restrict ss, stack_t *restrict oss)
+int sigaltstack(stack_t *ss, stack_t *oss)
 {
     // first see if this thread already has an entry
     int currthr = get_current_thread();
@@ -704,12 +710,12 @@ int sigaltstack(const stack_t *restrict ss, stack_t *restrict oss)
     /*
     Tell pman to change our stack.
     */
-    set_signal_stack_cmd cmd;
+    struct set_signal_stack_cmd cmd;
 
     cmd.command = SET_SIGNAL_STACK;
     cmd.thr_id = currthr;
-    cmd.stack = (SS == NULL)? NULL : ss->ss_sp;
-    cmd.size = (SS == NULL)? 0 : (ss->ss_size >> 12);
+    cmd.stack = (ss == NULL)? NULL : ss->ss_sp;
+    cmd.size = (ss == NULL)? 0 : (ss->ss_size >> 12);
     cmd.ret_port  = signals_port;
 
     send_msg(PMAN_TASK, PMAN_SIGNALS_PORT, &cmd);

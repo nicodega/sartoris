@@ -26,6 +26,8 @@ bits 32
 
 ;; call_with_ss_swap(void *addr, void *ss)
 
+global call_with_ss_swap
+
 call_with_ss_swap:
 
     mov eax, [esp + 4]  ;; put addr on eax

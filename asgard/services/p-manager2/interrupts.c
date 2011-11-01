@@ -412,6 +412,6 @@ void int_signal_remove(struct thr_signal *signal)
         if(ois) 
             ois->inext = is->inext;
         else
-            interrupt_signals[signal->signal_param].first = is->next;
+            interrupt_signals[signal->signal_param].first = is->inext;
     }
 }

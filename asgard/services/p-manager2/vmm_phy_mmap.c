@@ -78,7 +78,7 @@ BOOL vmm_phy_mmap(struct pm_task *task, ADDR py_start, ADDR py_end, ADDR lstart,
     mreg->prev = NULL;
 	mreg->owner_task = task->id;
 
-    // find a free if for the memory region
+    // find a free id for the memory region
     if(!rb_free_value(&task->vmm_info.regions_id, &mreg->tsk_id_node.value))
 	{
 		kfree(mreg);
