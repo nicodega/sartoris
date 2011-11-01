@@ -96,19 +96,19 @@ struct discard_signal_cmd
 struct set_signal_handler_cmd
 {
 	unsigned char command;		// set to SET_SIGNAL_HANDLER
-	unsigned short exceptions_port;
+	unsigned short thr_id;
     unsigned char ret_port;
-	unsigned int padding;
+    unsigned int exceptions_port;
 	void *handler_ep;           // the entry point of the signals handler
-	unsigned int padding1;
+	void *stack;
 } PACKED_ATT;
 
 struct set_signal_handler_res
 {
 	unsigned char command;		// set to SET_SIGNAL_HANDLER
-	unsigned short padding;
+	unsigned short thr_id;
     unsigned char result;
-	unsigned int padding[3];
+	unsigned int padding2[3];
 } PACKED_ATT;
 
 struct set_signal_stack_cmd

@@ -1170,6 +1170,9 @@ char *mapioerr(int ret)
 	}
 }
 
+/*******************************************************/
+/****************** INTERNAL FUNCTIONS *****************/
+/*******************************************************/
 int send_fs(int task, int *msg, int *res, int port)
 {
 	((struct stdfss_cmd *)msg)->thr_id = get_current_thread();

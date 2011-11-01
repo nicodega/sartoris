@@ -88,7 +88,7 @@ typedef void (*sighandler_t)(int signum);
 
 sighandler_t signal(int id, sighandler_t handler);
 int raise(int id);
-int sigaltstack(const stack_t *restrict ss, stack_t *restrict oss);
+int sigaltstack(stack_t *ss, stack_t *oss);
 
 #define SIG_IGN (sighandler_t)0
 #define SIG_DFL (sighandler_t)1

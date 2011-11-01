@@ -7,7 +7,7 @@ CXXFLAGS+= -I"../include"
 dependencies = sprintf.d printf.d init.d debug.d iolib.d format.d dirlib.d m_malloc.d critical_section.d io.d signals.d bmalloc.d new.d
 
 baseobjects = proc_entry.o start.o int.o reboot.o scheduler.o sprintf.o printf.o init.o debug.o iolib.o format.o dirlib.o structures parameters.o \
-critical_section.o m_malloc.o pm_malloc.o bmalloc.o pbmalloc.o rawpiolib.o io.o signals_call.o signals.o psignals.o new.o 
+critical_section.o m_malloc.o pm_malloc.o bmalloc.o pbmalloc.o rawpiolib.o io.o signals_call.o signals.o psignals.o ssignals.o new.o 
 
 all : $(baseobjects) stdlibcpp.o stdlib.o malloc.o libstest.so
 	
@@ -53,11 +53,17 @@ iolib.o : iolib.c ../include/lib/iolib.h
 piolib.o : iolib.c ../include/lib/iolib.h
 	$(CC) -c iolib.c $(CFLAGS) -o piolib.o -U IOLIB_MULTITHREADED
 	
-signals.o : signals.c ../include/lib/signals.h
-	$(CC) -c signals.c $(CFLAGS) -o signals.o -D SIGNALS_MULTITHREADED
+signals.o : signals.c ../include/lib/signals.h signals_call.s
+	$(CC) -c signals.c $(CFLAGS) -o signalsnc.o -D SIGNALS_MULTITHREADED
+	$(LD) -i signals_call.o signalsnc.o --Map signals.map  -o signals.o
 
-psignals.o : signals.c ../include/lib/signals.h
-	$(CC) -c signals.c $(CFLAGS) -o psignals.o -U SIGNALS_MULTITHREADED
+ssignals.o : signals.c ../include/lib/signals.h signals_call.s
+	$(CC) -c signals.c $(CFLAGS) -o ssignalsnc.o -D SIGNALS_MULTITHREADED -D _SERVICE_
+	$(LD) -i signals_call.o ssignalsnc.o --Map ssignals.map  -o ssignals.o
+
+psignals.o : signals.c ../include/lib/signals.h signals_call.s
+	$(CC) -c signals.c $(CFLAGS) -o psignalsnc.o -U SIGNALS_MULTITHREADED
+	$(LD) -i signals_call.o psignalsnc.o --Map psignals.map  -o psignals.o
 
 rawpiolib.o : rawiolib.c ../include/lib/iolib.h
 	$(CC) -c rawiolib.c $(CFLAGS) -o rawpiolib.o -U IOLIB_MULTITHREADED

@@ -272,10 +272,10 @@ void wait_signal(struct wait_for_signal_cmd *signal, BOOL blocking, UINT16 task)
 
 void set_signal_handler(struct set_signal_handler_cmd *cmd, UINT16 task)
 {
-    struct set_esignal_handler_res res;
+    struct set_signal_handler_res res;
     struct pm_task *tsk = NULL;
     
-    res.command = SET_ESIGNAL_HANDLER;
+    res.command = SET_SIGNAL_HANDLER;
     res.thr_id = cmd->thr_id;
     res.result = SIGNAL_FAILED;
 
@@ -300,7 +300,7 @@ void set_signal_handler(struct set_signal_handler_cmd *cmd, UINT16 task)
 	}
     
     tsk->signals.handler_ep = cmd->handler_ep;
-    tsk->exeptions.exceptions_port = cmd.exceptions_port;
+    tsk->exeptions.exceptions_port = cmd->exceptions_port;
     
     res.result = SIGNAL_OK;
     send_msg(task, cmd->ret_port, &res);
@@ -308,10 +308,11 @@ void set_signal_handler(struct set_signal_handler_cmd *cmd, UINT16 task)
 
 void set_signal_stack(struct set_signal_stack_cmd *cmd, UINT16 task)
 {
-    struct set_esignal_handler_res res;
+    struct set_signal_handler_res res;
     struct pm_thread *thread = thr_get(cmd->thr_id);
+    struct pm_task *tsk = NULL;
     
-    res.command = SET_ESIGNAL_HANDLER;
+    res.command = SET_SIGNAL_HANDLER;
     res.thr_id = cmd->thr_id;
     res.result = SIGNAL_FAILED;
 
@@ -332,7 +333,7 @@ void set_signal_stack(struct set_signal_stack_cmd *cmd, UINT16 task)
 		return;
 	}
 
-    tsk->signals.stack = cmd->stack;
+    thread->signals.stack = cmd->stack;
     
     res.result = SIGNAL_OK;
     send_msg(task, cmd->ret_port, &res);
