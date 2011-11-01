@@ -27,6 +27,8 @@ global get_msg
 global send_msg
 global get_msg_count
 	
+global ret_from_int
+
 global share_mem
 global claim_mem
 global read_mem
@@ -203,3 +205,11 @@ ttrace_mem_write:
 	call TTRACE_MEM_WRITE : 0x00000000
 	pop ebp
 	ret
+
+ret_from_int:
+	push ebp
+	mov ebp, esp
+	call RET_FROM_INT : 0x00000000
+	pop ebp
+	ret
+
