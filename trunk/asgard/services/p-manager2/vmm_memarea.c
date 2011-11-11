@@ -65,7 +65,7 @@ ma_node *ma_collition(memareas *t, UINT32 low, UINT32 high)
 }
 
 /*
-Find a colliding memory region.
+Find all colliding memory regions.
 This function runs in O(I + log(n)) time on the worst case,
 where I is the ammount of intervals overlapping the provided
 interval.
@@ -90,7 +90,7 @@ void ma_overlaps(memareas *t, UINT32 low, UINT32 high, BOOL (*callback)(ma_node 
 
 		    if(current->link[0] && current->link[0]->max > nlow)
 			    current = current->link[0];
-		    else
+		    else if(current->link[1])
 			    current = current->link[1];
 	    }
 
@@ -98,7 +98,7 @@ void ma_overlaps(memareas *t, UINT32 low, UINT32 high, BOOL (*callback)(ma_node 
         if(!callback(lastn)) return;
 
         // update nlow, setting nlow with lastn->max
-        nlow = lastn->max;
+        if(lastn) nlow = lastn->max;
         
     }while(lastn);
 }

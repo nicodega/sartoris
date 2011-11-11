@@ -98,7 +98,7 @@ void exception_signal(UINT16 task_id, UINT16 thread_id, UINT16 exception, ADDR l
 
 		evt.command = EVENT;
 		evt.event_type = PMAN_EXCEPTION;
-		evt.task = PMAN_GLOBAL_EVENT;
+		evt.task = PMAN_TASK;
 		evt.event_res = (UINT32)exception;
 
 		send_signal_ex(&signal, &evt, SIGNAL_OK, last_exception_addr);
