@@ -47,10 +47,9 @@ int has_handler = 0;
 #define SIGNALS_IDX2HANDLER(idx) (idx+MAX_EXCEPTIONS)
 #define SIGNALS_HANDLER2IDX(h) (h-MAX_EXCEPTIONS)
 
-#define VALID_SIGNAL(sigh) (sigh == NULL \
+#define VALID_SIGNAL(sigh) (!(sigh == NULL \
         || (unsigned int)sigh < (unsigned int)signals \
-        || (unsigned int)sigh >= (unsigned int)signals + (MAX_SIGNALS*sizeof(unsigned int)) \
-        || (((unsigned int)sigh - ((unsigned int)signals) & 3)))
+        || (unsigned int)sigh >= (unsigned int)signals + (MAX_SIGNALS*sizeof(unsigned int))))
 
 // this structure will be used to place pending exceptions 
 // for a different thread on a list.
@@ -129,6 +128,9 @@ void remove_signal(SIGNALHANDLER sigh)
 param1 and param2 can be set to SIGNAL_IGNORE_PARAM and timeout to SIGNAL_TIMEOUT_INFINITE. */
 int wait_signal(unsigned short event_type, unsigned short task, unsigned int timeout, unsigned int param, unsigned int *res)
 {	
+#ifdef DEBUG
+    print("wait_signal e: %i t: %i, tm: %i, p: %i\n", event_type, task, timeout, param);
+#endif
 	struct wait_for_signal_cmd waitcmd;
 	struct signal_cmd signal;
 	int sender_id, index;
@@ -154,6 +156,9 @@ int wait_signal(unsigned short event_type, unsigned short task, unsigned int tim
 
 		if(chkres != 0)
 		{
+#ifdef DEBUG
+print("wait_signal FINISHED res: %i\n", *res);
+#endif
             remove_signal(sigh);
 
 			return chkres == -1;		// finished.
@@ -165,7 +170,9 @@ int wait_signal(unsigned short event_type, unsigned short task, unsigned int tim
 SIGNALHANDLER wait_signal_async(unsigned short event_type, unsigned short task, unsigned int timeout, unsigned int param)
 {
 	struct wait_for_signal_cmd waitcmd;
-
+    #ifdef DEBUG
+print("wait_signal_async e: %i t: %i, tm: %i, p: %i\n", event_type, task, timeout, param);
+#endif
 	waitcmd.command = WAIT_FOR_SIGNAL_NBLOCK;
 	waitcmd.thr_id = get_current_thread();
 	waitcmd.event_type = event_type;
@@ -178,7 +185,9 @@ SIGNALHANDLER wait_signal_async(unsigned short event_type, unsigned short task, 
 	SIGNALHANDLER sigh = prepare_send_signal(event_type, task, param, waitcmd.id);
 
 	send_msg(PMAN_TASK, PMAN_SIGNALS_PORT, &waitcmd);
-
+    #ifdef DEBUG
+print("wait_signal_async END\n");
+#endif
 	return sigh;
 }
 
@@ -186,12 +195,18 @@ SIGNALHANDLER wait_signal_async(unsigned short event_type, unsigned short task, 
 int check_signal(SIGNALHANDLER sigh, unsigned int *res)
 {
 	int ret = 0;
-
+    #ifdef DEBUG
+print("check_signal BEGIN\n");
+#endif
     if(!VALID_SIGNAL(sigh)) 
         return 0;
-
+    #ifdef DEBUG
+print("check_signal 1\n");
+#endif
 	process_signal_responses(0);
-	
+	#ifdef DEBUG
+print("check_signal 2\n");
+#endif
 #ifdef SIGNALS_MULTITHREADED
 	wait_mutex(&sigmutex);
 #endif
@@ -199,6 +214,9 @@ int check_signal(SIGNALHANDLER sigh, unsigned int *res)
 
 	if(sentry->received)
 	{
+        #ifdef DEBUG
+print("check_signal RECEIVED ret: %i\n", sentry->ret == SIGNAL_TIMEOUT);
+#endif
 		if(res != NULL) *res = sentry->res;
 		
 		if(sentry->ret == SIGNAL_TIMEOUT) 
@@ -209,7 +227,9 @@ int check_signal(SIGNALHANDLER sigh, unsigned int *res)
 #ifdef SIGNALS_MULTITHREADED
 	leave_mutex(&sigmutex);
 #endif
-
+    #ifdef DEBUG
+print("check_signal finished ret: %i\n", ret);
+#endif
 	return ret;
 }
 
@@ -217,11 +237,16 @@ void discard_signal(SIGNALHANDLER sigh)
 {
 	struct signal_response *sentry = NULL;
     int index;
-
+    #ifdef DEBUG
+print("discard_signal BEGIN sigh: %x\n", sigh);
+#endif
     if(!VALID_SIGNAL(sigh)) 
         return;
-
+    
+    #ifdef DEBUG
+print("discard_signal 1\n");
     index = SIGNALS_SIGH2IDX(sigh);
+#endif
 
 #ifdef SIGNALS_MULTITHREADED
 	wait_mutex(&sigmutex);
@@ -235,9 +260,15 @@ void discard_signal(SIGNALHANDLER sigh)
 #ifdef SIGNALS_MULTITHREADED
 	leave_mutex(&sigmutex);
 #endif
-
+    
+    #ifdef DEBUG
+print("discard_signal 2\n");
+#endif
     if(!sentry) return;
-
+    
+    #ifdef DEBUG
+print("discard_signal 3\n");
+#endif
     if(sentry->received == 0)
     {
 	    struct discard_signal_cmd discmd;
@@ -255,14 +286,23 @@ void discard_signal(SIGNALHANDLER sigh)
 	    process_signal_responses(0);	// just in case the signal was sent while we sent discard msg
     }
     
+    #ifdef DEBUG
+print("discard_signal 4\n");
+#endif
     free_id(sentry->id);
 	free(sentry);
+    
+    #ifdef DEBUG
+print("discard_signal END\n");
+#endif
 }
 
 void send_event(unsigned short task, unsigned short event_type, unsigned int param, unsigned int res)
 {
 	struct event_cmd evntcmd;
-
+    #ifdef DEBUG
+print("send_event BEGIN t: %i et: %i p: %i res: %i\n", task, event_type, param, res);
+#endif
 	evntcmd.command = EVENT;
 	evntcmd.event_type = event_type;
 	evntcmd.param = param;
@@ -270,6 +310,9 @@ void send_event(unsigned short task, unsigned short event_type, unsigned int par
 	evntcmd.task = task;
 	
 	send_msg(PMAN_TASK, PMAN_EVENTS_PORT, &evntcmd);
+    #ifdef DEBUG
+print("send_event END\n");
+#endif
 }
 
 /* Internal Helper functions*/
@@ -278,7 +321,9 @@ unsigned char get_id()
 #ifdef SIGNALS_MULTITHREADED
 	wait_mutex(&sigmutex);
 #endif
-
+    #ifdef DEBUG
+print("get_id BEGIN\n");
+#endif
     int i = 0, j = 0;
 
     while(ids[i] == 0xFFFFFFFF && i < 32){i++;}
@@ -301,15 +346,20 @@ unsigned char get_id()
 #ifdef SIGNALS_MULTITHREADED
 	leave_mutex(&sigmutex);
 #endif
-
+    #ifdef DEBUG
+print("get_id END id: %i\n", (i << 5) + (32 - j));
+#endif
     // found a free id
 	return (i << 5) + (32 - j);
 }
 
 void free_id(unsigned char id)
 {
+    #ifdef DEBUG
+print("free_id BEGIN id: %i\n", id);
+#endif
     int i = (id >> 5);
-    int j = (31 - (id & 31));
+    int j = 32 - (id - (i << 5));
 
 #ifdef SIGNALS_MULTITHREADED
 	wait_mutex(&sigmutex);
@@ -320,13 +370,18 @@ void free_id(unsigned char id)
 #ifdef SIGNALS_MULTITHREADED
 	leave_mutex(&sigmutex);
 #endif
+    #ifdef DEBUG
+print("free_id END id: %i\n", (i << 5) + (32 - j));
+#endif
 }
 
 /* This function must be invoked before sending the signal */
 SIGNALHANDLER prepare_send_signal(unsigned short event_type, unsigned short task, unsigned int param, unsigned char id)
 {
 	int currthr = get_current_thread();
-
+    #ifdef DEBUG
+print("prepare_send_signal e: %i, t: %i, p: %i, id: %i\n", event_type, task, param, id);
+#endif
 	// create an entry on the signal waiting list
 	CPOSITION entry = NULL, it = NULL;
 	struct signal_response *sentry = NULL;
@@ -335,6 +390,9 @@ SIGNALHANDLER prepare_send_signal(unsigned short event_type, unsigned short task
 
 	if(sentry == NULL)
     {
+        #ifdef DEBUG
+print("prepare_send_signal ERROR\n");
+#endif
     	return (SIGNALHANDLER)NULL;
     }
 
@@ -355,7 +413,9 @@ SIGNALHANDLER prepare_send_signal(unsigned short event_type, unsigned short task
 #ifdef SIGNALS_MULTITHREADED
 	leave_mutex(&sigmutex);
 #endif
-    
+    #ifdef DEBUG
+print("prepare_send_signal END sigh: %x\n", &signals[id]);
+#endif
 	return &signals[id];
 }
 
@@ -368,11 +428,17 @@ void process_signal_responses(int handler)
 	CPOSITION it = NULL;
 	struct signal_response *sentry;
     pending_exe *ex = NULL;
-
+    
+    #ifdef DEBUG
+print("process_signal_responses BEGIN h: %i\n", handler);
+#endif
     // process any pending exceptions for this thread
     // (exception signals processed on other thread)
     if(handler && pe_first)
     {
+        #ifdef DEBUG
+print("process_signal_responses PENDING EXCEPTIONS\n");
+#endif
         ex = pe_first;
         while(ex)
         {
@@ -396,8 +462,12 @@ void process_signal_responses(int handler)
     int msgs = get_msg_count(signals_port);
 
 	while(msgs > 0)
-	{
+	{        
 		get_msg(signals_port, &signal, &id);
+
+        #ifdef DEBUG
+print("process_signal_responses MESSAGE ARRIVED from task: %i signalcmd: %i id: %i\n", id, signal.command, signal.id);
+#endif
 
 		if(id != PMAN_TASK || signal.command != SIGNAL)
         {
@@ -432,6 +502,9 @@ void process_signal_responses(int handler)
 		{
             if(signal.event_type == PMAN_EXCEPTION && signal.task == PMAN_TASK)
             {
+                #ifdef DEBUG
+print("process_signal_responses SIGNAL IS EXCEPTION\n");
+#endif
                 // these signals won't have an sentry..
                 if(handlers[signal.res] && handlers[signal.res] != SIG_IGN)
                 {
@@ -476,6 +549,9 @@ void process_signal_responses(int handler)
             // see if the signal was sent
             if(signals[signal.id])
             {
+                #ifdef DEBUG
+print("process_signal_responses ID IS WAITING\n");
+#endif
                 sentry = signals[signal.id];
 
                 if( sentry->thr == signal.thr_id 
@@ -483,6 +559,9 @@ void process_signal_responses(int handler)
 					&& sentry->task == signal.task
 					&& sentry->id == signal.id)
 				{
+                    #ifdef DEBUG
+print("process_signal_responses RECEIVED!\n");
+#endif
 					// signal received
 					sentry->received = 1;
 					sentry->res = signal.res;
@@ -493,6 +572,9 @@ void process_signal_responses(int handler)
 #endif
                 if(handlers[SIGNALS_IDX2HANDLER(id)] && handler && signal.thr_id == currthr)
                 {
+                    #ifdef DEBUG
+print("process_signal_responses INVOKING HANDLER\n");
+#endif
                     handlers[SIGNALS_IDX2HANDLER(id)](SIGNALS_IDX2HANDLER(id));
                 }
             }
@@ -505,6 +587,9 @@ void process_signal_responses(int handler)
 		}
         msgs--;
 	}
+    #ifdef DEBUG
+print("process_signal_responses END\n");
+#endif
 }
 
 /*

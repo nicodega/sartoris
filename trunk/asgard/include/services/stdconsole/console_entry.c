@@ -20,7 +20,7 @@
 
 void console(void);
 
-void console_entry()
+void _start()
 {
     console();
 }

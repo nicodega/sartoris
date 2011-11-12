@@ -88,6 +88,8 @@ int int_enable_irq(struct ata_channel *channel)
     {
         reschedule();
     }
+        
+    discard_signal(sigh);
 	
 	if (!res) 
 	{
