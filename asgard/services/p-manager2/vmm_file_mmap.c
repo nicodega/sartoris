@@ -38,7 +38,7 @@ INT32 vmm_fmap_realeased_callback(struct fsio_event_source *iosrc, INT32 ioret);
 INT32 vmm_fmap_flushed_callback(struct fsio_event_source *iosrc, INT32 ioret);
 INT32 vmm_fmap_seek_callback(struct fsio_event_source *iosrc, INT32 ioret);
 INT32 vmm_fmap_read_callback(struct fsio_event_source *iosrc, INT32 ioret);
-INT32 vmm_fmap_closed_callback(struct pm_task *task, INT32 ioret);
+INT32 vmm_fmap_closed_callback(struct pm_task *task, INT32 ioret, UINT32 ret);
 
 /* Functions Implementation */
 BOOL vmm_page_filemapped(struct pm_task *task, struct pm_thread *thread, ADDR page_laddr, struct vmm_memory_region *mreg)
@@ -274,7 +274,7 @@ BOOL vmm_fmap_release(struct pm_task *task, ADDR lstart)
             break;
         case 1:
             if(task->command_inf.callback != NULL) 
-		        task->command_inf.callback(task, IO_RET_OK);
+		        task->command_inf.callback(task, IO_RET_OK, 0);
             break;
         default:
             break;
@@ -400,7 +400,7 @@ int vmm_fmap_task_closing(struct pm_task *task, struct vmm_memory_region *mreg)
 }
 
 /* Callback invoked when closing an fmap because the task is being killed */
-INT32 vmm_fmap_closed_callback(struct pm_task *task, INT32 ioret)
+INT32 vmm_fmap_closed_callback(struct pm_task *task, INT32 ioret, UINT32 ret)
 {
     // continue closing the task
     vmm_close_task(task);
@@ -453,7 +453,7 @@ INT32 fmap_takeover_callback(struct fsio_event_source *iosrc, INT32 ioret)
 	}
 
 	if(task->command_inf.callback != NULL) 
-		task->command_inf.callback(task, ioret);
+		task->command_inf.callback(task, ioret, 0);
 
 	return 1;
 }
@@ -510,11 +510,11 @@ INT32 vmm_fmap_flush_callback(struct fsio_event_source *iosrc, INT32 ioret)
             {
                 case 0:
                     if(task->command_inf.callback != NULL) 
-	                    task->command_inf.callback(task, IO_RET_ERR);
+	                    task->command_inf.callback(task, IO_RET_ERR, -1);
                     break;
                 case 1:
                     if(task->command_inf.callback != NULL) 
-	                    task->command_inf.callback(task, IO_RET_OK);
+	                    task->command_inf.callback(task, IO_RET_OK, -1);
                     break;
                 default:
                     break;
@@ -606,11 +606,11 @@ INT32 vmm_fmap_flush_callback(struct fsio_event_source *iosrc, INT32 ioret)
             {
                 case 0:
                     if(task->command_inf.callback != NULL) 
-	                    task->command_inf.callback(task, IO_RET_ERR);
+	                    task->command_inf.callback(task, IO_RET_ERR, 0);
                     break;
                 case 1:
                     if(task->command_inf.callback != NULL) 
-	                    task->command_inf.callback(task, IO_RET_OK);
+	                    task->command_inf.callback(task, IO_RET_OK, 0);
                     break;
                 default:
                     break;
@@ -620,7 +620,7 @@ INT32 vmm_fmap_flush_callback(struct fsio_event_source *iosrc, INT32 ioret)
 
 		/* Failed */
         if(task->command_inf.callback != NULL) 
-	        task->command_inf.callback(task, ioret);
+	        task->command_inf.callback(task, ioret, 0);
 	}
 	return 0;
 }
@@ -670,7 +670,7 @@ INT32 vmm_fmap_flush_seek_callback(struct fsio_event_source *iosrc, INT32 ioret)
 
 		/* Failed */
 		if(task->command_inf.callback != NULL) 
-			task->command_inf.callback(task, ioret);
+			task->command_inf.callback(task, ioret, 0);
 	}
 	return 0;
 }
@@ -704,7 +704,7 @@ INT32 vmm_fmap_realeased_callback(struct fsio_event_source *iosrc, INT32 ioret)
 
 		/* Invoke command module callback */
 		if(task->command_inf.callback != NULL) 
-			task->command_inf.callback(task, ioret);
+			task->command_inf.callback(task, ioret, 0);
 
 		return 1;
 	}
@@ -712,7 +712,7 @@ INT32 vmm_fmap_realeased_callback(struct fsio_event_source *iosrc, INT32 ioret)
 	{
 		/* Failed */
 		if(task->command_inf.callback != NULL) 
-			task->command_inf.callback(task, ioret);
+			task->command_inf.callback(task, ioret, 0);
 
 		return 0;
 	}
@@ -729,7 +729,7 @@ INT32 vmm_fmap_flushed_callback(struct fsio_event_source *iosrc, INT32 ioret)
     if(task == NULL) return 0;
 
 	if(task->command_inf.callback != NULL) 
-			task->command_inf.callback(task, ioret);
+			task->command_inf.callback(task, ioret, 0);
 
 	return 1;
 }

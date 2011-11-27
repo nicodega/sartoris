@@ -77,8 +77,6 @@ void cmd_queue_remove(struct pending_command *cmd)
 	command_queue.total--;
 }
 
-
-
 void cmd_queue_remove_bytask(struct pm_task *task)
 {
 	struct pending_command *cmd = command_queue.first, *next;

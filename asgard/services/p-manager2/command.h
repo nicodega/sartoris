@@ -51,7 +51,7 @@ struct command_info
 	UINT16 command_ret_port;   /* Return Port for the Destroy Response (Ret value 
                                will be sent)                                         */
 	struct pending_command *executing;	/* Command being executed for this task      */
-	INT32 (*callback)(struct pm_task *task, INT32 ioret);	// Callback function for task commands.
+	INT32 (*callback)(struct pm_task *task, INT32 ioret, UINT32 ret_value);	        // Callback function for task commands.
 } PACKED_ATT;
 
 /* Timeout (in ticks) for service shutdown */

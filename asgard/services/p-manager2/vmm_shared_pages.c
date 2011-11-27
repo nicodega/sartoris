@@ -468,7 +468,7 @@ void vmm_shared_create_end(struct pm_task *task, struct vmm_shared_params *param
         mreg->owner_task = task->id;
 	    mreg->descriptor = desc;
 	    mreg->type = VMM_MEMREGION_SHARED;
-	    mreg->tsk_node.low = params->params[3];
+	    mreg->tsk_node.low = params->params[3]; 
 	    mreg->tsk_node.high = lend;
 	    mreg->flags = params->params[4];
 
@@ -500,6 +500,11 @@ void vmm_shared_create_end(struct pm_task *task, struct vmm_shared_params *param
 
 		    lstart += 0x1000;
 	    }
+
+        if(mreg) kfree(mreg);
+        mreg = NULL;
+        if(desc) kfree(desc);
+        desc = NULL;
     }
 
     /* Restore task state */
@@ -519,7 +524,7 @@ void vmm_shared_create_end(struct pm_task *task, struct vmm_shared_params *param
 	/* Invoke command callback */
 	task->command_inf.ret_value = (desc)? ( (task->id << 16) | desc->id) : 0;
 	if(task->command_inf.callback != NULL)
-			task->command_inf.callback(task, (params->params[1] == params->params[0] && desc && mreg)? IO_RET_OK : IO_RET_ERR);
+			task->command_inf.callback(task, ((params->params[1] == params->params[0] && desc && mreg)? IO_RET_OK : IO_RET_ERR), 0);
 }
 
 /*
@@ -804,7 +809,7 @@ UINT32 vmm_share_map_callback(struct pm_task *task, UINT32 ioret)
         /* Invoke command callback */
         task->command_inf.ret_value = 0;
 	    if(task->command_inf.callback != NULL)
-			    task->command_inf.callback(task, IO_RET_OK);
+			    task->command_inf.callback(task, IO_RET_OK, 0);
         return 0;
     }
 
@@ -824,7 +829,7 @@ UINT32 vmm_share_map_callback(struct pm_task *task, UINT32 ioret)
         /* Invoke command callback */
         task->command_inf.ret_value = 0;
 	    if(task->command_inf.callback != NULL)
-			    task->command_inf.callback(task, IO_RET_OK);
+			    task->command_inf.callback(task, IO_RET_OK, 0);
         return 0;
     }
 	opdir = otask->vmm_info.page_directory;
@@ -879,7 +884,7 @@ UINT32 vmm_share_map_callback(struct pm_task *task, UINT32 ioret)
 	/* Invoke command callback */
     task->command_inf.ret_value = 1;
 	if(task->command_inf.callback != NULL)
-			task->command_inf.callback(task, IO_RET_OK);
+			task->command_inf.callback(task, IO_RET_OK, 0);
 
 	kfree(params);
 
