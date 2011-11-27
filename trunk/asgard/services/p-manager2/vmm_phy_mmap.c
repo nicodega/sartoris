@@ -33,7 +33,7 @@ UINT32 check_low;
 UINT32 check_high;
 int result;
 
-void wmm_phy_checkpf(rbnode *n)
+void vmm_phy_checkpf(rbnode *n)
 {
     struct pm_thread *thread = thr_get(n->value2);
 
@@ -96,7 +96,6 @@ BOOL vmm_phy_mmap(struct pm_task *task, ADDR py_start, ADDR py_end, ADDR lstart,
 	}
 
     // check there are no other memory regions overlapping on the same task
-    // on exclusive mode
     if(ma_collition(&task->vmm_info.regions, (UINT32)lstart, (UINT32)lend))
     {
 		kfree(mreg);
@@ -107,7 +106,7 @@ BOOL vmm_phy_mmap(struct pm_task *task, ADDR py_start, ADDR py_end, ADDR lstart,
     check_low = (UINT32)laddr;
     check_high = (UINT32)lend;
     result = 0;
-    rb_inorder(&task->vmm_info.wait_root, wmm_phy_checkpf);
+    rb_inorder(&task->vmm_info.wait_root, vmm_phy_checkpf);
 
     if(result)
     {
@@ -262,9 +261,9 @@ BOOL vmm_phy_mmap(struct pm_task *task, ADDR py_start, ADDR py_end, ADDR lstart,
 	
 	rb_insert(&task->vmm_info.regions_id, &mreg->tsk_id_node, FALSE);
     ma_insert(&task->vmm_info.regions, &mreg->tsk_node);
-
+    
     if(task->command_inf.callback != NULL) 
-		task->command_inf.callback(task, IO_RET_OK);
+		task->command_inf.callback(task, IO_RET_OK, (UINT32)py_start);
 	
 	return TRUE;
 }
@@ -312,7 +311,7 @@ void vmm_phy_umap(struct pm_task *task, ADDR lstart, int free_io)
 	kfree(mreg);
 
     if(task->command_inf.callback != NULL) 
-		task->command_inf.callback(task, IO_RET_OK);
+		task->command_inf.callback(task, IO_RET_OK, 0);
 
 	return;
 }

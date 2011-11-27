@@ -42,12 +42,14 @@ int thr_upper_bound[] = { MAX_THR, MAX_THR };
 BOOL shutting_down = FALSE;
 extern int pman_stage;
 
+int process_queue_msg(struct pending_command *cmd);
+
 /***************************** CALLBACKS ******************************************/
 INT32 cmd_task_fileclosed_callback(struct fsio_event_source *iosrc, INT32 ioret);
 INT32 cmd_swap_freed_callback(struct fsio_event_source *iosrc, INT32 ioret);
 UINT32 cmd_fmap_callback(struct pm_task *task, INT32 ioret);
 INT32 cmd_fmap_finish_callback(struct pm_task *task, INT32 ioret);
-INT32 cmd_finished__callback(struct pm_task *task, INT32 ioret);
+INT32 cmd_finished__callback(struct pm_task *task, INT32 ioret, UINT32 ret);
 /**********************************************************************************/
 
 void cmd_init()
@@ -73,9 +75,8 @@ void cmd_process_msg()
 	INT32 task_id, retval;
 	struct pm_task *tsk;
 	struct pm_thread *thr;
-	struct fmap_params params;
 	UINT16 destroy_task_id;
-	struct pending_command *cmd = NULL;
+	struct pending_command *cmd = NULL, *ocmd = NULL;
     struct pm_msg_phymem_response pres;
 				
 	/*
@@ -340,241 +341,153 @@ void cmd_process_msg()
 
 	while(cmd != NULL) 
 	{
-		pman_print_and_stop("COMMAND.c: Got a queue COMMAND! STOP ");
-
-		msg = cmd->msg;
-		task_id = (cmd->sender_task & 0x0000FFFF);
-
-		switch(msg.pm_type) 
-		{
-			/* File mapping functions */            
-			case PM_FMAP: 
-			{
-				tsk = tsk_get(task_id);
-
-                if(!tsk) continue;
-
-				if(tsk->command_inf.executing != NULL)
-					break;
-
-				cmd_queue_remove(cmd);
-				tsk->command_inf.executing = cmd;
-
-				if(tsk->state == TSK_NORMAL)
-				{
-					if(read_mem(((struct pm_msg_fmap*)&msg)->params_smo, 0, sizeof(params), &params) != SUCCESS)
-					{
-						cmd_inform_result(&msg, task_id, PM_BAD_SMO, 0, 0);
-						continue;
-					}
-
-					tsk->command_inf.callback = cmd_finished__callback;
-					tsk->command_inf.command_ret_port = msg.response_port;
-					tsk->command_inf.command_req_id = msg.req_id;
-					tsk->command_inf.command_sender_id = task_id;
-
-					retval = vmm_fmap(task_id, params.fileid, params.fs_service, (ADDR)params.addr_start, params.length, params.perms, params.offset);
-					
-					if(retval != PM_OK)
-						cmd_inform_result(&msg, task_id, PM_ERROR, 0, 0);					
-				}
-				else
-				{
-                    if(!(tsk->flags & TSK_FLAG_SERVICE))
-                        cmd_inform_result(&msg, task_id, PM_NO_PERMISSION, 0, 0);
-                    else
-                        cmd_inform_result(&msg, task_id, PM_ERROR, 0, 0);
-				}
-
-				break;
-			}
-			case PM_FMAP_FINISH: 
-			{
-				/* Close MMAP */
-				tsk = tsk_get(task_id);
-
-                if(!tsk) continue;
-
-				if(tsk->command_inf.executing != NULL)
-					break;
-				cmd_queue_remove(cmd);
-				tsk->command_inf.executing = cmd;
-
-				if(tsk->state == TSK_NORMAL)
-				{
-					tsk->command_inf.callback = cmd_finished__callback;
-					if(!vmm_fmap_release(tsk, ((struct pm_msg_fmap_finish*)&msg)->address))
-                        cmd_inform_result(&msg, task_id, PM_ERROR, 0, 0);
-				}
-				else
-				{
-					cmd_inform_result(&msg, task_id, PM_ERROR, 0, 0);
-				}
-				
-				break;
-			}
-			case PM_FMAP_FLUSH: 
-			{
-				/* Flush FMMAP */
-				tsk = tsk_get(task_id);
-
-                if(!tsk) continue;
-
-				if(tsk->command_inf.executing != NULL)
-					break;
-				cmd_queue_remove(cmd);
-				tsk->command_inf.executing = cmd;
-
-				if(tsk->state == TSK_NORMAL)
-				{
-					tsk->command_inf.callback = cmd_finished__callback;
-					vmm_fmap_flush(tsk, ((struct pm_msg_fmap_finish*)&msg)->address);
-				}
-				else
-				{
-					cmd_inform_result(&msg, task_id, PM_ERROR, 0, 0);
-				}
-				
-				break;
-			}
-			/* Physical mapping functions */
-			case PM_PMAP_CREATE: 
-			{
-				/* Create PMMAP */
-				tsk = tsk_get(task_id);
-
-                if(!tsk) continue;
-
-				if(tsk->command_inf.executing != NULL)
-					break;
-				cmd_queue_remove(cmd);
-				tsk->command_inf.executing = cmd;
-
-				if(tsk->state == TSK_NORMAL 
-                    && (tsk->flags & TSK_FLAG_SERVICE))
-				{
-                    struct pm_msg_pmap_create *pmapcmd = (struct pm_msg_pmap_create*)&msg;
-
-					tsk->command_inf.callback = cmd_finished__callback;
-					
-                    if(!vmm_phy_mmap(tsk, 
-						(ADDR)pmapcmd->start_phy_addr, 
-						(ADDR)(pmapcmd->start_phy_addr + (pmapcmd->pages << 12)),
-						(ADDR)pmapcmd->start_addr, 
-						(ADDR)(pmapcmd->start_addr + (pmapcmd->pages << 12)), 
-                        pmapcmd->pages,
-						pmapcmd->flags))
-					{
-						cmd_inform_result(&msg, task_id, PM_ERROR, 0, 0);
-					}
-				}
-				else
-				{
-					cmd_inform_result(&msg, task_id, PM_ERROR, 0, 0);
-				}
-				
-				break;
-			}
-			case PM_PMAP_REMOVE: 
-			{
-				/* Close MMAP */
-				tsk = tsk_get(task_id);
-
-                if(!tsk) continue;
-
-				if(tsk->command_inf.executing != NULL)
-					break;
-				cmd_queue_remove(cmd);
-				tsk->command_inf.executing = cmd;
-
-				if(tsk->state == TSK_NORMAL 
-                    && (tsk->flags & TSK_FLAG_SERVICE))
-				{
-					tsk->command_inf.callback = cmd_finished__callback;
-					vmm_phy_umap(tsk, (ADDR)((struct pm_msg_pmap_remove*)&msg)->start_addr, ((struct pm_msg_pmap_remove*)&msg)->safe);
-				}
-				else
-				{
-					cmd_inform_result(&msg, task_id, PM_ERROR, 0, 0);
-				}
-				
-				break;
-			}
-			/* Memory sharing functions */
-			case PM_SHARE_MEM: 
-			{
-				/* Create a shared memory region */
-				tsk = tsk_get(task_id);
-
-                if(!tsk) continue;
-
-				if(tsk->command_inf.executing != NULL)
-					break;
-				cmd_queue_remove(cmd);
-				tsk->command_inf.executing = cmd;
-
-				if(tsk->state == TSK_NORMAL)
-				{
-					tsk->command_inf.callback = cmd_finished__callback;
-					if(!vmm_share_create(tsk, (ADDR)((struct pm_msg_share_mem*)&msg)->start_addr, ((struct pm_msg_share_mem*)&msg)->length, ((struct pm_msg_share_mem*)&msg)->perms))
-						cmd_inform_result(&msg, task_id, PM_ERROR, 0, 0);					
-				}
-				else
-				{
-					cmd_inform_result(&msg, task_id, PM_ERROR, 0, 0);
-				}
-				break;
-			}
-			case PM_UNSHARE_MEM: 
-			case PM_MMAP_REMOVE:
-			{
-				/* Close MMAP */
-				tsk = tsk_get(task_id);
-                                
-				if(!tsk || tsk->command_inf.executing != NULL)
-					break;
-				cmd_queue_remove(cmd);
-				tsk->command_inf.executing = cmd;
-
-				if(tsk->state == TSK_NORMAL)
-				{
-					tsk->command_inf.callback = cmd_finished__callback;
-                    vmm_share_remove(tsk, ((struct pm_msg_share_mem_remove*)&msg)->start_addr);					
-				}
-				else
-				{
-					cmd_inform_result(&msg, task_id, PM_ERROR, 0, 0);
-				}
-				
-				break;
-			}
-			/* Memory sharing mapping functions */
-			case PM_MMAP_CREATE: 
-			{
-				/* Create a shared memory region */
-				tsk = tsk_get(task_id);
+		pman_print_dbg("COMMAND.c: Got a queue COMMAND! task: %i cmd: %i\n",  (cmd->sender_task & 0x0000FFFF), msg.pm_type);
                 
-                if(!tsk) continue;
+        if(process_queue_msg(cmd))
+        {
+            ocmd = cmd;
+            cmd = cmd->next;
+		    cmd_queue_remove(ocmd);
+        }
+        else
+        {
+            cmd = cmd->next;
+        }
+	}
+}
 
-				if(tsk->command_inf.executing != NULL)
-					break;
-				cmd_queue_remove(cmd);
-				tsk->command_inf.executing = cmd;
-
-				if(tsk->state == TSK_NORMAL)
-				{
-					tsk->command_inf.callback = cmd_finished__callback;
-					if(!vmm_share_map(((struct pm_msg_mmap*)&msg)->shared_mem_id, tsk, (ADDR)((struct pm_msg_mmap*)&msg)->start_addr, ((struct pm_msg_mmap*)&msg)->length, ((struct pm_msg_mmap*)&msg)->perms))
-						cmd_inform_result(&msg, task_id, PM_ERROR, 0, 0);					
-				}
-				else
-				{
-					cmd_inform_result(&msg, task_id, PM_ERROR, 0, 0);
-				}
-				break;
+int process_queue_msg(struct pending_command *cmd)
+{
+    struct pm_msg_generic msg = cmd->msg;
+	INT32 task_id = (cmd->sender_task & 0x0000FFFF);
+	struct pm_task *tsk = tsk_get(task_id);
+	struct fmap_params params;
+    
+    if(!tsk) return 1;
+    
+    if(tsk->command_inf.executing != NULL)
+        return 0;
+        
+    if(tsk->state != TSK_NORMAL)
+	{
+        if(msg.pm_type == PM_FMAP && !(tsk->flags & TSK_FLAG_SERVICE))
+            cmd_inform_result(&msg, task_id, PM_NO_PERMISSION, 0, 0);
+        else
+            cmd_inform_result(&msg, task_id, PM_ERROR, 0, 0);
+		return 1;
+    }
+    
+    tsk->command_inf.executing = cmd;
+    tsk->command_inf.callback = cmd_finished__callback;
+    tsk->command_inf.command_ret_port = msg.response_port;
+	tsk->command_inf.command_req_id = msg.req_id;
+	tsk->command_inf.command_sender_id = task_id;
+        
+    switch(msg.pm_type) 
+	{
+		/* File mapping functions */            
+		case PM_FMAP: 
+		{
+			if(read_mem(((struct pm_msg_fmap*)&msg)->params_smo, 0, sizeof(params), &params) != SUCCESS)
+			{
+				cmd_inform_result(&msg, task_id, PM_BAD_SMO, 0, 0);
+                tsk->command_inf.executing = NULL;
 			}
+            					
+			if(vmm_fmap(task_id, params.fileid, params.fs_service, (ADDR)params.addr_start, params.length, params.perms, params.offset) != PM_OK)
+            {
+				cmd_inform_result(&msg, task_id, PM_ERROR, 0, 0);
+                tsk->command_inf.executing = NULL;
+				return 1;
+            }
+			break;
+		}
+		case PM_FMAP_FINISH: 
+		{
+			/* Close MMAP */
+			if(!vmm_fmap_release(tsk, ((struct pm_msg_fmap_finish*)&msg)->address))
+            {
+                cmd_inform_result(&msg, task_id, PM_ERROR, 0, 0);
+                tsk->command_inf.executing = NULL;
+            }
+				
+			break;
+		}
+		case PM_FMAP_FLUSH: 
+		{
+			/* Flush FMMAP */
+			vmm_fmap_flush(tsk, ((struct pm_msg_fmap_finish*)&msg)->address);
+			break;
+		}
+		/* Physical mapping functions */
+		case PM_PMAP_CREATE: 
+		{
+			/* Create PMMAP */
+			if(tsk->flags & TSK_FLAG_SERVICE)
+			{
+                struct pm_msg_pmap_create *pmapcmd = (struct pm_msg_pmap_create*)&msg;
+					
+                if(!vmm_phy_mmap(tsk, (ADDR)pmapcmd->start_phy_addr, (ADDR)(pmapcmd->start_phy_addr + (pmapcmd->pages << 12)),
+					(ADDR)pmapcmd->start_addr, (ADDR)(pmapcmd->start_addr + (pmapcmd->pages << 12)), 
+                    pmapcmd->pages, pmapcmd->flags))
+				{
+					cmd_inform_result(&msg, task_id, PM_ERROR, 0, 0);                    
+                    tsk->command_inf.executing = NULL;
+				}
+			}
+			else
+			{
+				cmd_inform_result(&msg, task_id, PM_ERROR, 0, 0);
+                tsk->command_inf.executing = NULL;
+			}
+				
+			break;
+		}
+		case PM_PMAP_REMOVE: 
+		{
+			/* Close MMAP */
+			if(tsk->flags & TSK_FLAG_SERVICE)
+			{
+				vmm_phy_umap(tsk, (ADDR)((struct pm_msg_pmap_remove*)&msg)->start_addr, ((struct pm_msg_pmap_remove*)&msg)->safe);
+			}
+			else
+			{
+				cmd_inform_result(&msg, task_id, PM_ERROR, 0, 0);
+                tsk->command_inf.executing = NULL;
+			}				
+			break;
+		}
+		/* Memory sharing functions */
+		case PM_SHARE_MEM: 
+		{
+			/* Create a shared memory region */
+			if(!vmm_share_create(tsk, (ADDR)((struct pm_msg_share_mem*)&msg)->start_addr, ((struct pm_msg_share_mem*)&msg)->length, ((struct pm_msg_share_mem*)&msg)->perms))
+            {
+				cmd_inform_result(&msg, task_id, PM_ERROR, 0, 0);					
+                tsk->command_inf.executing = NULL;
+            }
+			break;
+		}
+		case PM_UNSHARE_MEM: 
+		case PM_MMAP_REMOVE:
+		{
+			/* Close MMAP */
+            vmm_share_remove(tsk, ((struct pm_msg_share_mem_remove*)&msg)->start_addr);	
+			break;
+		}
+		case PM_MMAP_CREATE: 
+		{
+			/* Create a shared memory region */
+			if(!vmm_share_map(((struct pm_msg_mmap*)&msg)->shared_mem_id, tsk, (ADDR)((struct pm_msg_mmap*)&msg)->start_addr, ((struct pm_msg_mmap*)&msg)->length, ((struct pm_msg_mmap*)&msg)->perms))
+			{
+				cmd_inform_result(&msg, task_id, PM_ERROR, 0, 0);					
+                tsk->command_inf.executing = NULL;
+            }
+			break;
 		}
 	}
+
+    return 1;
 }
 
 void cmd_inform_result(void *msg, UINT16 task_id, UINT16 status, UINT16 new_id, UINT16 new_id_aux) 
@@ -1294,7 +1207,7 @@ INT32 cmd_swap_freed_callback(struct fsio_event_source *iosrc, INT32 ioret)
 /*
 Invoked when a memory mapping operation has been completed.
 */
-INT32 cmd_finished__callback(struct pm_task *task, INT32 ioret) 
+INT32 cmd_finished__callback(struct pm_task *task, INT32 ioret, UINT32 ret) 
 {
 	struct pm_msg_response msg_ans;
 	
@@ -1304,7 +1217,7 @@ INT32 cmd_finished__callback(struct pm_task *task, INT32 ioret)
 	msg_ans.req_id  = task->command_inf.command_req_id;
 	msg_ans.status  = PM_OK;
 	msg_ans.new_id  = task->id;
-	msg_ans.new_id_aux = -1;
+	msg_ans.new_id_aux = ret;
 
 	if(task->command_inf.executing->msg.pm_type == PM_SHARE_MEM)
 		msg_ans.new_id = task->command_inf.ret_value;
