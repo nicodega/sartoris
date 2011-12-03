@@ -46,6 +46,8 @@ extern int set_port_mode_c(int port, int priv, int mode);
 extern int send_msg_c(int, int, int*);
 extern int get_msg_c(int, int*, int*);
 extern int get_msg_count_c(int);
+extern int get_msgs_c(int port, int *msgs, int *ids, int maxlen);
+extern int get_msg_counts_c(int *ports, int *counts, int len);
 
 extern int share_mem_c(int, int, int, int);
 extern int claim_mem_c(int);

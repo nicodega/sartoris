@@ -369,6 +369,111 @@ int get_msg_count(int port)
 	return res;
 }
 
+/*
+This function will place on msgs as many as maxlen messages, if there are any on the specificed port.
+It will return how many messages where read onto msgs.
+*/
+int get_msgs(int port, int *msgs, int *ids, int maxlen) 
+{
+    struct port *p;
+	struct task *task = NULL;
+    int x, result, res, i;
+	
+    result = 0;
+
+    x = mk_enter(); 
+    
+    if(VALIDATE_PTR(msgs) && VALIDATE_PTR(((unsigned int)msgs)+(maxlen*MSG_LEN)) && VALIDATE_PTR(((unsigned int)ids)+maxlen) && VALIDATE_PTR(ids))
+    {        
+        msgs = MAKE_KRN_PTR(msgs);
+        ids = MAKE_KRN_PTR(ids);
+        task = GET_PTR(curr_task,tsk);
+		        
+        set_error(SERR_INVALID_PORT);
+
+        if (0 <= port && port < MAX_TSK_OPEN_PORTS) 
+	    {
+		    p = task->open_ports[port];
+      
+		    if (p != NULL) 
+		    {
+                set_error(SERR_OK);
+                
+                if(p->total < maxlen)
+                    maxlen = p->total;
+
+                for(i = 0; i < maxlen; i++)
+                {                    
+			        res = dequeue(&ids[i], p, &msgs[i+MSG_LEN]);
+
+#ifdef _METRICS_
+                    if(res == SUCCESS) 
+                        metrics.messages--;
+#endif              
+                }
+
+                result = i;
+		    }
+        }
+    }
+    else
+    {       
+        set_error(SERR_INVALID_PTR);
+    }
+	
+    mk_leave(x); /* exit critical block */
+    
+    return result;
+}
+
+/*
+This function will return a value >0 if there are messages on any of the ports specified on the ports array, and will
+set the counts on the specified array.
+It will return a negative number if an error occured.
+*/
+int get_msg_counts(int *ports, int *counts, int len) 
+{
+	int x, res = -1, i;
+	struct task *task;
+
+    if(VALIDATE_PTR(ports) && VALIDATE_PTR(((unsigned int)ports)+len) && VALIDATE_PTR(((unsigned int)counts)+len) && VALIDATE_PTR(counts))
+    {        
+        ports = MAKE_KRN_PTR(ports);
+        counts = MAKE_KRN_PTR(counts);
+
+	    task = GET_PTR(curr_task,tsk);
+
+        set_error(SERR_OK);
+        
+        for(i = 0; i < len; i++)
+        {
+            x = mk_enter();
+            
+            if (0 > ports[i] || ports[i] >= MAX_TSK_OPEN_PORTS || task->open_ports[ports[i]] == NULL)
+            {
+                set_error(SERR_INVALID_PORT);
+		        res = -1;
+                break;
+            }
+            else
+            {
+                counts[i] = task->open_ports[ports[i]]->total;
+                if(!res && counts[i])
+                    res = 1;
+            }
+	    
+            mk_leave(x);
+        }
+    }
+    else
+    {
+        x = mk_enter();        
+        set_error(SERR_INVALID_PTR);
+	    mk_leave(x);
+    }
+	
+	return res;
+}
 
 /* the following functions implement the data structures used above: */
 

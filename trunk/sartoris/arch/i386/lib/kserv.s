@@ -43,6 +43,8 @@ global set_port_mode
 global get_msg
 global send_msg
 global get_msg_count
+global get_msgs
+global get_msg_counts
 	
 global share_mem
 global claim_mem
@@ -276,6 +278,22 @@ get_msg_count:
 	mov ebp, esp
 	pass_arguments 1
 	call GET_MSG_COUNT : 0x00000000
+	pop ebp
+	ret
+    
+get_msgs:
+	push ebp
+	mov ebp, esp
+	pass_arguments 4
+	call GET_MSGS : 0x00000000
+	pop ebp
+	ret
+	
+get_msg_counts:
+	push ebp
+	mov ebp, esp
+	pass_arguments 3
+	call GET_MSG_COUNTS : 0x00000000
 	pop ebp
 	ret
 	
