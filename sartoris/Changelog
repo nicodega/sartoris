@@ -17,7 +17,7 @@
       sartoris itself.
 	- Multiboot compliant loader (hopefully).
 	- Pop/Push/Resume Interrupts implemented for interrupt stack manipulation from non nested ints.
-      This could be used on the OS on top to handle interrupts page faults, it they are allowed.
+      This could be used on the OS on top to handle interrupts page faults, if they are allowed.
 	- Now ports must be opened manually. Compatibility with version 0.5.3 is deprecated.
 	- Kernel now loads itself from the first megabyte and up, preserving the BIOS.
 	  (implemented entering Unreal Mode) and a new segment is available on the ldt for
@@ -32,6 +32,8 @@
       after ttrace_begin invoke. A step int1 will be raised once the thread is executed after
       ttrace_begin. If the task tries to do anything while the thread is tracing but has never executed, 
       every ttrace function except for ttrace_end will fail.
+    - Added two new messaging functions in order to check multiple port counts and receive multiple messages
+      from one port at once (to avoid too many privilege switches).
 
 [0.6.0] - Prerelease 8
 	- Fixed smos implementation with paging.
