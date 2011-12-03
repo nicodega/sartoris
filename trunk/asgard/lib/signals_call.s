@@ -1,4 +1,4 @@
-;;	Copyright (C) 2002, 2003, 2004, 2005
+;;	Copyright (C) 2002 - 2011
 ;;       
 ;;	Santiago Bazerque 	sbazerque@gmail.com			
 ;;	Nicolas de Galarreta	nicodega@gmail.com
@@ -11,12 +11,6 @@
 ;;	You should have received a copy of the License along with the code,
 ;;	if not, it can be downloaded from our project site: sartoris.sourceforge.net,
 ;;	or you can contact us directly at the email addresses provided above.
-
-;; 
-;; This file defines _start and __start symbols, and moves
-;; the stack pointer, so init won't step over the init_data 
-;; structure
-;;
 
 bits 32
 
