@@ -32,27 +32,29 @@
 %define SEND_MSG                 (0x1e << 3)
 %define GET_MSG                  (0x1f << 3)
 %define GET_MSG_COUNT            (0x20 << 3)
+%define GET_MSGS                 (0x21 << 3)
+%define GET_MSG_COUNTS           (0x22 << 3)
     
-%define SHARE_MEM                (0x21 << 3)
-%define CLAIM_MEM                (0x22 << 3)
-%define READ_MEM                 (0x23 << 3)
-%define WRITE_MEM                (0x24 << 3)
-%define PASS_MEM                 (0x25 << 3)
-%define MEM_SIZE                 (0x26 << 3)
+%define SHARE_MEM                (0x23 << 3)
+%define CLAIM_MEM                (0x24 << 3)
+%define READ_MEM                 (0x25 << 3)
+%define WRITE_MEM                (0x26 << 3)
+%define PASS_MEM                 (0x27 << 3)
+%define MEM_SIZE                 (0x28 << 3)
 
-%define POP_INT                  (0x27 << 3)
-%define PUSH_INT                 (0x28 << 3)
-%define RESUME_INT               (0x29 << 3)
+%define POP_INT                  (0x29 << 3)
+%define PUSH_INT                 (0x2a << 3)
+%define RESUME_INT               (0x2b << 3)
 
-%define LAST_ERROR               (0x2a << 3)
+%define LAST_ERROR               (0x2c << 3)
 
-%define TTRACE_BEGIN             (0x2b << 3)
-%define TTRACE_END               (0x2c << 3)
-%define TTRACE_REG               (0x2d << 3)
-%define TTRACE_MEM_READ          (0x2e << 3)
-%define TTRACE_MEM_WRITE         (0x2f << 3)
+%define TTRACE_BEGIN             (0x2d << 3)
+%define TTRACE_END               (0x2e << 3)
+%define TTRACE_REG               (0x2f << 3)
+%define TTRACE_MEM_READ          (0x30 << 3)
+%define TTRACE_MEM_WRITE         (0x31 << 3)
 
 %ifdef _METRICS_
-%define GET_METRICS              (0x30 << 3)
+%define GET_METRICS              (0x32 << 3)
 %endif
 

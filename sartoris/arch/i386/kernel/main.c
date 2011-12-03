@@ -96,28 +96,30 @@ void create_syscall_gates()
 	hook_syscall(25, 3, &send_msg_c, 3);
 	hook_syscall(26, 3, &get_msg_c, 3);
 	hook_syscall(27, 3, &get_msg_count_c, 1);
+	hook_syscall(28, 3, &get_msgs_c, 4);
+	hook_syscall(29, 3, &get_msg_counts_c, 3);
 
-	hook_syscall(28, 3, &share_mem_c, 4);
-	hook_syscall(29, 3, &claim_mem_c, 1);
-	hook_syscall(30, 3, &read_mem_c, 4);
-	hook_syscall(31, 3, &write_mem_c, 4);
-	hook_syscall(32, 3, &pass_mem_c, 2);
-	hook_syscall(33, 3, &mem_size_c, 1);
+	hook_syscall(30, 3, &share_mem_c, 4);
+	hook_syscall(31, 3, &claim_mem_c, 1);
+	hook_syscall(32, 3, &read_mem_c, 4);
+	hook_syscall(33, 3, &write_mem_c, 4);
+	hook_syscall(34, 3, &pass_mem_c, 2);
+	hook_syscall(35, 3, &mem_size_c, 1);
 
-	hook_syscall(34, 1, &pop_int_c, 0);
-	hook_syscall(35, 1, &push_int_c, 1);
-	hook_syscall(36, 1, &resume_int_c, 0);
+	hook_syscall(36, 1, &pop_int_c, 0);
+	hook_syscall(37, 1, &push_int_c, 1);
+	hook_syscall(38, 1, &resume_int_c, 0);
 
-    hook_syscall(37, 3, &last_error_c, 0);
+    hook_syscall(39, 3, &last_error_c, 0);
     
-    hook_syscall(38, 1, &ttrace_begin_c, 2);
-    hook_syscall(39, 1, &ttrace_end_c, 2);
-    hook_syscall(40, 3, &ttrace_reg_c, 4);
-    hook_syscall(41, 3, &ttrace_mem_read_c, 4);
-    hook_syscall(42, 3, &ttrace_mem_write_c, 4);
+    hook_syscall(40, 1, &ttrace_begin_c, 2);
+    hook_syscall(41, 1, &ttrace_end_c, 2);
+    hook_syscall(42, 3, &ttrace_reg_c, 4);
+    hook_syscall(43, 3, &ttrace_mem_read_c, 4);
+    hook_syscall(44, 3, &ttrace_mem_write_c, 4);
     
 #ifdef _METRICS_
-	hook_syscall(42, 1, &get_metrics_c, 0);
+	hook_syscall(45, 1, &get_metrics_c, 0);
 #endif
 }
 

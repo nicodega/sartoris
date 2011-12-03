@@ -53,7 +53,9 @@ int set_port_perm(int port, struct permissions *perms);
 int set_port_mode(int port, int priv, int mode);
 int send_msg(int to_address, int port, void *msg);
 int get_msg(int port, void *msg, int *id);
+int get_msgs(int port, int *msgs, int *ids, int maxlen);
 int get_msg_count(int port);
+int get_msg_counts(int *ports, int *counts, int len);
 
 /* memory sharing */
 int share_mem(int target_task, void *addr, int size, int perms);

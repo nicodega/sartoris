@@ -84,6 +84,12 @@ global send_msg_c
 extern get_msg_count
 global get_msg_count_c
 
+extern get_msgs
+global get_msgs_c
+
+extern get_msg_counts
+global get_msg_counts_c
+
 extern share_mem
 global share_mem_c
 
@@ -269,6 +275,12 @@ get_msg_c:
 
 get_msg_count_c:
 	syscall_def 1, get_msg_count
+
+get_msgs_c:
+	syscall_def 4, get_msgs
+
+get_msg_counts_c:
+	syscall_def 3, get_msg_counts
 
 	;; memory sharing
 	
