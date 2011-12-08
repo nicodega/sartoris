@@ -82,8 +82,9 @@ struct task
 	int priv_level;
 
 #ifdef __KERNEL__
-	char state;         
-	char padding[3];
+	char state;   
+    char evts;          // events enabled on the task
+	char padding[2];
 	int thread_count;
 	/* 
 	Queue  mapping, it binds an open port to a message queue from the 
@@ -111,7 +112,7 @@ struct thread
 #ifdef __KERNEL__
     struct permissions run_perms;      // this is a pointer to user space!
     char page_faulted;					/* used to know if we have produced a page fault */
-    char padding;
+    char evts;                          // events active on this thread
 	short last_error;                   // last error (see error.h)
 	int trace_task;                     // if -1 no task is allowed to trace this thread. If it's not -1, the specified task can.
 #endif

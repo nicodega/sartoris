@@ -20,6 +20,7 @@
 #include <sartoris/critical-section.h>
 #include "sartoris/error.h"
 #include "sartoris/permissions.h"
+#include "sartoris/events.h"
 
 /* message subsystem implementation */
 
@@ -94,7 +95,7 @@ int close_port(int port)
     
 		task = GET_PTR(curr_task,tsk);
 		
-		if(task->open_ports[port] != NULL) 
+		if(task->open_ports[port] != NULL && task->open_ports[port] != evt_port) 
 		{
 			result = SUCCESS;
 	
@@ -290,6 +291,12 @@ int send_msg(int dest_task_id, int port, int *msg)
         else if(0 <= port && port < MAX_TSK_OPEN_PORTS)
             set_error(SERR_INVALID_PORT);
     }
+
+    if(result == SUCCESS && task->evts)
+    {
+        evt_raise(dest_task_id, SARTORIS_EVT_MSG);
+    }
+
     mk_leave(x); /* exit critical block */
     
     return result;

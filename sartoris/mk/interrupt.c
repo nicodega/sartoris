@@ -216,7 +216,7 @@ int ret_from_int(void)
 	{
 		result = SUCCESS;
 
-		int_active[curr_thread] = false;
+		int_active[curr_thread] = 0;
 		curr_thread = int_stack[--int_stack_pointer];
         
         thread = GET_PTR(curr_thread, thr);

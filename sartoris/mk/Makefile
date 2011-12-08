@@ -2,10 +2,10 @@
 CPPFLAGS +=  -I"../include" -I"../arch/target/include"
 
 objects = main.o task.o thread.o paging.o interrupt.o containers.o indexing.o salloc.o dynmem.o \
-message.o shared-mem.o bitops.o metrics.o error.o permissions.o ttrace.o
+message.o shared-mem.o bitops.o metrics.o error.o permissions.o ttrace.o events.o
 
 dependencies = main.d task.d thread.d paging.d interrupt.d metrics.d containers.d indexing.d salloc.d dynmem.d \
-message.d shared-mem.d bitops.d error.d permissions.d ttrace.d
+message.d shared-mem.d bitops.d error.d permissions.d ttrace.d events.d
 
 %.d : %.c
 	@echo making deps for $< ...
