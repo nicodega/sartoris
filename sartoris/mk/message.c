@@ -525,7 +525,7 @@ void delete_port(struct task *task, struct port *port)
 }
 
 /* 1. this function is called within a critical block */
-/* 2. 0 <= port < MAX_OPEN_PORTS is assumed           */
+/* 2. p != NULL is assumed                            */
 /* 3. port should be open & good (i.e. its queued 
       messages should NOT be in the free list)        */
 void empty(struct port *p) 

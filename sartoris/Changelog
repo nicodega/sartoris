@@ -34,6 +34,11 @@
       every ttrace function except for ttrace_end will fail.
     - Added two new messaging functions in order to check multiple port counts and receive multiple messages
       from one port at once (to avoid too many privilege switches).
+    - Added three system calls to support a new event subsystem. Currently there is only one event
+      which will send a message to a port when a task receives a message. This could be usefull for
+      schedulers, in order to put a task to sleep (if the task asks for it) until a message arrives to it.
+      When/if the port is full when the event is raised, an interrupt will be triggered. Only one priv 1 
+      service can handle events on the system.
 
 [0.6.0] - Prerelease 8
 	- Fixed smos implementation with paging.

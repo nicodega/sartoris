@@ -121,7 +121,7 @@ int evt_set_listener(int thread, int port, int interrupt)
 
 int evt_wait(int id, int evt)
 {
-    int result = FAILURE, x;
+    int result = FAILURE, x, i;
     struct thread *thr = NULL;
     struct task *tsk = NULL;
     
@@ -134,8 +134,19 @@ int evt_wait(int id, int evt)
                 if(id > 0 && id < MAX_TSK && TST_PTR(id,tsk))
                 {
                     tsk = GET_PTR(id,tsk);
-                    tsk->evts = 1;
-                    result = SUCCESS;
+                    // if the task already has messages, return FAILURE
+                    i = 0;
+	                while(i < MAX_TSK_OPEN_PORTS)
+	                {
+		                if(tsk->open_ports[i] != NULL && tsk->open_ports[i]->total != 0) 
+                            break;
+                        i++;
+	                }
+                    if(i == MAX_TSK_OPEN_PORTS)
+                    {
+                        tsk->evts = 1;
+                        result = SUCCESS;
+                    }
                 }
                 else
                 {
@@ -195,7 +206,6 @@ IMPORTANT: This function might brake atomicity.
 void evt_raise(int id, int evt)
 {
     struct evt_msg msg;
-    struct thread *thr = NULL;
     struct task *tsk = NULL;
     int res = FAILURE;
 
@@ -215,6 +225,8 @@ void evt_raise(int id, int evt)
                     if(evt_port && TST_PTR(id,tsk))
                         enqueue(-1, evt_port, (int*)&msg);
                 }
+                tsk = GET_PTR(id,tsk);
+                tsk->evts = 0;
                 break;
         }
     }
