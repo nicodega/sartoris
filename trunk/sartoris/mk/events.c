@@ -122,7 +122,6 @@ int evt_set_listener(int thread, int port, int interrupt)
 int evt_wait(int id, int evt)
 {
     int result = FAILURE, x, i;
-    struct thread *thr = NULL;
     struct task *tsk = NULL;
     
     if(evt_port)
@@ -166,8 +165,7 @@ int evt_wait(int id, int evt)
 
 int evt_disable(int id, int evt)
 {
-    int result = FAILURE, x;    
-    struct thread *thr = NULL;
+    int result = FAILURE, x;
     struct task *tsk = NULL;
 
     if(evt_port)
