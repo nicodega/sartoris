@@ -101,6 +101,7 @@ int create_task(int id, struct task *tsk)
 		task->thread_count = 0;
 		task->first_smo = NULL;
 		task->smos = 0;
+        task->evts = 0;
 		
 		/* set every port as closed/non-existant */
 		for (i = 0; i < MAX_TSK_OPEN_PORTS; i++) 

@@ -53,6 +53,24 @@ static inline void arch_issue_page_fault(void)
         "1: " : : : "memory" );
 }
 
+#define HAVE_INL_ARCH_EVENT_RAISE
+
+extern int evt_interrupt;
+extern unsigned int idt_call_table[];
+static inline void arch_event_raise(void)
+{
+    // Since int n in intel arch only works
+    // with mm8 operands, we will simulate
+    // the interrupt call.
+    unsigned int vec = evt_interrupt * sizeof(unsigned int) + (unsigned int)idt_call_table;
+    __asm__ __volatile__ (
+        "pushf;"
+        "cli;"
+        "pushl %%cs;"
+        "pushl $1f;"    // this will push 1: address on the stack
+        "jmp *(%%eax);"
+        "1: " : : "a" (vec) : "memory");
+}
 
 #ifdef PAGING
 static inline int arch_flush_tlb() 

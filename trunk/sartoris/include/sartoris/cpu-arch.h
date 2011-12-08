@@ -100,6 +100,10 @@ void arch_sti(int x);
 void *arch_get_page_fault(void);
 #endif
 
+#ifndef HAVE_INL_ARCH_EVENT_RAISE
+void *arch_event_raise(void);
+#endif
+
 #ifndef HAVE_INL_ISSUE_PAGE_FAULT
 void arch_issue_page_fault(void);
 #endif

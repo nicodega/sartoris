@@ -19,7 +19,11 @@
 #include <sartoris/critical-section.h>
 #include "sartoris/kernel-data.h"
 #include "sartoris/error.h"
+#include "sartoris/events.h"
 #include "sartoris/permissions.h"
+
+/* used on destroy thread */
+int destroy_int_handler(int number, int thread);
 
 /* We need need this for gcc to compile */
 void *memcpy( void *to, const void *from, int count )
@@ -74,6 +78,7 @@ int create_thread(int id, struct thread *thr)
 							thread->task_num = tsk_id;
                             thread->last_error = SERR_OK;
                             thread->trace_task = -1;
+                            thread->evts = 0;
                             task->thread_count++;
 
                             init_perms(&thread->run_perms);
@@ -144,7 +149,7 @@ int destroy_thread(int id)
 
 	x = mk_enter(); /* enter critical block */
 
-	if (0 <= id && id < MAX_THR && TST_PTR(id,thr)) 
+	if (0 <= id && id < MAX_THR && TST_PTR(id,thr) && evt_thread != id) 
 	{
 		if (curr_thread != id) 
 		{
@@ -154,14 +159,24 @@ int destroy_thread(int id)
 			task = GET_PTR(thread->task_num,tsk);
 
 			task->thread_count--;
+
+            /* destroy eny interrupts pointing to this thread */
+            for(i = 0; i < MAX_IRQ; i++)
+            {
+                if(int_handlers[i] == id)
+                    destroy_int_handler(i, id);
+            }
 			
-			arch_destroy_thread(id, thread);
+            if(result != FAILURE)
+            {
+			    arch_destroy_thread(id, thread);
 			
-			sfree(thread, id, SALLOC_THR);
+			    sfree(thread, id, SALLOC_THR);
 #ifdef METRICS
-            metrics.threads--;
+                metrics.threads--;
 #endif
-            set_error(SERR_OK);
+                set_error(SERR_OK);
+            }
 		}
         else
         {
