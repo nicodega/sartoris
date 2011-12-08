@@ -143,6 +143,13 @@ global ttrace_mem_read_c
 extern ttrace_mem_write
 global ttrace_mem_write_c
 
+extern evt_set_listener
+global evt_set_listener_c
+extern evt_wait
+global evt_wait_c
+extern evt_disable
+global evt_disable_c
+
 extern curr_state
 extern stack_winding_syscall
 extern stack_unwind_syscall
@@ -340,6 +347,15 @@ ttrace_mem_read_c:
 
 ttrace_mem_write_c:
     syscall_def 4, ttrace_mem_write
+
+evt_set_listener_c:
+    syscall_def 3, evt_set_listener
+
+evt_wait_c:
+    syscall_def 2, evt_wait
+
+evt_disable_c:
+    syscall_def 2, evt_disable
 
 ;; metrics
 			

@@ -16,7 +16,7 @@
 #define MAX_ALLOC_LINEAR   0x7000000   /* 112 MB (remember to change stack_windings and int.s debug routine on i386 if this value is modified) */
 #define MIN_TASK_OFFSET    MAX_ALLOC_LINEAR
 
-#define MAX_SCA						45    /* max system calls */
+#define MAX_SCA						48    /* max system calls */
 #define MAX_TSK						4096  /* max tasks */
 #define MAX_THR						16384 /* max concurrent threads of execution */
 #define MAX_IRQ						64    /* max irqs */

@@ -54,7 +54,11 @@
 %define TTRACE_MEM_READ          (0x30 << 3)
 %define TTRACE_MEM_WRITE         (0x31 << 3)
 
+%define EVT_SET_LISTENER         (0x32 << 3)
+%define EVT_WAIT                 (0x33 << 3)
+%define EVT_DISABLE              (0x34 << 3)
+
 %ifdef _METRICS_
-%define GET_METRICS              (0x32 << 3)
+%define GET_METRICS              (0x35 << 3)
 %endif
 

@@ -119,7 +119,7 @@ int evt_set_listener(int thread, int port, int interrupt)
     return result;
 }
 
-int evt_wait(int id, int evt, int once)
+int evt_wait(int id, int evt)
 {
     int result = FAILURE, x;
     struct thread *thr = NULL;
