@@ -65,6 +65,10 @@ global ttrace_reg
 global ttrace_mem_read
 global ttrace_mem_write
 
+global evt_set_listener
+global evt_wait
+global evt_disable
+
 %ifdef _METRICS_
 global get_metrics
 %endif
@@ -422,7 +426,30 @@ ttrace_mem_write:
 	call TTRACE_MEM_WRITE : 0x00000000
 	pop ebp
 	ret
-	
+
+evt_set_listener:
+	push ebp
+	mov ebp, esp
+	pass_arguments 3
+	call EVT_SET_LISTENER : 0x00000000
+	pop ebp
+	ret	
+
+evt_wait:
+	push ebp
+	mov ebp, esp
+	pass_arguments 2
+	call EVT_WAIT : 0x00000000
+	pop ebp
+	ret
+
+evt_disable:
+	push ebp
+	mov ebp, esp
+	pass_arguments 2
+	call EVT_DISABLE : 0x00000000
+	pop ebp
+	ret
 %ifdef _METRICS_
 get_metrics:
 	push ebp

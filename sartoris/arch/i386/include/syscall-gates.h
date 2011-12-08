@@ -70,6 +70,10 @@ extern int ttrace_reg_c(int thr_id, int reg, void *value, int set);
 extern int ttrace_mem_read_c(int thr_id, void *src, void *dst, int size);
 extern int ttrace_mem_write_c(int thr_id, void *src, void *dst, int size);
 
+extern int evt_set_listener_c(int thread, int port, int interrupt);
+extern int evt_wait_c(int id, int evt);
+extern int evt_disable_c(int id, int evt);
+
 #ifdef _METRICS_
 extern int get_metrics_c(void);
 #endif

@@ -75,6 +75,11 @@ int ttrace_mem_write(int thr_id, void *src, void *dst, int size);
 /* Errors */
 int last_error();
 
+/* Events */
+int evt_set_listener(int thread, int port, int interrupt);
+int evt_wait(int id, int evt);
+int evt_disable(int id, int evt);
+
 #ifdef _METRICS_
 int get_metrics(struct sartoris_metrics *m);
 #endif
