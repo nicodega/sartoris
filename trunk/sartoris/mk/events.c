@@ -218,6 +218,7 @@ void evt_raise(int id, int evt, int evt_param)
         switch(evt)
         {
             case SARTORIS_EVT_MSG:
+            case SARTORIS_EVT_PORT_CLOSED:
                 tsk = GET_PTR(id,tsk);
                 tsk->evts = 0;              // disable events
                 if(enqueue(-1, evt_port, (int*)&msg) == FAILURE)
