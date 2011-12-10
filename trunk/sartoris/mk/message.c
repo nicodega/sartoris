@@ -292,9 +292,9 @@ int send_msg(int dest_task_id, int port, int *msg)
             set_error(SERR_INVALID_PORT);
     }
 
-    if(result == SUCCESS && task->evts)
+    if(result == SUCCESS && task->evts && (task->evt_ports_mask & (0x1 << port)))
     {
-        evt_raise(dest_task_id, SARTORIS_EVT_MSG);
+        evt_raise(dest_task_id, SARTORIS_EVT_MSG, port);
     }
 
     mk_leave(x); /* exit critical block */

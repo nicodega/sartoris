@@ -438,7 +438,7 @@ evt_set_listener:
 evt_wait:
 	push ebp
 	mov ebp, esp
-	pass_arguments 2
+	pass_arguments 3
 	call EVT_WAIT : 0x00000000
 	pop ebp
 	ret
