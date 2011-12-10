@@ -68,6 +68,11 @@ struct pm_task *tsk_create(UINT16 id)
     t->dbg_next = t->dbg_prev = NULL;
     t->dbg_task = 0xFFFF;
 
+    int i = 0;
+
+    for(i = 0; i < 32; i++)
+        t->port_blocks[i] = 0;
+
 	// Exceptions send port //
 	t->exeptions.exceptions_port = 0xFFFF;
     t->exeptions.ecount = 0;
@@ -75,7 +80,7 @@ struct pm_task *tsk_create(UINT16 id)
 
 	// Init Command Info //
 	cmd_info_init(&t->command_inf);
-				
+
 	// Init loader info //
 	loader_info_init(&t->loader_inf);
 

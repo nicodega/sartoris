@@ -35,6 +35,9 @@
 #define ALIG_CHK        17
 #define SIMD_FAULT      19
 
+
+#define SART_EVENTS_INT     63
+
 void fatal_exception(UINT16 task_id, INT32 ret_value);
 void exception_signal(UINT16 task_id, UINT16 thread_id, UINT16 exception, ADDR last_exception_addr);
 

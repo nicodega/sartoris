@@ -94,6 +94,136 @@ void cmd_process_msg()
 		{			
 			switch(msg.pm_type) 
 			{   
+                case PM_BLOCK_THREAD:
+                {
+                    tsk = tsk_get(task_id);
+
+                    if(tsk != NULL)
+                    {
+                        thr = thr_get(((struct pm_msg_block_thread*)&msg)->thread_id);
+
+                        if(thr != NULL && thr->task_id == task_id)
+                        {
+                            if(thr->state == THR_BLOCKED && (thr->flags & THR_FLAG_BLOCKED))
+                            {
+                                cmd_inform_result(&msg, task_id, PM_ALREADY_BLOCKED, 0, 0);
+                            }
+                            else
+                            {
+                                if(((struct pm_msg_block_thread*)&msg)->block_type == THR_BLOCK)
+                                {
+                                    thr->flags |= THR_FLAG_BLOCKED;
+                                    thr->state = THR_BLOCKED;
+                                    sch_deactivate(thr);
+                                }
+                                else
+                                {
+                                    thr->flags |= THR_FLAG_BLOCKED_PORT;
+
+                                    // build the ports mask
+                                    tsk = tsk_get(thr->task_id);
+
+                                    int k;
+                                    unsigned int mask = ((struct pm_msg_block_thread*)&msg)->ports_mask;
+                                    
+                                    for(k = 0; k < 32; k++)
+                                    {                                        
+                                        if((mask & (0x1 << k)))
+                                            tsk->port_blocks[k]++;
+                                        else if(tsk->port_blocks[k])
+                                            mask |= (0x1 << k);
+                                    }
+
+                                    if(evt_wait(thr->task_id, SARTORIS_EVT_MSG, mask))
+                                    {
+                                        thr->state = THR_BLOCKED;
+                                        thr->block_port_mask = ((struct pm_msg_block_thread*)&msg)->ports_mask;
+                                        sch_deactivate(thr);
+                                    }
+                                    else
+                                    {
+                                        // if it failed and the task had threads blocked already
+                                        // it means we have a message on one of the ports requested
+                                        // on this block
+                                        // Restore port_blocks values
+                                        mask = ((struct pm_msg_block_thread*)&msg)->ports_mask;
+                                        for(k = 0; k < 32; k++)
+                                        {                                        
+                                            if((mask & (0x1 << k)))
+                                                tsk->port_blocks[k]--;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        else
+                        {
+                            cmd_inform_result(&msg, task_id, PM_INVALID_THREAD, 0, 0);
+							break;                            
+                        }
+                    }
+                    break;
+                }
+                case PM_UNBLOCK_THREAD:
+                {
+                    tsk = tsk_get(task_id);
+
+                    if(tsk != NULL)
+                    {
+                        thr = thr_get(((struct pm_msg_block_thread*)&msg)->thread_id);
+
+                        if(thr != NULL && thr->task_id == task_id)
+                        {
+                            if((thr->flags & THR_FLAG_BLOCKED) == 0)
+                            {
+                                cmd_inform_result(&msg, task_id, PM_NOT_BLOCKED, 0, 0);
+                            }
+                            else
+                            {
+                                if((thr->flags & THR_FLAG_BLOCKED_PORT) == THR_FLAG_BLOCKED)
+                                {
+                                    thr->state = THR_BLOCKED;
+                                    thr->flags &= ~THR_FLAG_BLOCKED;
+                                    sch_activate(thr);
+                                }
+                                else
+                                {
+                                    int k;
+                                    unsigned int mask = thr->block_port_mask, nmask = 0;
+                                    
+                                    for(k = 0; k < 32; k++)
+                                    {                                        
+                                        if((mask & (0x1 << k)))
+                                            tsk->port_blocks[k]--;
+                                        if(tsk->port_blocks[k])
+                                            nmask |= (0x1 << k);
+                                    }
+
+                                    /*
+                                    Since we will process port messages each time they come, and update
+                                    the task port_blocks, this call should never fail, unless the task closes
+                                    a port, on which case the port event will have been generated anyway.
+                                    */
+                                    evt_wait(thr->task_id, SARTORIS_EVT_MSG, nmask);
+                                    
+                                    thr->flags &= ~THR_FLAG_BLOCKED_PORT;
+
+                                    if(!thr->flags)
+                                        thr->state = THR_RUNNING;
+
+                                    thr->block_port_mask = 0;
+                                    sch_activate(thr);
+                                }
+                            }
+                        }
+                        else
+                        {
+                            cmd_inform_result(&msg, task_id, PM_INVALID_THREAD, 0, 0);
+							break;                            
+                        }
+                    }
+                    break;
+                }
                 case PM_LOADER_READY:
                 {
                     // destroy the SMO sent to the task for phdrs

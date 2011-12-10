@@ -88,6 +88,8 @@
 #define PM_NOT_DEBUGGING                0x001e
 #define PM_NOT_BLOCKED                  0x001f
 #define PM_NO_PERMISSION                0x0020
+#define PM_INVALID_THREAD               0x0021
+#define PM_ALREADY_BLOCKED              0x0022
 
 #define PM_THREAD_OK                0x0000
 #define PM_THREAD_ID_INVALID        0x0001
@@ -212,15 +214,18 @@ struct pm_msg_destroy_thread {
   short padding[4];
 } PACKED_ATT;
 
+#define THR_BLOCK       0
+#define THR_BLOCK_MSG   1
+
 struct pm_msg_block_thread {
   unsigned char pm_type;
   unsigned char padding0;
   short req_id;
   unsigned char response_port;
-  char padding1;
+  char block_type;                  // THR_BLOCK_MSG / THR_BLOCK
   short thread_id;
-  short block_id;
-  short padding[3];
+  unsigned int ports_mask;
+  int pading;
 } PACKED_ATT;
 
 struct pm_msg_unblock_thread {
@@ -230,8 +235,7 @@ struct pm_msg_unblock_thread {
   unsigned char response_port;
   char padding1;
   short thread_id;
-  short block_id;
-  short padding[3];
+  int padding[2];
 } PACKED_ATT;
 
 

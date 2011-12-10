@@ -23,7 +23,7 @@
 
 #define PMAN_PORT_PROTOCOLS     5    // Ports under this define will be used by Protocols
 
-// PMAN_COMMAND_PORT is 2
+// PMAN_COMMAND_PORT    2       // defined on include/services/pmanager/services.h
 // PMAN_SIGNALS_PORT    3       // defined on include/services/pmanager/signals.h
 // PMAN_EVENTS_PORT     4       // defined on include/services/pmanager/signals.h
 
@@ -35,6 +35,7 @@
 #define IOSLOT_WRITE_PORT       10
 #define IOSLOT_FSWRITE_PORT     11
 #define SWAP_TASK_READ_PORT	    12
+#define SARTORIS_EVENTS_PORT    13
 
 #define INITFS_PORT   TASK_IO_PORT	// port used for ofs initialization (yeap, it overlaps with TASK_IO_PORT)
 

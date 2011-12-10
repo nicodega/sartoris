@@ -22,7 +22,7 @@ clean :
 	$(MAKE) -C pci clean
 	$(MAKE) -C atac clean
 	$(MAKE) -C ld clean
-
+	
 .PHONY : dep
 dep :
 	$(MAKE) -C p-manager2 dep
@@ -36,3 +36,4 @@ dep :
 	$(MAKE) -C pci dep
 	$(MAKE) -C atac dep
 	$(MAKE) -C ld dep
+	

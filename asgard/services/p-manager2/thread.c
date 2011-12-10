@@ -66,6 +66,7 @@ struct pm_thread *thr_create(UINT16 id, struct pm_task *task)
     thr->interrupt = 0;
     thr->vmm_info.page_displacement = 0;
     thr->vmm_info.page_in_address = NULL;
+    thr->block_port_mask = 0;
 
     thr->stack_addr = NULL;
     thr->task_id = task->id;

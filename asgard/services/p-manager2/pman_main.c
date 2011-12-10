@@ -43,7 +43,7 @@ void process_manager()
 	pman_stage = PMAN_STAGE_INITIALIZING;
 	
 	io_begin_init();
-	
+    	
 	while(!done)
 	{
 		/* Schedule next thread */
@@ -54,6 +54,9 @@ void process_manager()
 		process_events();
 
 		if(intraised) timer_tick();
+
+        /* process sartoris events */
+        sch_process_portblocks();
 
 		/* Process Incoming Commands */
 		cmd_process_msg();
@@ -77,6 +80,9 @@ void process_manager()
 		process_events();
 
 		if(intraised) timer_tick();
+
+        /* process sartoris events */
+        sch_process_portblocks();
 
 		/* Process Incoming Commands */
 		cmd_process_msg();

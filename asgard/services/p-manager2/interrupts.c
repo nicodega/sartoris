@@ -24,6 +24,7 @@
 #include "exception.h"
 #include "scheduler.h"
 #include "vm.h"
+#include "ports.h"
 #include "kmalloc.h"
 #include <services/pmanager/signals.h>
 #include <sartoris/kernel.h>
@@ -36,6 +37,7 @@
 struct interrupt_signals_container interrupt_signals[MAX_INTERRUPT];
 
 void int_common_handler();
+void sartoris_evt_handler();
 
 void int_init()
 {
@@ -101,6 +103,27 @@ void int_init()
 	}
 
     pmthr = thr_create(INT_HANDLER_THR, NULL);
+	pmthr->task_id = PMAN_TASK;
+	pmthr->state = THR_INTHNDL;	
+
+    /* Create sartoris event handler thread */
+    hdl.task_num = PMAN_TASK;
+	hdl.invoke_mode = PRIV_LEVEL_ONLY;
+	hdl.invoke_level = 0;
+	hdl.ep = &sartoris_evt_handler;
+	hdl.stack = (ADDR)STACK_ADDR(PMAN_EVTHNDL_STACK_ADDR);
+
+	if(create_thread(SART_EVT_THR, &hdl))
+		pman_print_and_stop("INT: FAILED To create Interrupt handler Thread");
+
+    /* Open the port for events */
+    open_port(SARTORIS_EVENTS_PORT, 0, PRIV_LEVEL_ONLY);
+
+    /* Tell sartoris to generate events */
+    if(evt_set_listener(SART_EVT_THR, SARTORIS_EVENTS_PORT, SART_EVENTS_INT) == FAILURE)
+        pman_print_dbg("Could not initialize sartoris event listener.");
+
+    pmthr = thr_create(SART_EVT_THR, NULL);
 	pmthr->task_id = PMAN_TASK;
 	pmthr->state = THR_INTHNDL;	
 }
@@ -267,7 +290,7 @@ BOOL int_attach(struct pm_thread *thr, UINT32 interrupt, int priority)
 BOOL int_dettach(struct pm_thread *thr)
 {
 	destroy_int_handler(thr->interrupt, thr->id);
-	if(create_int_handler(thr->interrupt, INT_HANDLER_THR, 1, 10) != SUCCESS)
+	if(create_int_handler(thr->interrupt, INT_HANDLER_THR, true, 10) != SUCCESS)
 		return FALSE;
 	return TRUE;
 }
@@ -414,4 +437,11 @@ void int_signal_remove(struct thr_signal *signal)
         else
             interrupt_signals[signal->signal_param].first = is->inext;
     }
+}
+
+void sartoris_evt_handler()
+{
+    sch_process_portblocks();
+
+    ret_from_int();
 }

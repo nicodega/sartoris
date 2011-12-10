@@ -20,6 +20,7 @@
 
 #include <sartoris/syscall.h>
 #include "types.h"
+#include "ports.h"
 #include "scheduler.h"
 #include "task_thread.h"
 #include <drivers/pit/pit.h>
@@ -402,6 +403,61 @@ void sch_force_complete()
 	scheduler.last_runned = NULL;
 	scheduler.list_selector = (scheduler.list_selector == SCHED_MAXPRIORITY-1)? 0 : scheduler.list_selector + 1;
 }
+/* 
+This function will process messages from sartoris events.
+*/
+void sch_process_portblocks()
+{
+    int id;
+    struct evt_msg msg;
 
+    while(get_msg_count(SARTORIS_EVENTS_PORT) > 0)
+    {
+        get_msg(SARTORIS_EVENTS_PORT, &msg, &id);
 
+        if(msg.evt == SARTORIS_EVT_MSG || msg.evt == SARTORIS_EVT_PORT_CLOSED)
+        {
+            struct pm_task *tsk = tsk_get(msg.id);
+            struct pm_thread *thr = tsk->first_thread;
+            int i;
+            unsigned int mask = 0;
+            
+            // wake threads waiting for a message on the port
+            while(thr)
+            {
+                if(thr->block_port_mask & (0x1 << msg.param))
+                {
+                    thr->flags &= ~THR_FLAG_BLOCKED_PORT;
+
+                    if(!thr->flags)
+                        thr->state = THR_RUNNING;
+
+                    thr->block_port_mask = 0;
+                    sch_activate(thr);
+                }
+                                
+                // fix the task port_blocks array
+                for(i = 0; i < 32; i++)
+                {
+                    if(thr->block_port_mask & (0x1 << i))
+                        tsk->port_blocks[i]--;
+                }
+            
+                thr = thr->next_thread;
+            }
+
+            for(i = 0; i < 32; i++)
+            {
+                if(tsk->port_blocks[i])
+                    mask |= (0x1 << i);
+            }
+
+            // set the wait again
+            if(mask)
+            {
+                evt_wait(tsk->id, SARTORIS_EVT_MSG, mask);
+            }
+        }
+    }
+}
 

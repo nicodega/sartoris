@@ -77,5 +77,9 @@ void sch_force_complete();
 /* Get running thread */
 UINT16 sch_running();
 
+/* Process incoming events from sartoris. */
+void sch_process_portblocks();
+
+
 #endif
 

@@ -40,6 +40,7 @@ under pmanager 2 tree.
 #define PAGESTEALING_THR	4		/* page stealing pman thread */
 #define PGF_HANDLER_THR		5		/* page fault handler        */
 #define INT_HANDLER_THR		6		/* general interrupt handler */
+#define SART_EVT_THR		7		/* general interrupt handler */
 
 #endif
 
