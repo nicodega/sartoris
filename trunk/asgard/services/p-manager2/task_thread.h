@@ -89,6 +89,9 @@ struct pm_task
     struct pm_task *dbg_prev;    // prev child on the debugged task list
     UINT16 dbg_task;             // task debugging this task
     UINT16 dbg_port;             // debug messages will be sent to this port on the debugging task
+
+    UINT16 port_blocks[32];      // each possition on the array will contain the ammount of threads blocked by the port
+                                 // specified by the index.
 } PACKED_ATT; 
 
 
@@ -103,10 +106,12 @@ struct pm_task
 #define THR_INTERNAL  7    /* This is an internal thread                   */
 #define THR_DBG       8    /* This is blocked because of a debug exception */
 
-/* Thread flags */
+/* Thread flags when it's state is THR_BLOCKED */
 #define THR_FLAG_NONE			0
 #define THR_FLAG_PAGEFAULT		1	/* page fault is being processed							*/
-#define THR_FLAG_PAGEFAULT_TBL  2	/* Page fault being attended also raised a page table fault */		
+#define THR_FLAG_PAGEFAULT_TBL  2	/* Page fault being attended also raised a page table fault */
+#define THR_FLAG_BLOCKED        4	/* Thread is blocked by request.                            */
+#define THR_FLAG_BLOCKED_PORT   12	/* Thread is blocked by request for a port                  */
 
 struct pm_thread 
 {
@@ -137,6 +142,9 @@ struct pm_thread
 
 	/* Signals */
 	struct thr_signals signals;			    /* This is the signals container                */
+
+    unsigned int block_port_mask;           /* If a bit is 1 on this mask, the thread was 
+                                            blocked waiting for a message on the bit possition port. */
 } PACKED_ATT;
 
 

@@ -525,7 +525,8 @@ void vmm_page_ioerror(struct pm_thread *thread, BOOL removeTBLTree)
                 else
                 {
                     // wake the thread
-                    curr_thr->state = THR_WAITING;
+                    if(curr_thr->state == THR_FLAG_NONE)
+                        curr_thr->state = THR_WAITING;
 			        sch_activate(curr_thr);
                 }
             }
@@ -631,7 +632,8 @@ void vmm_check_threads_pg(struct pm_thread **thr, BOOL removeTBLTree)
             // - If the task is a shared library, in order for it to be killed
             //   this thread task must have been killed, then it'll fall on the 
             //   first condition.
-		    curr_thr->state = THR_WAITING;
+            if(curr_thr->state == THR_FLAG_NONE)
+		        curr_thr->state = THR_WAITING;
 	        sch_activate(curr_thr);
         }
 
@@ -684,9 +686,10 @@ void vmm_wake_pf_threads(struct pm_thread *thread)
        First things first: Unblock the first 
        faulting thread and reactivate it. 
     */
-	thread->state = THR_WAITING;	
 	thread->flags &= ~(THR_FLAG_PAGEFAULT | THR_FLAG_PAGEFAULT_TBL);
-
+    if(curr_thr->state == THR_FLAG_NONE)
+        thread->state = THR_WAITING;
+	
     if(thread->task_id != thread->vmm_info.fault_task)
     {
         task = tsk_get(thread->task_id);
@@ -707,7 +710,8 @@ void vmm_wake_pf_threads(struct pm_thread *thread)
         on = currnode->next;
 
         curr_thr->flags &= ~(THR_FLAG_PAGEFAULT | THR_FLAG_PAGEFAULT_TBL);
-		curr_thr->state = THR_WAITING;
+        if(curr_thr->state == THR_FLAG_NONE)
+		    curr_thr->state = THR_WAITING;
 	    sch_activate(curr_thr);
 
 		currnode = on;

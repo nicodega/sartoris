@@ -80,6 +80,7 @@ extern int edata[];
 #define PMAN_MALLOC_PAGES           (PMAN_MALLOC_SIZE / PAGE_SIZE)
 
 // these are virtual stack addresses
+#define PMAN_EVTHNDL_STACK_ADDR     (PMAN_CODE_SIZE - 0x12000)
 #define PMAN_INTCOMMON_STACK_ADDR   (PMAN_CODE_SIZE - 0x10000)
 #define PMAN_STEALING_STACK_ADDR    (PMAN_CODE_SIZE - 0x8000)
 #define PMAN_AGING_STACK_ADDR       (PMAN_CODE_SIZE - 0x6000)    
