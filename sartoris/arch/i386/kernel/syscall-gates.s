@@ -352,7 +352,7 @@ evt_set_listener_c:
     syscall_def 3, evt_set_listener
 
 evt_wait_c:
-    syscall_def 2, evt_wait
+    syscall_def 3, evt_wait
 
 evt_disable_c:
     syscall_def 2, evt_disable

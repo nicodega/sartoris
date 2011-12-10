@@ -77,7 +77,7 @@ int last_error();
 
 /* Events */
 int evt_set_listener(int thread, int port, int interrupt);
-int evt_wait(int id, int evt);
+int evt_wait(int id, int evt, int evt_param);
 int evt_disable(int id, int evt);
 
 #ifdef _METRICS_

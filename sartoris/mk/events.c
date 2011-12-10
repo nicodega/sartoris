@@ -119,7 +119,7 @@ int evt_set_listener(int thread, int port, int interrupt)
     return result;
 }
 
-int evt_wait(int id, int evt)
+int evt_wait(int id, int evt, int evt_param)
 {
     int result = FAILURE, x, i;
     struct task *tsk = NULL;
@@ -137,13 +137,14 @@ int evt_wait(int id, int evt)
                     i = 0;
 	                while(i < MAX_TSK_OPEN_PORTS)
 	                {
-		                if(tsk->open_ports[i] != NULL && tsk->open_ports[i]->total != 0) 
+		                if((evt_param & (0x1 << i)) && tsk->open_ports[i] != NULL && tsk->open_ports[i]->total != 0) 
                             break;
                         i++;
 	                }
                     if(i == MAX_TSK_OPEN_PORTS)
                     {
                         tsk->evts = 1;
+                        tsk->evt_ports_mask = (unsigned int)evt_param;
                         result = SUCCESS;
                     }
                 }
@@ -201,7 +202,7 @@ Internal function, assumes the object represented by id is alive
 and we are on an atomic block.
 IMPORTANT: This function might brake atomicity.
 */
-void evt_raise(int id, int evt)
+void evt_raise(int id, int evt, int evt_param)
 {
     struct evt_msg msg;
     struct task *tsk = NULL;
@@ -211,10 +212,13 @@ void evt_raise(int id, int evt)
     {
         msg.evt = evt;
         msg.id = id;
+        msg.param = evt_param;
 
         switch(evt)
         {
             case SARTORIS_EVT_MSG:
+                tsk = GET_PTR(id,tsk);
+                tsk->evts = 0;              // disable events
                 if(enqueue(-1, evt_port, (int*)&msg) == FAILURE)
                 {
                     /* Raise the event int */
@@ -223,8 +227,6 @@ void evt_raise(int id, int evt)
                     if(evt_port && TST_PTR(id,tsk))
                         enqueue(-1, evt_port, (int*)&msg);
                 }
-                tsk = GET_PTR(id,tsk);
-                tsk->evts = 0;
                 break;
         }
     }

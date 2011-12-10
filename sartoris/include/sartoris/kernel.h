@@ -22,8 +22,8 @@
 #define MAX_IRQ						64    /* max irqs */
 #define MAX_SMO						65536 /* system-wide */
 #define MAX_MSG						65536 /* system-wide */
-#define MAX_OPEN_PORTS				(32*MAX_TSK)   /* system-wide */
-#define MAX_TSK_OPEN_PORTS			32
+#define MAX_TSK_OPEN_PORTS			32    /* if this number is increased, the port flag for events on tasks should be incresed in size. */
+#define MAX_OPEN_PORTS				(MAX_TSK_OPEN_PORTS*MAX_TSK)   /* system-wide */
 #define MAX_MSG_ON_PORT				64 
 
 #define MAX_NESTED_INT 32
@@ -84,7 +84,8 @@ struct task
 #ifdef __KERNEL__
 	char state;   
     char evts;          // events enabled on the task
-	char padding[2];
+	short smos;
+	int evt_ports_mask; // mask for ports for which the event will be generated
 	int thread_count;
 	/* 
 	Queue  mapping, it binds an open port to a message queue from the 
@@ -92,14 +93,13 @@ struct task
 	*/
 	struct port *open_ports[MAX_TSK_OPEN_PORTS];
 	struct smo *first_smo;
-	int smos;
 #endif
 } __attribute__ ((__packed__));
 
 /*
 NOTE: If this struct size is changed, check thread_state on
 arch part for i386 for 16 byte alignment.
-Size 40 bytes.
+Size 44 bytes (on kernel).
 */
 struct thread 
 {
@@ -112,7 +112,7 @@ struct thread
 #ifdef __KERNEL__
     struct permissions run_perms;      // this is a pointer to user space!
     char page_faulted;					/* used to know if we have produced a page fault */
-    char evts;                          // events active on this thread
+    char evts;                          // events active on this thread    
 	short last_error;                   // last error (see error.h)
 	int trace_task;                     // if -1 no task is allowed to trace this thread. If it's not -1, the specified task can.
 #endif
