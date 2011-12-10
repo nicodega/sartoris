@@ -441,7 +441,10 @@ void int_signal_remove(struct thr_signal *signal)
 
 void sartoris_evt_handler()
 {
-    sch_process_portblocks();
+    for(;;)
+    {
+        sch_process_portblocks();
 
-    ret_from_int();
+        ret_from_int();
+    }
 }
