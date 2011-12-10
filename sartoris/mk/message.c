@@ -21,6 +21,7 @@
 #include "sartoris/error.h"
 #include "sartoris/permissions.h"
 #include "sartoris/events.h"
+#include "sartoris/syscall.h"
 
 /* message subsystem implementation */
 
@@ -119,6 +120,11 @@ int close_port(int port)
         set_error(SERR_INVALID_PORT);
     }
 
+    if(result == SUCCESS && task->evts && (task->evt_ports_mask & (0x1 << port)))
+    {
+        evt_raise(curr_task, SARTORIS_EVT_MSG, port);
+    }
+
     return result;
 }
 
@@ -196,7 +202,7 @@ int set_port_perm(int port, struct permissions *perms)
 	return result;
 }
 
-int send_msg(int dest_task_id, int port, int *msg) 
+int send_msg(int dest_task_id, int port, void *msg) 
 {
     struct port *p = NULL;
     int x, result;
@@ -302,7 +308,7 @@ int send_msg(int dest_task_id, int port, int *msg)
     return result;
 }
 
-int get_msg(int port, int *msg, int *id) 
+int get_msg(int port, void *msg, int *id) 
 {
     struct port *p;
 	struct task *task;

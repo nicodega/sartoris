@@ -14,6 +14,9 @@
 #define SYSCALL
 
 #include <sartoris/kernel.h>
+#ifdef _METRICS_
+#include <sartoris/metrics.h>
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -47,10 +50,10 @@ int get_last_int(unsigned int *error_code);
 void *get_last_int_addr();
 
 /* message passing */
-int open_port(int port, int priv, int mode);
+int open_port(int port, int priv, enum usage_mode mode);
 int close_port(int port);
 int set_port_perm(int port, struct permissions *perms);
-int set_port_mode(int port, int priv, int mode);
+int set_port_mode(int port, int priv, enum usage_mode mode);
 int send_msg(int to_address, int port, void *msg);
 int get_msg(int port, void *msg, int *id);
 int get_msgs(int port, int *msgs, int *ids, int maxlen);
@@ -76,6 +79,16 @@ int ttrace_mem_write(int thr_id, void *src, void *dst, int size);
 int last_error();
 
 /* Events */
+#define SARTORIS_EVT_MSG   1
+
+struct evt_msg
+{
+    int evt;
+    int id;
+    int param;
+    int padding;
+}  __attribute__ ((__packed__));
+
 int evt_set_listener(int thread, int port, int interrupt);
 int evt_wait(int id, int evt, int evt_param);
 int evt_disable(int id, int evt);
