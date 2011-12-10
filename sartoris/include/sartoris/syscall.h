@@ -79,7 +79,8 @@ int ttrace_mem_write(int thr_id, void *src, void *dst, int size);
 int last_error();
 
 /* Events */
-#define SARTORIS_EVT_MSG   1
+#define SARTORIS_EVT_MSG            1
+#define SARTORIS_EVT_PORT_CLOSED    2
 
 struct evt_msg
 {

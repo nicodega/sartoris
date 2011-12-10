@@ -122,7 +122,7 @@ int close_port(int port)
 
     if(result == SUCCESS && task->evts && (task->evt_ports_mask & (0x1 << port)))
     {
-        evt_raise(curr_task, SARTORIS_EVT_MSG, port);
+        evt_raise(curr_task, SARTORIS_EVT_PORT_CLOSED, port);
     }
 
     return result;
