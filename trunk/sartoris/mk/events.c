@@ -19,6 +19,7 @@
 #include "sartoris/error.h"
 #include "sartoris/events.h"
 #include "sartoris/types.h"
+#include "sartoris/syscall.h"
 
 /* sartoris events */
 int evt_task = -1;
