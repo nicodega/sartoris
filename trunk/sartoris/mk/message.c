@@ -394,7 +394,6 @@ int get_msgs(int port, int *msgs, int *ids, int maxlen)
 	
     result = 0;
 
-    x = mk_enter(); 
     
     if(VALIDATE_PTR(msgs) && VALIDATE_PTR(((unsigned int)msgs)+(maxlen*MSG_LEN)) && VALIDATE_PTR(((unsigned int)ids)+maxlen) && VALIDATE_PTR(ids))
     {        
@@ -403,39 +402,46 @@ int get_msgs(int port, int *msgs, int *ids, int maxlen)
         task = GET_PTR(curr_task,tsk);
 		        
         set_error(SERR_INVALID_PORT);
-
+                
         if (0 <= port && port < MAX_TSK_OPEN_PORTS) 
 	    {
-		    p = task->open_ports[port];
+            // Since msgs and ids are on user space it could be paged out..
+            // we will process each element of the array performing
+            // validations.
+            for(i = 0; i < maxlen; i++)
+            {             
+                msgs[i+MSG_LEN] = 0;        // if the page was paged out, this will bring it in.
+                ids[i] = -1;
+
+                x = mk_enter();        
+		        
+                p = task->open_ports[port];
       
-		    if (p != NULL) 
-		    {
-                set_error(SERR_OK);
+		        if (p != NULL) 
+		        {
+                    set_error(SERR_OK);
                 
-                if(p->total < maxlen)
-                    maxlen = p->total;
+                    if(p->total < maxlen)
+                        maxlen = p->total;
 
-                for(i = 0; i < maxlen; i++)
-                {                    
-			        res = dequeue(&ids[i], p, &msgs[i+MSG_LEN]);
+                    res = dequeue(&ids[i], p, &msgs[i+MSG_LEN]);
 
-#ifdef _METRICS_
+    #ifdef _METRICS_
                     if(res == SUCCESS) 
-                        metrics.messages--;
-#endif              
-                }
+                    metrics.messages--;
+    #endif              
+                    result = i;
+		        }
 
-                result = i;
-		    }
+                mk_leave(x); /* exit critical block */    
+            }
         }
     }
     else
     {       
         set_error(SERR_INVALID_PTR);
     }
-	
-    mk_leave(x); /* exit critical block */
-    
+	    
     return result;
 }
 
@@ -446,7 +452,7 @@ It will return a negative number if an error occured.
 */
 int get_msg_counts(int *ports, int *counts, int len) 
 {
-	int x, res = -1, i;
+	int x, res = -1, i, port;
 	struct task *task;
 
     if(VALIDATE_PTR(ports) && VALIDATE_PTR(((unsigned int)ports)+len) && VALIDATE_PTR(((unsigned int)counts)+len) && VALIDATE_PTR(counts))
@@ -458,11 +464,17 @@ int get_msg_counts(int *ports, int *counts, int len)
 
         set_error(SERR_OK);
         
+        // Since msgs and ids are on user space it could be paged out..
+        // we will process each element of the array performing
+        // validations.
         for(i = 0; i < len; i++)
         {
+            port = ports[i];        // read and write array values here in case they where not paged in
+            counts[i] = 0;
+
             x = mk_enter();
             
-            if (0 > ports[i] || ports[i] >= MAX_TSK_OPEN_PORTS || task->open_ports[ports[i]] == NULL)
+            if (0 > port || port >= MAX_TSK_OPEN_PORTS || task->open_ports[port] == NULL)
             {
                 set_error(SERR_INVALID_PORT);
 		        res = -1;
