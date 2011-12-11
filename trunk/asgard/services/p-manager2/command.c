@@ -104,11 +104,7 @@ void cmd_process_msg()
 
                         if(thr != NULL && thr->task_id == task_id)
                         {
-                            if(thr->state == THR_BLOCKED && (thr->flags & THR_FLAG_BLOCKED))
-                            {
-                                cmd_inform_result(&msg, task_id, PM_ALREADY_BLOCKED, 0, 0);
-                            }
-                            else
+                            if(!(thr->state == THR_BLOCKED && (thr->flags & THR_FLAG_BLOCKED)))
                             {
                                 if(((struct pm_msg_block_thread*)&msg)->block_type == THR_BLOCK)
                                 {
@@ -155,11 +151,6 @@ void cmd_process_msg()
                                     }
                                 }
                             }
-                        }
-                        else
-                        {
-                            cmd_inform_result(&msg, task_id, PM_INVALID_THREAD, 0, 0);
-							break;                            
                         }
                     }
                     break;

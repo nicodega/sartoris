@@ -221,11 +221,11 @@ struct pm_msg_block_thread {
   unsigned char pm_type;
   unsigned char padding0;
   short req_id;
-  unsigned char response_port;
+  unsigned char padding1;
   char block_type;                  // THR_BLOCK_MSG / THR_BLOCK
   short thread_id;
   unsigned int ports_mask;
-  int pading;
+  int padding;
 } PACKED_ATT;
 
 struct pm_msg_unblock_thread {
