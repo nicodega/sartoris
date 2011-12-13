@@ -390,7 +390,7 @@ int get_msgs(int port, int *msgs, int *ids, int maxlen)
 {
     struct port *p;
 	struct task *task = NULL;
-    int x, result, res, i;
+    int x, result, res, i, count = 0;
 	
     result = 0;
 
@@ -419,10 +419,7 @@ int get_msgs(int port, int *msgs, int *ids, int maxlen)
       
 		        if (p != NULL) 
 		        {
-                    set_error(SERR_OK);
-                
-                    if(p->total < maxlen)
-                        maxlen = p->total;
+                    set_error(SERR_OK);                
 
                     res = dequeue(&ids[i], p, &msgs[i+MSG_LEN]);
 
@@ -452,10 +449,10 @@ It will return a negative number if an error occured.
 */
 int get_msg_counts(int *ports, int *counts, int len) 
 {
-	int x, res = -1, i, port;
+	int x, res = 0, i, port;
 	struct task *task;
-
-    if(VALIDATE_PTR(ports) && VALIDATE_PTR(((unsigned int)ports)+len) && VALIDATE_PTR(((unsigned int)counts)+len) && VALIDATE_PTR(counts))
+    
+    if(VALIDATE_PTR(ports) && VALIDATE_PTR(((unsigned int)ports)+len*sizeof(int)) && VALIDATE_PTR(((unsigned int)counts)+len*sizeof(int)) && VALIDATE_PTR(counts))
     {        
         ports = MAKE_KRN_PTR(ports);
         counts = MAKE_KRN_PTR(counts);
@@ -482,8 +479,8 @@ int get_msg_counts(int *ports, int *counts, int len)
             }
             else
             {
-                counts[i] = task->open_ports[ports[i]]->total;
-                if(!res && counts[i])
+                counts[i] = task->open_ports[port]->total;
+                if(res == 0 && counts[i])
                     res = 1;
             }
 	    
@@ -492,11 +489,12 @@ int get_msg_counts(int *ports, int *counts, int len)
     }
     else
     {
+        res = -1;
         x = mk_enter();        
         set_error(SERR_INVALID_PTR);
 	    mk_leave(x);
     }
-	
+
 	return res;
 }
 
