@@ -139,7 +139,9 @@ int evt_wait(int id, int evt, int evt_param)
 	                while(i < MAX_TSK_OPEN_PORTS)
 	                {
 		                if((evt_param & (0x1 << i)) && tsk->open_ports[i] != NULL && tsk->open_ports[i]->total != 0) 
+                        {
                             break;
+                        }
                         i++;
 	                }
                     if(i == MAX_TSK_OPEN_PORTS)
