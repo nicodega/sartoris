@@ -20,7 +20,7 @@
 
 /*
 *
-*	This command is only ment to test char devices on ofs service.
+*	This command is only ment to test sartoris dynamic memory.
 *
 */
 

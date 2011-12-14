@@ -68,7 +68,6 @@ struct stdfss_res *mount_device(int wpid, struct working_thread *thread, struct 
 		free(str);
 		return ret;
 	}
-
 	wait_mutex(&mounted_mutex);
 	checkminf = (struct smount_info *)lpt_getvalue_parcial_matchE(mounted, str, &strmatched);
 	leave_mutex(&mounted_mutex);
@@ -89,7 +88,7 @@ struct stdfss_res *mount_device(int wpid, struct working_thread *thread, struct 
 		return build_response_msg(thread->command.command, STDFSSERR_NOT_FOUND);
 	}
 
-	// checkl mount path is not a prefix of the devfile path
+	// check mount path is not a prefix of the devfile path
 	if(istrprefix(0, str, devfile_name))
 	{
 		free(str);
@@ -252,7 +251,6 @@ struct stdfss_res *mount_device(int wpid, struct working_thread *thread, struct 
 	}
 	leave_mutex(&opened_files_mutex);
 
-	
 	// check device is not already mounted
 	wait_mutex(&mounted_mutex);
 	{
@@ -434,6 +432,8 @@ struct stdfss_res *mount_device(int wpid, struct working_thread *thread, struct 
 	// copy write_smo data to the ofst //
 	mem_copy(thread->directory_buffer.buffer, (unsigned char *)&minf->ofst, sizeof(struct OFST));
 	
+    print("OFST MNT %i %i %i %i %x %i %i %i %i \n", minf->ofst.first_group, minf->ofst.group_count, minf->ofst.mount_count, minf->ofst.block_size, minf->ofst.Magic_number, minf->ofst.ptrs_on_node, minf->ofst.node_size, minf->ofst.nodes_per_group, minf->ofst.blocks_per_group);
+
 	// check 4K block size //
 	if(minf->ofst.block_size != 4096 || minf->ofst.ptrs_on_node != PTRS_ON_NODE)
 	{
@@ -467,7 +467,7 @@ struct stdfss_res *mount_device(int wpid, struct working_thread *thread, struct 
 
 	// copy OFST back to the buffer //
 	mem_copy((unsigned char *)&minf->ofst, thread->directory_buffer.buffer, sizeof(struct OFST));
-	
+    
 	// write OFST to device //
 	read_smo = share_mem(deviceid, thread->directory_buffer.buffer, 512, READ_PERM);
 	block_write.buffer_smo = read_smo;

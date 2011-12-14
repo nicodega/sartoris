@@ -4,7 +4,8 @@ CFLAGS += -I"../../include"
 
 objects = fdc_entry.o fdc.o $(extobjects)
 
-extobjects = ../../drivers/screen/screen.o ../../lib/scheduler.o ../../lib/structures/stdlibsim.o ../../lib/int.o ../../klib/kserv.o ../../drivers/floppy/floppy.o ../../drivers/rtc/rtc.o ../../lib/debug.o 
+extobjects = ../../drivers/screen/screen.o ../../lib/scheduler.o ../../lib/structures/stdlibsim.o ../../lib/int.o ../../klib/kserv.o ../../drivers/floppy/floppy.o ../../drivers/rtc/rtc.o ../../lib/debug.o \
+../../lib/wait_msg_sync.o
 
 dependencies = fdc.d
 

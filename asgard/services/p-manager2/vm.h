@@ -452,7 +452,7 @@ int vmm_fmap_task_closing(struct pm_task *task, struct vmm_memory_region *mreg);
 void vmm_fmap_close_all(struct pm_task *task);
 
 /* PHY MAP */
-BOOL vmm_phy_mmap(struct pm_task *task, ADDR py_start, ADDR py_end, ADDR lstart, ADDR lend, UINT32 pages, char flags);
+BOOL vmm_phy_mmap(struct pm_task *task, ADDR py_start, ADDR py_end, ADDR lstart, ADDR lend, UINT32 pages, UINT32 align, char flags);
 void vmm_phy_umap(struct pm_task *task, ADDR lstart, int free_io);
 
 /* SHARED PAGES */

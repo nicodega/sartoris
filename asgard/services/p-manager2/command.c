@@ -130,8 +130,8 @@ void cmd_process_msg()
                                             mask |= (0x1 << k);
                                     }
 
-                                    if(evt_wait(thr->task_id, SARTORIS_EVT_MSG, mask))
-                                    {
+                                    if(evt_wait(thr->task_id, SARTORIS_EVT_MSG, mask) == SUCCESS)
+                                    {                                        
                                         thr->state = THR_BLOCKED;
                                         thr->block_port_mask = ((struct pm_msg_block_thread*)&msg)->ports_mask;
                                         sch_deactivate(thr);
@@ -229,7 +229,7 @@ void cmd_process_msg()
                 case PM_PHYMEM: 
 				{
 					/* if it's a service, it's entitled to know 
-                    it's physical memory base address. */
+                    a physical address. */
                     tsk = tsk_get(task_id);
 
                     if(tsk != NULL && (tsk->flags & (TSK_FLAG_SERVICE|TSK_LOW_MEM))==(TSK_FLAG_SERVICE|TSK_LOW_MEM))
@@ -462,9 +462,7 @@ void cmd_process_msg()
 
 	while(cmd != NULL) 
 	{
-		pman_print_dbg("COMMAND.c: Got a queue COMMAND! task: %i cmd: %i\n",  (cmd->sender_task & 0x0000FFFF), msg.pm_type);
-                
-        if(process_queue_msg(cmd))
+		if(process_queue_msg(cmd))
         {
             ocmd = cmd;
             cmd = cmd->next;
@@ -485,10 +483,10 @@ int process_queue_msg(struct pending_command *cmd)
 	struct fmap_params params;
     
     if(!tsk) return 1;
-    
+
     if(tsk->command_inf.executing != NULL)
         return 0;
-        
+
     if(tsk->state != TSK_NORMAL)
 	{
         if(msg.pm_type == PM_FMAP && !(tsk->flags & TSK_FLAG_SERVICE))
@@ -497,13 +495,13 @@ int process_queue_msg(struct pending_command *cmd)
             cmd_inform_result(&msg, task_id, PM_ERROR, 0, 0);
 		return 1;
     }
-    
+
     tsk->command_inf.executing = cmd;
     tsk->command_inf.callback = cmd_finished__callback;
     tsk->command_inf.command_ret_port = msg.response_port;
 	tsk->command_inf.command_req_id = msg.req_id;
 	tsk->command_inf.command_sender_id = task_id;
-        
+    
     switch(msg.pm_type) 
 	{
 		/* File mapping functions */            
@@ -548,9 +546,9 @@ int process_queue_msg(struct pending_command *cmd)
 			{
                 struct pm_msg_pmap_create *pmapcmd = (struct pm_msg_pmap_create*)&msg;
 					
-                if(!vmm_phy_mmap(tsk, (ADDR)pmapcmd->start_phy_addr, (ADDR)(pmapcmd->start_phy_addr + (pmapcmd->pages << 12)),
+                if(!vmm_phy_mmap(tsk, ((pmapcmd->flags & PM_PMAP_ALIGN)? (ADDR)0xFFFFFFFF : (ADDR)pmapcmd->start_phy_addr), (ADDR)(pmapcmd->start_phy_addr + (pmapcmd->pages << 12)),
 					(ADDR)pmapcmd->start_addr, (ADDR)(pmapcmd->start_addr + (pmapcmd->pages << 12)), 
-                    pmapcmd->pages, pmapcmd->flags))
+                    pmapcmd->pages, ((pmapcmd->flags & PM_PMAP_ALIGN)? (UINT32)pmapcmd->start_phy_addr : 0), pmapcmd->flags))
 				{
 					cmd_inform_result(&msg, task_id, PM_ERROR, 0, 0);                    
                     tsk->command_inf.executing = NULL;
@@ -1320,7 +1318,7 @@ INT32 cmd_swap_freed_callback(struct fsio_event_source *iosrc, INT32 ioret)
 		shutdown_tsk_unloaded(task->id);
 	
     if(!tsk_destroy(task))
-		pman_print("PMAN: Could not destroy task");
+		pman_print_dbg("PMAN: Could not destroy task");
 
 	return 1;
 }

@@ -418,44 +418,47 @@ void sch_process_portblocks()
         if(msg.evt == SARTORIS_EVT_MSG || msg.evt == SARTORIS_EVT_PORT_CLOSED)
         {
             struct pm_task *tsk = tsk_get(msg.id);
-            struct pm_thread *thr = tsk->first_thread;
-            int i;
-            unsigned int mask = 0;
-            
-            // wake threads waiting for a message on the port
-            while(thr)
+
+            if(tsk)
             {
-                if(thr->block_port_mask & (0x1 << msg.param))
+                struct pm_thread *thr = tsk->first_thread;
+                int i;
+                unsigned int mask = 0;
+            
+                // wake threads waiting for a message on the port
+                while(thr)
                 {
-                    thr->flags &= ~THR_FLAG_BLOCKED_PORT;
+                    if(thr->block_port_mask & (0x1 << msg.param))
+                    {
+                        thr->flags &= ~THR_FLAG_BLOCKED_PORT;
 
-                    if(!thr->flags)
-                        thr->state = THR_RUNNING;
-
-                    thr->block_port_mask = 0;
-                    sch_activate(thr);
+                        if(!thr->flags)
+                            thr->state = THR_RUNNING;
+          
+                        // fix the task port_blocks array
+                        for(i = 0; i < 32; i++)
+                        {
+                            if(thr->block_port_mask & (0x1 << i))
+                                tsk->port_blocks[i]--;
+                        }
+            
+                        thr->block_port_mask = 0;
+                        sch_activate(thr);
+                    }
+                      
+                    thr = thr->next_thread;
                 }
-                                
-                // fix the task port_blocks array
+
                 for(i = 0; i < 32; i++)
                 {
-                    if(thr->block_port_mask & (0x1 << i))
-                        tsk->port_blocks[i]--;
+                    if(tsk->port_blocks[i])
+                        mask |= (0x1 << i);
                 }
-            
-                thr = thr->next_thread;
-            }
-
-            for(i = 0; i < 32; i++)
-            {
-                if(tsk->port_blocks[i])
-                    mask |= (0x1 << i);
-            }
-
-            // set the wait again
-            if(mask)
-            {
-                evt_wait(tsk->id, SARTORIS_EVT_MSG, mask);
+                // set the wait again
+                if(mask)
+                {
+                    evt_wait(tsk->id, SARTORIS_EVT_MSG, mask);
+                }
             }
         }
     }

@@ -72,7 +72,9 @@ int wait_for_msgs_masked(int *ports, int *counts, int length, unsigned int mask)
     int ret = 0;
     struct pm_msg_block_thread msg;
     
-    while(!(ret = get_msg_counts(ports, counts, length)))
+    ret = get_msg_counts(ports, counts, length);
+
+    while(!ret)
     {
         msg.pm_type = PM_BLOCK_THREAD;
         msg.req_id = 0;
@@ -83,7 +85,9 @@ int wait_for_msgs_masked(int *ports, int *counts, int length, unsigned int mask)
         send_msg(PMAN_TASK, PMAN_COMMAND_PORT, &msg);
 
         reschedule();
-    }
 
+        ret = get_msg_counts(ports, counts, length);
+    }
+    
     return ret;
 }

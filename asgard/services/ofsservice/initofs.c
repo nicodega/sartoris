@@ -74,7 +74,6 @@ void init_ofs(struct stdfss_init *init_cmd, struct stdfss_res **ret)
 	}
 
 	// query for STDDEV interface using stdservice
-
 	query_cmd.command = STDSERVICE_QUERYINTERFACE;
 	query_cmd.uiid = STDDEV_UIID;
 	query_cmd.ret_port = OFS_BLOCKDEV_PORT;

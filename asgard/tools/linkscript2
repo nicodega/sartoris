@@ -53,6 +53,10 @@ SECTIONS
       _end.  Align after .bss to ensure correct alignment even if the
       .bss section disappears because there are no input sections.  */
    . = ALIGN(32 / 8);
+  }  
+  .noload (NOLOAD) :
+  {
+    *(.noload)
   }
   . = ALIGN(32 / 8);
   PROVIDE (end = .);

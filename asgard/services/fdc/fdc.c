@@ -20,6 +20,7 @@
 #include "fdc_internals.h"
 
 #include <lib/debug.h>
+#include <lib/wait_msg_sync.h>
 
 struct stdservice_res dieres;
 int dieid;
@@ -164,7 +165,7 @@ void create_fdc_thread()
 	msg_create_thr.response_port = FDC_PMAN_PORT;
 	msg_create_thr.task_id = get_current_task();
 	msg_create_thr.stack_addr = NULL;
-	msg_create_thr.entry_point = timer;
+	msg_create_thr.entry_point = irq_handler;
 	msg_create_thr.interrupt = 38;
 	msg_create_thr.int_priority = 6;
 
@@ -239,6 +240,7 @@ void init_drive()
 	open_port(STDSERVICE_PORT, 2, PRIV_LEVEL_ONLY);
     open_port(STDDEV_PORT, 2, PRIV_LEVEL_ONLY);
     open_port(STDDEV_BLOCK_DEV_PORT, 2, PRIV_LEVEL_ONLY);
+    open_port(FDC_DMA_TRANSACTIONS, 2, PRIV_LEVEL_ONLY);
 
 	__asm__ __volatile__ ("sti"::);
 
@@ -303,16 +305,20 @@ void init_drive()
 	/* now we enter an infinite loop, checking and procesing
 	   messages */
     int k = 7;
+    int ports[] = {STDSERVICE_PORT, STDDEV_PORT, STDDEV_BLOCK_DEV_PORT};
+    int counts[3];
+    unsigned int mask = 0x7;
+    string_print("FDC ALIVE",3*160 - 18,k++);
 	while(!die)
 	{		
-		while (get_msg_count(STDSERVICE_PORT) == 0 && get_msg_count(STDDEV_PORT) == 0 && get_msg_count(STDDEV_BLOCK_DEV_PORT) == 0) 
+        while(wait_for_msgs_masked(ports, counts, 3, mask) == 0)
         {
-            string_print("FDC ALIVE",3*160 - 18,k++);
-            reschedule(); 
+            
         }
-
+        string_print("FDC ALIVE",3*160 - 18,k++);
+		
 		/* process stdservice commands */
-		service_count = get_msg_count(STDSERVICE_PORT);
+		service_count = counts[0];
 		
 		while(service_count != 0)
 		{
@@ -340,7 +346,7 @@ void init_drive()
 			service_count--;
 		}
 
-		stddev_count = get_msg_count(STDDEV_PORT); 
+		stddev_count = counts[1];
 
 		/* process stddev messages */
 		while(!die && stddev_count != 0)
@@ -354,7 +360,7 @@ void init_drive()
 			stddev_count--;
 		}
 
-		stdblockdev_count = get_msg_count(STDDEV_BLOCK_DEV_PORT);
+		stdblockdev_count = counts[2];
 
 		/* process stdblock_dev msgs */
 		while(!die && stdblockdev_count != 0)
@@ -634,15 +640,16 @@ int check_ownership(int process_id, int logic_device)
 // be carefoul with clockv wrapping
 #define TIMED_OUT (tout < clockv)
 
-
 /* wait for interrupt */
 int wait_fdc_ex(int seek)
 {
 	SET_TIMEOUT(INT_TIMEOUT)
 
-	while (!int_ack && !TIMED_OUT) {
+	while (!int_ack && !TIMED_OUT) 
+    {
 		// waiting 
 	}
+
 	if(TIMED_OUT && !int_ack) return FDC_TIMEOUT;
 	int_ack = 0;
 
@@ -656,13 +663,16 @@ int wait_fdc()
 	return wait_fdc_ex(0);
 }
 
-int read_block(int block, int smo_id_dest) {
+int read_block(int block, int smo_id_dest) 
+{
 	return fdc_rw(block, smo_id_dest, 0, 0);
 }
 
-int write_block(int block, int smo_id_src) {
+int write_block(int block, int smo_id_src) 
+{
 	return fdc_rw(block, smo_id_src, 0, 1);
 }
+
 int mwrite_block(struct stdblockdev_writem_cmd *cmd)
 {
 	int count = 0, offset = 0;
@@ -688,11 +698,13 @@ int mread_block(struct stdblockdev_readm_cmd *cmd)
 	return FDC_OK; //ok
 }
 /* FDC low level functions */
-int send_byte(int byte) {
+int send_byte(int byte) 
+{
 
 	SET_TIMEOUT(TIMEOUT)
 
-	while (!TIMED_OUT) {
+	while (!TIMED_OUT) 
+    {
 		if (!busy()) 
 		{ 
 			send_data(byte);
@@ -709,11 +721,13 @@ int send_byte(int byte) {
 	return FDC_TIMEOUT;
 }
 
-int get_byte() {
+int get_byte() 
+{
 
 	SET_TIMEOUT(TIMEOUT)
 
-	while (!TIMED_OUT) {
+	while (!TIMED_OUT) 
+    {
 		if(req()) 
 		{ 
 			return get_data();
@@ -728,17 +742,20 @@ int get_byte() {
 	return -1;
 }
 
-void get_result() {
+void get_result() 
+{
 
 	statusz = 0;
 
-	while (statusz < 7 && on_command()) { 
-	  status[statusz++] = get_byte(); 
+	while (statusz < 7 && on_command()) 
+    {
+	    status[statusz++] = get_byte(); 
 	}
 
 }
 
-void sense_int() {
+void sense_int() 
+{
 
     /* send a "sense interrupt status" command */
 
@@ -806,17 +823,17 @@ void reset_drive()
 
 void convert_from_LBA(int block, int *head, int *track, int *sector) 
 {
-
 	*track = block / (sect_per_cyl * heads);
 	*head = (block / sect_per_cyl) % heads;
 	*sector = (block % sect_per_cyl) + 1;
 }
 
-void motor_on() {
-
+void motor_on() 
+{
 	motor_tout = -1; /* finish countdown */
 
-	if (motor) { 
+	if (motor) 
+    { 
 		return; 
 	}
 
@@ -850,7 +867,8 @@ int disk_changed()
 }
 
 // precondition: motor on.
-void recalibrate() {
+void recalibrate() 
+{
 
     int tries = 13;	// try many times
 
@@ -896,42 +914,42 @@ int seek(int track)
 	// sr0 & 0xFB instead of sr0 alone. On the docs
 	// it says that bit will be 0 but im not sure
 	// botchs does it.. eitherway it's ok.
-	if (((sr0 & 0xFB) != 0x20) || (track != fdc_track)) {
+	if (((sr0 & 0xFB) != 0x20) || (track != fdc_track)) 
+    {
 		return FDC_ERR;
 	}
 
 	return FDC_OK;
 }
 
-int fdc_rw(int block, int smo_id, int offset, int write) {
+int fdc_rw(int block, int smo_id, int offset, int write) 
+{
 
 	int head, track, sector, tries = 3, tout;
 	struct dma_response dma_res;
 	int id_proc, i, omgs;
 
 	/* convert logical address into physical address */
-
 	convert_from_LBA(block, &head, &track, &sector);
 
 	/* if it's a write operation, we must copy the data
 	   to the dma buffer */
 
-	if (write) {
-	  /* copy data from SMO */
-
-		if(smo_id == -1) { return -1; }
-
+	if (write) 
+    {
+	    /* copy data from SMO */
 		read_mem(smo_id, offset, 512, buffer);
 	}
 
 	// wait while floppy is busy
 	while(busy());
-	while (tries != 0) {
-	
+	while (tries != 0) 
+    {
 		motor_on();
 		specify();	// set data rate
 
-		if (seek(track) != FDC_OK) {
+		if (seek(track) != FDC_OK) 
+        {
 			motor_off();
 			return FDC_ERR;
 		}
@@ -939,42 +957,51 @@ int fdc_rw(int block, int smo_id, int offset, int write) {
 		// check there is a disk on the drive
 		if(disk_change())
 		{
-			// disk changed
+            // disk changed
 			return FDC_ERR;
 		}
 
 		/* initialize DMA for transfer */
 
-		if (!write) {
-		  /* read operation */
-		 
-		  if (dma_op != WRITE) {
-		    send_msg(dma_man_task, DMA_COMMAND_PORT, &prepare_read);
-		    while (get_msg_count(FDC_DMA_TRANSACTIONS) == 0) { 
-		      reschedule(); 
-		    }
-		    get_msg(FDC_DMA_TRANSACTIONS, &dma_res, &id_proc);
-		    if(dma_res.result != DMA_OK) {return FDC_ERR;}
-		    dma_smo = dma_res.res1;
-		    dma_op = WRITE;
-		  }
-		  motor_on(); // just in case DMA took too long to answer
-		  send_byte(CMD_READ);
-		} else {
-		  if (dma_op != READ) {
-		    send_msg(dma_man_task, DMA_COMMAND_PORT, &prepare_write);
-		    while (get_msg_count(FDC_DMA_TRANSACTIONS) == 0) { 
-		      reschedule();
-		    }
-		    get_msg(FDC_DMA_TRANSACTIONS, &dma_res, &id_proc);
-		    if (dma_res.result != DMA_OK) { return FDC_ERR; }
-		    dma_smo = dma_res.res1;
-		    dma_op = READ;
-		  }
-		  write_mem(dma_smo, 0, 512, buffer);
-		  motor_on(); // just in case DMA took too long to answer
-		  send_byte(CMD_WRITE);
-		}
+		if (!write) 
+        {
+            /* read operation */
+            if (dma_op != WRITE)
+            {
+                send_msg(dma_man_task, DMA_COMMAND_PORT, &prepare_read);
+                while (get_msg_count(FDC_DMA_TRANSACTIONS) == 0) 
+                { 
+                    reschedule(); 
+                }
+                get_msg(FDC_DMA_TRANSACTIONS, &dma_res, &id_proc);
+                if(dma_res.result != DMA_OK) 
+                    return FDC_ERR;
+                dma_smo = dma_res.res1;
+                dma_op = WRITE;
+            }
+            motor_on(); // just in case DMA took too long to answer
+            send_byte(CMD_READ);
+        } 
+        else 
+        {
+            if (dma_op != READ) 
+            {
+                send_msg(dma_man_task, DMA_COMMAND_PORT, &prepare_write);
+                while (get_msg_count(FDC_DMA_TRANSACTIONS) == 0) 
+                { 
+                    reschedule();
+                }
+                get_msg(FDC_DMA_TRANSACTIONS, &dma_res, &id_proc);
+                if (dma_res.result != DMA_OK) 
+                    return FDC_ERR;
+                dma_smo = dma_res.res1;
+                dma_op = READ;
+            }
+            if(write_mem(dma_smo, 0, 512, buffer) == FAILURE)
+                print("write mem failed");
+            motor_on(); // just in case DMA took too long to answer
+            send_byte(CMD_WRITE);
+        }
 
 		send_byte(head << 2);
 		send_byte(track);
@@ -986,7 +1013,6 @@ int fdc_rw(int block, int smo_id, int offset, int write) {
 		send_byte(0xff);
 
 		/* now wait for command completion */
-
 		if(wait_fdc() != FDC_OK)
 		{
 			// fail
@@ -996,7 +1022,8 @@ int fdc_rw(int block, int smo_id, int offset, int write) {
 		}
 
 		/* check results */
-		if (((status[0] & 0xc0) == 0)) {
+		if (((status[0] & 0xc0) == 0)) 
+        {
 			break;
 		}
 
@@ -1005,8 +1032,8 @@ int fdc_rw(int block, int smo_id, int offset, int write) {
 		
 		tries--;
 
-		if (tries == 0) {
-
+		if (tries == 0) 
+        {
 			return FDC_ERR;
 		}
 	}
@@ -1014,8 +1041,10 @@ int fdc_rw(int block, int smo_id, int offset, int write) {
 	/* if it was a read op then copy the data
 	   from the buffer */
 	
-	if (!write) {
-		if (smo_id == -1) {
+	if (!write) 
+    {
+		if (smo_id == -1) 
+        {
 			return FDC_ERR;
 		}	
 		read_mem(dma_smo,0,512,buffer);
@@ -1027,36 +1056,41 @@ int fdc_rw(int block, int smo_id, int offset, int write) {
 	return FDC_OK;
 }
 
-void irq_handler() {
-
+void irq_handler() 
+{
 	__asm__ ("cli"::);
 
-	for(;;) {
+	for(;;) 
+    {
 		int_ack = 1;
 	
 		// send EOI to master PIC
 		__asm__	 __volatile__ ("movl $0x20, %%eax;"
-			               "outb %%al, $0x20" : : :"eax");
+			                   "outb %%al, $0x20" : : :"eax");
 		ret_from_int();
 	}
 }
 
-void timer() {
+void timer() 
+{
 
     __asm__ ("cli"::);
 
-	for(;;){
+	for(;;)
+    {
 		
 		clockv++;
 		
-		if (motor && motor_tout != -1) {
+		if (motor && motor_tout != -1) 
+        {
 			motor_tout--;
 			
-			if (motor_tout == 0) {
-			  // turn off the motor 
-			  set_floppy(DMA_ENABLE | DRIVE_ENABLE);
-			  motor_tout = -1; 
-			  motor = 0;
+			if (motor_tout == 0) 
+            {
+                // turn off the motor 
+                set_floppy(DMA_ENABLE | DRIVE_ENABLE);
+                motor_tout = -1; 
+                motor = 0;
 			}
 			
 		}
