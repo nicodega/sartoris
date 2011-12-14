@@ -258,6 +258,9 @@ int format_simple_ofs(char *device_file_name, void(*print_func)(char*,int))
 		return 1;
 	}
 
+	// calculate block and node co
+    print("OFST %i %i %i %i %x %i %i %i %i \n", ofst.first_group, ofst.group_count, ofst.mount_count, ofst.block_size, ofst.Magic_number, ofst.ptrs_on_node, ofst.node_size, ofst.nodes_per_group, ofst.blocks_per_group);
+
 	if(print_func != NULL) print_func("OK", 11);
 
 	// create group header
@@ -272,6 +275,8 @@ int format_simple_ofs(char *device_file_name, void(*print_func)(char*,int))
 	gh.nodes_table_offset = gh.nodes_bitmap_offset + bitmaps_size(node_count, 0) / OFS_BLOCKDEV_BLOCKSIZE;
 	gh.blocks_offset = gh.nodes_bitmap_offset + bitmaps_size(node_count, 0)  / OFS_BLOCKDEV_BLOCKSIZE + (int)(node_count / OFS_NODESPER_BLOCKDEV_BLOCK) + ((node_count % OFS_NODESPER_BLOCKDEV_BLOCK == 0)? 0 : 1);
 	
+    print("GH %x %x %i %i %i %i %x %x\n", gh.blocks_bitmap_offset, gh.nodes_bitmap_offset, gh.blocks_per_group, gh.nodes_per_group, gh.group_id, gh.group_size, gh.nodes_table_offset, gh.blocks_offset);
+
 	// write Group Header to media
 
 	if(print_func != NULL) print_func("\nWriting Group Header... ", 7);

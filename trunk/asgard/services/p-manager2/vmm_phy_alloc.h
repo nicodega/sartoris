@@ -62,6 +62,7 @@ void pya_put_page(phy_allocator *pa, ADDR pg_laddr, INT32 flags);
 void pya_put_pages(phy_allocator *pa, ADDR pg_laddr, UINT32 pages, INT32 flags);
 void *pya_get_page(phy_allocator *pa, BOOL io);
 void *pya_get_pages(phy_allocator *pa, UINT32 pages, BOOL io);
+void *pya_get_pages_aligned(phy_allocator *pa, UINT32 pages, BOOL io, UINT32 align);
 void *pya_get_pages_addr(phy_allocator *pa, ADDR pg_laddr, UINT32 pages, BOOL io);
 
 #endif /* __PAGE_STACK_H */

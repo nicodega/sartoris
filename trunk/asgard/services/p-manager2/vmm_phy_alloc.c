@@ -378,6 +378,55 @@ void *pya_get_pages(phy_allocator *pa, UINT32 pages, BOOL io)
     return NULL;
 }
 
+void *pya_get_pages_aligned(phy_allocator *pa, UINT32 pages, BOOL io, UINT32 align)
+{
+    phy_page_node *a = NULL,
+                  *start = NULL;
+    INT32 cpow = (32 -__builtin_clz(pages))-1;
+
+    if(pages > PHY_MAX_PAGES || align > 0x10000) // max 64kb alignment 
+        return NULL;
+    
+    // just go for the ugly way... (this could probably be done better)
+
+    INT32 pow = PHY_SIZES-1;
+    UINT32 pgsize = ((pages-1) << 12);
+    phy_page_node **lst = pa->pg_index;
+    
+    // Starting from the topmost power, I'll try to build
+    // the area. This is a really unefficient algorithm,
+    // but since we don't have a full buddy with the size
+    // we must check the whole structure.
+    void *addr = NULL;
+    UINT32 pstart = NULL;
+
+    while(pow >= 0)
+    {
+        // try each area
+        start = lst[pow];
+        pstart = LINEAR2PHYSICAL(start);
+
+        while(start)
+        {
+            if(pstart % align != 0)
+                addr = PHYSICAL2LINEAR(pstart + (align - pstart % align));
+            else
+                addr = start;
+
+            struct taken_table *ttable = vmm.taken.tables[PM_LINEAR_TO_DIR((UINT32)addr + pgsize)];
+            struct taken_entry *tentry = &ttable->entries[PM_LINEAR_TO_TAB((UINT32)addr + pgsize)];
+
+            if(tentry->data.b_pg.taken == 0 && !(!io && (tentry->data.b_pg.flags & TAKEN_PG_FLAG_IO))
+                && pya_get_pages_addr(pa, addr, pages, io))
+                return addr;
+            start = start->next;
+            pstart = LINEAR2PHYSICAL(start);
+        }
+        pow--;
+    }
+    return NULL;
+}
+
 void *pya_get_pages_addr(phy_allocator *pa, ADDR pg_laddr, UINT32 pages, BOOL io)
 {
     phy_page_node *fa = (phy_page_node*)pg_laddr;

@@ -325,10 +325,23 @@ struct pm_msg_pmap_create	// PM_PMAP_CREATE
                                 // particular physical address but just a chunk of memory
 } PACKED_ATT;
 
+// PM_PMAP_CREATE flags
+
 #define PM_PMAP_CACHEDIS  0x1   // disable cache for this region
 #define PM_PMAP_WRITE	  0x2   // allow write to this area
 #define PM_PMAP_IO   	  0x4   // this will be an area used for a device IO
 #define PM_PMAP_LOW_MEM   0x8
+#define PM_PMAP_ALIGN     0x10  // start_phy_addr should be interpreted as an alignment
+
+
+struct pm_msg_pmap_create_response {
+  unsigned char pm_type;
+  unsigned char padding0;
+  short req_id;
+  int   status;
+  int   task;
+  void *phy_address;
+} PACKED_ATT;
 
 struct pm_msg_pmap_remove   // PM_PMAP_REMOVE
 {

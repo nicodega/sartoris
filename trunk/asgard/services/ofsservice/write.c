@@ -37,7 +37,7 @@ struct stdfss_res *write_file(int wpid, struct working_thread *thread, struct st
 	int lb_used = 0;
 	int written = 0;
 	int wasnull = FALSE;
-	
+
 	// see if this task has the file opened
 	if(!get_file_info(thread->taskid, write_cmd->file_id, &finf, &tinf))
 	{
@@ -567,7 +567,7 @@ struct stdfss_res *write_file(int wpid, struct working_thread *thread, struct st
 	}
 	else
 	{
-		// it's a device opened as a file... 
+        // it's a device opened as a file... 
 		if(finf->dinf->dev_type == DEVTYPE_CHAR)
 		{
 			return chardev_write(wpid, thread, write_cmd, delimited, finf);			
@@ -578,8 +578,8 @@ struct stdfss_res *write_file(int wpid, struct working_thread *thread, struct st
 			left = write_cmd->count; 
 			written = 0;
 			offset = 0;
-							
-			// write first block
+
+            // write first block
 			if(current_block_free > 0)
 			{
 				// read the contents of the current block (fill will only retrieve one device block)

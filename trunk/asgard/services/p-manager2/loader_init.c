@@ -221,7 +221,7 @@ UINT32 put_pages(struct pm_task *task, BOOL use_fsize, BOOL low_mem, BOOL lib)
 	UINT32 page_addr, pagecount, foffset;
 	ADDR pg_tbl, pg, pgp;
     UINT32 max_addr = 0;
-	
+
 	/* Put Pages in for loadable segments */
 	while( i < task->loader_inf.elf_header.e_phnum)
 	{
