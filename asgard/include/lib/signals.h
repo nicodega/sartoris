@@ -77,6 +77,7 @@ typedef struct signal_response** SIGNALHANDLER;
 void sleep(unsigned int milliseconds);
 int wait_signal(unsigned short event_type, unsigned short task, unsigned int timeout, unsigned int param, unsigned int *res);
 SIGNALHANDLER wait_signal_async(unsigned short event_type, unsigned short task, unsigned int timeout, unsigned int param);
+int wait_sigh(SIGNALHANDLER sigh);
 int check_signal(SIGNALHANDLER sigh, unsigned int *res);
 void discard_signal(SIGNALHANDLER sigh);
 int signal_id(SIGNALHANDLER sigh);

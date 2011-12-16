@@ -5,7 +5,8 @@ CFLAGS += -I"../../include"
 objects = shell_entry.o shell.o initialization.o terminal.o run_internal.o run.o cd.o env.o ls.o mount.o io.o set.o contest.o jobs.o process.o execute.o atactst.o dyntst.o $(extobjects)
 
 extobjects = ../../klib/kserv.o ../../lib/scheduler.o ../../lib/sprintf.o ../../lib/int.o ../../lib/debug.o ../../drivers/screen/screen.o ../../lib/malloc.o ../../lib/critical_section.o \
-../../lib/structures/string.o ../../lib/structures/int64.o ../../lib/piolib.o ../../lib/structures/lptree.o ../../lib/structures/list.o ../../lib/structures/stdlibsim.o ../../lib/format.o ../../lib/parameters.o
+../../lib/structures/string.o ../../lib/structures/int64.o ../../lib/piolib.o ../../lib/structures/lptree.o ../../lib/structures/list.o ../../lib/structures/stdlibsim.o ../../lib/format.o \
+../../lib/parameters.o ../../lib/wait_msg_sync.o
 
 dependencies = shell.d cd.d env.d ls.d mount.d io.d set.d initialization.d terminal.d run_internal.d run.d process.d execute.d jobs.d atactst.d dyntst.d
 

@@ -18,6 +18,7 @@
 */
 
 #include "directory_internals.h"
+#include <lib/wait_msg_sync.h>
 
 AvlTree services_by_id;
 lpat_tree services_by_name;
@@ -53,14 +54,15 @@ void directory_main()
 	avl_init(&services_by_id);
 	lpt_init(&services_by_name);
 
+    int ports[] = {STDSERVICE_PORT, DIRECTORY_PORT};
+    int counts[2];
+    unsigned int mask = 0x3;
+
 	while(!die)
 	{
-		while(get_msg_count(DIRECTORY_PORT) == 0 && get_msg_count(STDSERVICE_PORT) == 0)
-		{
-			reschedule();
-		}
+		while(wait_for_msgs_masked(ports, counts, 2, mask) == 0){}
 
-		service_count = get_msg_count(STDSERVICE_PORT);
+		service_count = counts[0];
 		
 		while(service_count != 0)
 		{            
@@ -91,16 +93,14 @@ void directory_main()
 			service_count--;
 		}
 
-		while(!die && get_msg_count(DIRECTORY_PORT) != 0)
+		while(!die && counts[1])
 		{
 			get_msg(DIRECTORY_PORT, &command, &id);
 
 			response.command = command.command;
 			response.thr_id = command.thr_id;
 			response.ret = DIRECTORYERR_OK;
-
-            //print("DIR CMD: %i, task %i ", command.command, id);
-
+            
 			switch(command.command)
 			{
 			    case DIRECTORY_REGISTER_SERVICE:
@@ -215,8 +215,10 @@ void directory_main()
 
 				    break;
 			}
-			
+
 			send_msg(id, command.ret_port, &response);
+
+            counts[1]--;
 		}
 	}
 

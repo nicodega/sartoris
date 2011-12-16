@@ -18,6 +18,7 @@
 */
 
 #include "atac.h"
+#include <lib/wait_msg_sync.h>
 
 char mallocbuffer[1024 * 32];	// 32kb
 
@@ -97,30 +98,30 @@ void _start()
 
 	/* Find ata devices on system */
 	ata_find();
-    int k = 0;
+    int k = 11;
+    int ports[] = {STDSERVICE_PORT, STDDEV_PORT, STDDEV_BLOCK_DEV_PORT, ATAC_THREAD_ACK_PORT};
+    int counts[4];
+    unsigned int mask = 0x39;
+
 	/* Command processing queue */
 	while(!die)
 	{
-        while (get_msg_count(STDSERVICE_PORT) == 0 
-			&& get_msg_count(STDDEV_PORT) == 0 
-			&& get_msg_count(STDDEV_BLOCK_DEV_PORT) == 0 
-			&& get_msg_count(ATAC_THREAD_ACK_PORT) == 0)
-		{ 			
-			string_print("ATAC ALIVE",160 - 20,k++);
-		    reschedule(); 
-		}
-
-		while(get_msg_count(ATAC_THREAD_ACK_PORT) > 0)
+        while(wait_for_msgs_masked(ports, counts, 4, mask) == 0){}			
+		string_print("ATAC ALIVE",160 - 20,k++);
+        
+        while(counts[3])
 		{
 			struct pm_msg_response msg_res;
 
 			get_msg(ATAC_THREAD_ACK_PORT, &msg_res, &id);
 			/* Generate an event :) */
 			send_event(get_current_task(), THREAD_CREATED_EVENT, msg_res.req_id, (msg_res.status == PM_THREAD_OK));
+
+            counts[3]--;
 		}
 
 		/* Process std service messages */
-		int service_count = get_msg_count(STDSERVICE_PORT);
+		int service_count = counts[0];
 		
 		while(service_count != 0)
 		{
@@ -145,7 +146,7 @@ void _start()
 		}
 
 		/* Process stddev messages */
-		int stddev_count = get_msg_count(STDDEV_PORT); 
+		int stddev_count = counts[1]; 
 
 		while(!die && stddev_count != 0)
 		{
@@ -160,7 +161,7 @@ void _start()
 		}
 
 		/* Process stdblockdev messages */
-		int stdblockdev_count = get_msg_count(STDDEV_BLOCK_DEV_PORT);
+		int stdblockdev_count = counts[2];
 		struct stdblockdev_cmd block_msg;
 		struct stdblockdev_res block_res;
 

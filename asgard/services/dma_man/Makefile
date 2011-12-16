@@ -4,7 +4,8 @@ CFLAGS += -I"../../include"
 
 objects = dma_entry.o dma_man.o $(extobjects)
 
-extobjects = ../../drivers/screen/screen.o ../../klib/kserv.o ../../drivers/dma/dma.o ../../lib/pmalloc.o ../../lib/structures/list.o ../../lib/int.o ../../lib/scheduler.o ../../lib/debug.o
+extobjects = ../../drivers/screen/screen.o ../../klib/kserv.o ../../drivers/dma/dma.o ../../lib/pmalloc.o ../../lib/structures/list.o ../../lib/int.o ../../lib/scheduler.o ../../lib/debug.o \
+../../lib/wait_msg_sync.o
 
 dependencies = dma_entry.d dma_man.d
 
