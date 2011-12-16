@@ -18,6 +18,7 @@
 */
 
 #include "pipes_srv_internals.h"
+#include <lib/wait_msg_sync.h>
 
 char malloc_buffer[1024 * 30]; // 30 kb
 
@@ -63,16 +64,15 @@ pipes_main()
     close_port(1);
 
 	claim_mem(reg_cmd.service_name_smo);
-
+    int ports[] = {STDSERVICE_PORT, PIPES_PORT};
+    int counts[2];
+    unsigned int mask = 0x5;
 	for(;;)
 	{
-		while(get_msg_count(PIPES_PORT) == 0 && get_msg_count(STDSERVICE_PORT) == 0)
-		{ 
-            reschedule(); 
-		}
+        while(wait_for_msgs_masked(ports, counts, 2, mask) == 0){}
 
 		// process incoming STDSERVICE messages
-		int service_count = get_msg_count(STDSERVICE_PORT);
+		int service_count = counts[0];
 			
 		while(service_count != 0)
 		{   
@@ -99,7 +99,7 @@ pipes_main()
 		}
 
 		// process incoming pipes messages
-		int pipes_count = get_msg_count(PIPES_PORT);
+		int pipes_count = counts[1];
 			
 		while(pipes_count != 0)
 		{

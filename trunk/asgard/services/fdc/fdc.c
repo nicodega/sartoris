@@ -311,10 +311,7 @@ void init_drive()
     string_print("FDC ALIVE",3*160 - 18,k++);
 	while(!die)
 	{		
-        while(wait_for_msgs_masked(ports, counts, 3, mask) == 0)
-        {
-            
-        }
+        while(wait_for_msgs_masked(ports, counts, 3, mask) == 0){}
         string_print("FDC ALIVE",3*160 - 18,k++);
 		
 		/* process stdservice commands */

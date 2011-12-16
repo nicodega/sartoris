@@ -71,6 +71,9 @@ void process_signals()
 			case WAIT_FOR_SIGNAL_NBLOCK:
 				wait_signal(&signal, FALSE, id);
 				break;
+            case SIG_NBLOCK_TO_BLOCK:
+				signal_nblock2block(&signal, id);
+				break;
 			case DISCARD_SIGNAL:
 				discard_signal((struct discard_signal_cmd*)&signal, id);				
 				break;
@@ -381,6 +384,69 @@ void discard_signal(struct discard_signal_cmd *dsignal, UINT16 task)
         
 		kfree(signal);		
 	}
+}
+
+void signal_nblock2block(struct wait_for_signal_cmd *signal_cmd, UINT16 task)
+{
+	struct pm_thread *thread = thr_get(signal_cmd->thr_id);
+	struct thr_signal *signal = NULL;
+	struct signal_cmd signal_msg;
+
+    signal_msg.command = SIGNAL;
+	signal_msg.thr_id = signal_cmd->thr_id;
+	signal_msg.event_type = signal_cmd->event_type;
+	signal_msg.id = signal_cmd->id;
+	signal_msg.task = signal_cmd->task;
+	signal_msg.res = 0;
+	signal_msg.ret = SIGNAL_FAILED;
+
+	if(thread == NULL || signal_cmd->thr_id >= MAX_THR || thread->task_id != task
+		  || thread->state == THR_NOTHING
+		  || thread->state == THR_KILLED
+		  || thread->state == THR_EXCEPTION
+          || thread->signals.blocking_signal != NULL)
+	{
+        // fail
+		pman_print_dbg("PMAN: signal_nblock2block failed checks.\n");
+        send_msg(task, signal->signal_port, &signal_msg);
+		return;
+	}
+
+	/* Find a matching signal */
+	signal = thread->signals.first;
+
+	while(signal != NULL)
+	{
+		if(signal->task == signal_cmd->task 
+            && signal->event_type == signal_cmd->event_type
+			&& signal->signal_param == signal_cmd->signal_param
+			&& signal->id == signal_cmd->id 
+			&& signal->signal_port == signal_cmd->signal_port ) 
+			break;
+		signal = signal->tnext;		
+	}
+
+	if(signal != NULL)
+    {
+        if(signal->timeout == PMAN_SIGNAL_REPEATING)
+        {
+            pman_print_dbg("PMAN: signal_nblock2block signal is repeating.\n");
+            send_msg(task, signal->signal_port, &signal_msg);
+        }
+        else
+        {
+            // block the thread
+            thread->signals.blocking_signal = signal;
+
+		    sch_deactivate(thread);
+        }
+	}
+    else
+    {
+        // fail
+        pman_print_dbg("PMAN: signal_nblock2block signal not found.\n");
+        send_msg(task, signal->signal_port, &signal_msg);
+    }
 }
 
 void event(struct event_cmd *evt, UINT16 task)

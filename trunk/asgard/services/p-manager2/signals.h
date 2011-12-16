@@ -116,6 +116,7 @@ void timer_tick();
 void init_tsk_signals(struct pm_task *tsk);
 
 void wait_signal(struct wait_for_signal_cmd *signal, BYTE blocking, UINT16 task);
+void signal_nblock2block(struct wait_for_signal_cmd *signal_cmd, UINT16 task);
 void discard_signal(struct discard_signal_cmd *dsignal, UINT16 task);
 void event(struct event_cmd *evt, UINT16 task);
 

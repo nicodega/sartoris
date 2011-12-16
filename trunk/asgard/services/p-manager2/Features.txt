@@ -12,12 +12,13 @@ Internals:
 - Exception Management          *
 - Auto OFS/Swap Mount           *
 - Multiboot Aware               *
-- Priority/Signal driven Scheduler  *
+- Priority/Signal driven Scheduler        *
+    \_ Thread blocking for message waits  *
 - Non-Fixed Malloc              *
 - Signaled Interrupts           *
 - Init fs2 loading              * 
 - Dynamic loading               * (only using ld service for now)
-- Debugging interface		*
+- Debugging interface		    *
 
 Protocols:
 

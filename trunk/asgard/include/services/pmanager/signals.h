@@ -46,6 +46,7 @@ will override the current signal.
 #define DISCARD_SIGNAL	        0x5     // tell the process manager to dicard a given signal
 #define SET_SIGNAL_HANDLER	    0x6     // Set a task wide exceptions signal handler.
 #define SET_SIGNAL_STACK	    0x7     // Set a stack for the thread signal handler.
+#define SIG_NBLOCK_TO_BLOCK	    0x8     // Transforms a non blocking signal onto a blocking one.
 
 /* Errors */
 #define SIGNAL_OK		0x0
@@ -71,7 +72,7 @@ will override the current signal.
 
 struct wait_for_signal_cmd
 {
-	unsigned char command;		// set to WAIT_FOR_SIGNAL
+	unsigned char command;		// set to WAIT_FOR_SIGNAL/WAIT_FOR_SIGNAL_NBLOCK/SIG_NBLOCK_TO_BLOCK
 	unsigned short thr_id;		// a thread identifier
 	unsigned char event_type;	// event which will trigger the signal
 	unsigned char id;	        // an identifier number (can be set to anything and it will be returned as is)

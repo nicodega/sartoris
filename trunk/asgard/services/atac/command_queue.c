@@ -50,7 +50,7 @@ struct device_command *queue_getnext(struct command_queue *queue, int channelid)
 		dev = (queue->next_dev)? 0 : 1;
 	}
 
-	if(dev == -1)
+	if(dev == -1) 
 	{
 		/* If there are no commands queued Wait for signal (we will be signaled when there are pending messages on our queue) */
 		SIGNALHANDLER sigh = wait_signal_async(CHANNEL_COMMAND_EVENT, get_current_task(), SIGNAL_TIMEOUT_INFINITE, channelid);
@@ -58,9 +58,7 @@ struct device_command *queue_getnext(struct command_queue *queue, int channelid)
 		leave_mutex(&queue->queue_mutex);
 
         /* wait for the signal */
-		while(check_signal(sigh, NULL) == 0) { reschedule(); }
-        
-        discard_signal(sigh);
+        wait_sigh(sigh);
 
 		wait_mutex(&queue->queue_mutex);
 		

@@ -25,6 +25,7 @@
 #include <lib/structures/string.h>
 #include <lib/malloc.h>
 #include "pci.h"
+#include <lib/wait_msg_sync.h>
 
 #define PCI_PORT	0x2
 
@@ -74,18 +75,17 @@ void pci_main()
 
 	/* enumerate PCI devices on the system */
 	enum_pci();
-    
-    int i = 0;
+    int ports[] = {STDSERVICE_PORT, PCI_PORT};
+    int counts[3];
+    unsigned int mask = 0x5;
+    int i = 11;
 	for(;;)
 	{   
-		while(get_msg_count(PCI_PORT) == 0 && get_msg_count(STDSERVICE_PORT) == 0)
-		{ 
-			string_print("PCI ALIVE",7*160-18,i++);
-            reschedule(); 
-		}
-
+		while(wait_for_msgs_masked(ports, counts, 2, mask) == 0){}
+        string_print("PCI ALIVE",7*160-18,i++);
+            
 		// process incoming STDSERVICE messages
-		int service_count = get_msg_count(STDSERVICE_PORT);
+		int service_count = counts[0];
 			
 		while(service_count != 0)
 		{
@@ -113,7 +113,7 @@ void pci_main()
 		}
 
 		// process incoming pci messages
-		int pci_count = get_msg_count(PCI_PORT);
+		int pci_count = counts[1];
 			
 		while(pci_count != 0)
 		{

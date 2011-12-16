@@ -22,6 +22,7 @@
 #include <lib/const.h>
 #include <lib/scheduler.h>
 #include <services/pmanager/services.h>
+#include <lib/wait_msg_sync.h>
 
 /* REMOVEME */
 #include <lib/debug.h>
@@ -127,16 +128,20 @@ void dma_srv()
     close_port(2);
     claim_mem(reg_cmd.service_name_smo);
 
+    int ports[] = {STDSERVICE_PORT, DMA_COMMAND_PORT};
+    int counts[2];
+    unsigned int mask = 0x3;
+    i = 11;
+    string_print("DMA ALIVE",2*160-18,i++);
+
     while (!die) 
     {
     
         /* wait for a message to come */
-        while(get_msg_count(DMA_COMMAND_PORT) == 0 && get_msg_count(STDSERVICE_PORT) == 0) {
-            string_print("DMA ALIVE",2*160-18,i++);
-            reschedule();
-        }
-
-        service_count = get_msg_count(STDSERVICE_PORT);
+        while(wait_for_msgs_masked(ports, counts, 2, mask) == 0){}
+        string_print("DMA ALIVE",2*160-18,i++);
+            
+        service_count = counts[0];
 		
         while(service_count != 0)
         {
@@ -164,7 +169,7 @@ void dma_srv()
 	        service_count--;
         }
 
-        while(!die && get_msg_count(DMA_COMMAND_PORT) > 0)
+        while(!die && counts[1])
         {
 	        get_msg(DMA_COMMAND_PORT, &msg, &id);
 
@@ -266,6 +271,8 @@ void dma_srv()
 	        res.result = result;
 	        res.thr_id = msg.thr_id;
 	        send_msg(id, msg.ret_port, &res);
+
+            counts[1]--;
         }
     }
 

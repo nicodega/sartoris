@@ -4,7 +4,8 @@ CFLAGS += -I"../../include"
 
 objects = directory_entry.o directory.o $(extobjects)
 
-extobjects = ../../lib/structures/lptree.o ../../lib/structures/string.o ../../klib/kserv.o ../../lib/structures/avltree.o ../../lib/malloc.o ../../lib/structures/list.o ../../lib/critical_section.o ../../lib/int.o ../../lib/scheduler.o ../../lib/debug.o ../../drivers/screen/screen.o 
+extobjects = ../../lib/structures/lptree.o ../../lib/structures/string.o ../../klib/kserv.o ../../lib/structures/avltree.o ../../lib/malloc.o ../../lib/structures/list.o \
+../../lib/critical_section.o ../../lib/int.o ../../lib/scheduler.o ../../lib/debug.o ../../drivers/screen/screen.o ../../lib/wait_msg_sync.o
 
 dependencies = directory.d
 

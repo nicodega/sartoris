@@ -19,6 +19,7 @@
 */
 
 #include "shell_iternals.h"
+#include <lib/wait_msg_sync.h>
 
 /*****************************/
 
@@ -174,14 +175,18 @@ void service_main (void)
 	init_consoles();
     init(&running);
     
-    int k = 0;
+    int ports[] = {CSL_SCAN_ACK_PORT, CSL_SIGNAL_PORT, PM_TASK_ACK_PORT, SHELL_INITRET_PORT, SHELL_PORT};
+    int counts[5];
+    unsigned int mask = 0x296;
+    int k = 1;
 	/* Message loop */
 	for(;;)
 	{   
+        while(wait_for_msgs_masked(ports, counts, 5, mask) == 0){}
         string_print("SHELL ALIVE",5*160 - 22,k++);
 
 		/* process console read responses */
-		while (get_msg_count(CSL_SCAN_ACK_PORT)>0) 
+		while (counts[0]) 
 		{
 			get_msg(CSL_SCAN_ACK_PORT, &csl_res, &id);
             if (id == CONS_TASK && csl_res.ret == STDCHARDEV_OK) 
@@ -218,10 +223,11 @@ void service_main (void)
 					for(;;);
 				}
 			}
+            counts[0]--;
 		}
 
 		/* get signals */
-		while (get_msg_count(CSL_SIGNAL_PORT)>0) 
+		while (counts[1]) 
 		{
 			get_msg(CSL_SIGNAL_PORT, &signal, &id);
 
@@ -272,13 +278,14 @@ void service_main (void)
 						break;
 				}
 			}
+            counts[1]--;
 		}
 
 		process_env_msg();
 
 		/* Get finished messages from process manager */
 
-		while (get_msg_count(PM_TASK_ACK_PORT) > 0)
+		while (counts[2])
 		{
 		  	get_msg(PM_TASK_ACK_PORT, &pm_res, &id);
 
@@ -286,14 +293,17 @@ void service_main (void)
 			{
 				task_finished(((struct pm_msg_finished*)&pm_res)->taskid, ((struct pm_msg_finished*)&pm_res)->ret_value);
 			}
+            counts[2]--;
 		}
 
 		/* Process standard process response asynchronously */
-		while (get_msg_count(SHELL_INITRET_PORT) > 0)
+		while (counts[3])
 		{
 		  	get_msg(SHELL_INITRET_PORT, &proc_res, &id);
 
 			process_ack(id);
+
+            counts[3]--;
 		}
 	}
 }
