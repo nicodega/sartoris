@@ -62,6 +62,7 @@ struct mutex max_directory_msg_mutex;
 struct stdservice_res dieres;
 int dieid;
 int dieretport;
+int ofs_task;
 
 // This is the main service thread //
 void _start()
@@ -92,12 +93,15 @@ void _start()
 	open_port(OFS_CHARDEV_PORT, 2, PRIV_LEVEL_ONLY);
 	open_port(OFS_BLOCKDEV_PORT, 2, PRIV_LEVEL_ONLY);
 	open_port(STDFSS_PORT, -1, UNRESTRICTED);
-	open_port(STDSERVICE_PORT, 1, PRIV_LEVEL_ONLY); 		// should set perms only to the scheduler
+	open_port(STDSERVICE_PORT, 0, PRIV_LEVEL_ONLY); 		// should set perms only to the scheduler
 	open_port(OFS_STDDEVRES_PORT, 2, PRIV_LEVEL_ONLY);
 	open_port(OFS_PMAN_PORT, 0, PRIV_LEVEL_ONLY);
+	open_port(OFS_IDLE_PORT, 1, PRIV_LEVEL_ONLY);
 
 	// set interrupts
 	__asm__ ("sti"::);
+
+    ofs_task = get_current_task();
 
 	init_mem(mbuffer, 1024 * 1024);
 
@@ -151,21 +155,31 @@ void _start()
 #ifdef OFS_DEVBLOCK_CACHE
 	bc_init();
 #endif
+
+    int k = 11;
+    int ports[] = {OFS_DIRECTORY_PORT, OFS_CHARDEV_PORT, OFS_BLOCKDEV_PORT, STDFSS_PORT, STDSERVICE_PORT, OFS_STDDEVRES_PORT, OFS_IDLE_PORT, OFS_PMAN_PORT};
+    int counts[8];
+    unsigned int mask = 0xFF;
+
 	while(!die)
 	{
-		while(get_msg_count(OFS_DIRECTORY_PORT) == 0 
-			&& get_msg_count(OFS_CHARDEV_PORT) == 0 
-			&& get_msg_count(OFS_BLOCKDEV_PORT) == 0 
-			&& get_msg_count(STDFSS_PORT) == 0 
-			&& get_msg_count(STDSERVICE_PORT) == 0 
-			&& get_msg_count(OFS_STDDEVRES_PORT) == 0 
-			&& (!check_idle() || (length(&processing_queue) == 0 && check_waiting_commands() == 0) )
-		){ 
-            string_print("OFS ALIVE",4*160 - 18,i++);
-			reschedule(); 
-		}
+		while(wait_for_msgs_masked(ports, counts, 4, mask) == 0){}	
 
-		dirservice_count = get_msg_count(OFS_DIRECTORY_PORT);
+        string_print("OFS ALIVE",4*160 - 18,k++);
+
+        while(counts[8])
+        {
+            get_msg(OFS_PMAN_PORT, &cmd, &senderid);
+            counts[8]--;
+        }
+
+        while(counts[6])
+        {
+            get_msg(OFS_IDLE_PORT, &cmd, &senderid);
+            counts[6]--;
+        }
+
+		dirservice_count = counts[0];
 
 		// process incoming directory resolve responses
 		while(dirservice_count != 0)
@@ -187,7 +201,7 @@ void _start()
 		}
 
 
-		service_count = get_msg_count(STDSERVICE_PORT);
+		service_count = counts[4];
 
 		// process any STDSERVICE Mesages
 		while(service_count != 0)
@@ -248,7 +262,7 @@ void _start()
 			service_count--;
 		}
 
-		stddevres_count = get_msg_count(OFS_STDDEVRES_PORT);
+		stddevres_count = counts[5];
 		
 		// process working thread MSG signals
 		while(stddevres_count != 0)
@@ -269,7 +283,7 @@ void _start()
 			stddevres_count--;
 		}
 
-		chardev_count = get_msg_count(OFS_CHARDEV_PORT);
+		chardev_count = counts[1];
 		
 		while(chardev_count != 0)
 		{
@@ -293,7 +307,7 @@ void _start()
 			chardev_count--;
 		}
 		
-		blockdev_count = get_msg_count(OFS_BLOCKDEV_PORT);
+		blockdev_count = counts[2];
 		
 		while(blockdev_count != 0)
 		{
@@ -314,7 +328,7 @@ void _start()
 			}			
 		}
 		
-		stdfss_count = get_msg_count(STDFSS_PORT);
+		stdfss_count = counts[3];
 		
 		// if shuting down and al threads are inactive then die
 		if(blocked)
