@@ -43,7 +43,7 @@ int wait_for_msg(int port)
         msg.req_id = 0;
         msg.block_type = THR_BLOCK_MSG;
         msg.thread_id = get_current_thread();
-        msg.ports_mask = (0x1 << port);
+        msg.mask = (0x1 << port);
 
         send_msg(PMAN_TASK, PMAN_COMMAND_PORT, &msg);
 
@@ -80,7 +80,7 @@ int wait_for_msgs_masked(int *ports, int *counts, int length, unsigned int mask)
         msg.req_id = 0;
         msg.block_type = THR_BLOCK_MSG;
         msg.thread_id = get_current_thread();
-        msg.ports_mask = mask;
+        msg.mask = mask;
 
         send_msg(PMAN_TASK, PMAN_COMMAND_PORT, &msg);
 

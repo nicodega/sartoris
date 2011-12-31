@@ -21,12 +21,10 @@
 
 #include "ofs_internals.h"
 
+int check_waiting_commands(int wpid);
+
 /* This function represents a working thread. */
-#ifdef WIN32DEBUGGER
-DWORD WINAPI working_process(LPVOID lpParameter)
-#else
 void working_process()
-#endif
 {
 	int myid = -1;
 	struct working_thread *thread = NULL;
@@ -34,9 +32,7 @@ void working_process()
 	device_info *dinf = NULL;
 	struct stdfss_res *ret = NULL;
 
-#ifndef WIN32DEBUGGER
 	__asm__ ("sti"::);
-#endif
 
 	// get thread id
 	myid = new_threadid;
@@ -190,10 +186,64 @@ void working_process()
 		set_wait_for_signal(myid, OFS_THREADSIGNAL_START, -1);
 		
 		thread->active = 0;
-		signal_idle();
+        check_waiting_commands(myid);
 	}
 	
 }
 
+/*
+This function will see if there are any pending commands on the devs_with_commands
+list, or if the device of the wp has pending comands.
+If any commands are found an iddle message will be sent to the main thread, if not 
+the thread will be signaled as iddle but no command will be sent.
+*/
+int check_waiting_commands(int wpid)
+{
+    int msg[4];
+	AvlTree *sub_avl = NULL;
+	device_info *dinf = NULL;
+	int created = FALSE;
+	
+	if(working_threads[wpid].initialized == 1 && working_threads[wpid].active == 0)
+	{
+		// check working thread last device for a new job
+		wait_mutex(&cached_devices_mutex);
+		sub_avl = (AvlTree *)avl_getvalue(cached_devices, working_threads[wpid].deviceid);
+
+		if(sub_avl == NULL)
+		{
+			leave_mutex(&cached_devices_mutex);
+			return;
+		}
+
+		dinf = (device_info *)avl_getvalue(*sub_avl, working_threads[wpid].logic_deviceid);
+
+		if(dinf == NULL)
+		{
+			leave_mutex(&cached_devices_mutex);
+			return;
+		}
+		leave_mutex(&cached_devices_mutex);
+
+		if(length(&dinf->waiting) != 0)
+		{
+			// attempt starting this command
+			if(attempt_start(dinf, get_head_position(&dinf->waiting), working_threads[wpid].deviceid, working_threads[wpid].logic_deviceid))
+			{
+				created = TRUE;
+			}
+		}
+	}
+    
+	signal_idle();
+
+    // If there is a device with pending commands, send the idle message
+    wait_mutex(&devs_with_commands_mutex);
+    //if(created || length(&devs_with_commands) != 0)
+    send_msg(get_current_task(), OFS_IDLE_PORT, &msg);
+    leave_mutex(&devs_with_commands_mutex);
+
+	return created;
+}
 
      

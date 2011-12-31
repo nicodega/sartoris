@@ -38,13 +38,15 @@ int attempt_start(device_info *logic_device, CPOSITION position, int deviceid, i
 		// put the command in front of the waiting list //
 		bring_to_front(&logic_device->waiting, position);
 						
-		// add the device to the processing_queue list, for processing //
+		// add the device to the devs_with_commands list, for processing //
 		idle_dev = (idle_device *)malloc(sizeof(idle_device));
 
 		idle_dev->logic_deviceid = logic_deviceid;
 		idle_dev->deviceid = deviceid;
 
-		add_tail(&processing_queue, idle_dev);
+        wait_mutex(&devs_with_commands_mutex);
+		add_tail(&devs_with_commands, idle_dev);
+        leave_mutex(&devs_with_commands_mutex);
 
 		// decrement all waiting commands lifetime
 		it = get_head_position(&logic_device->waiting);
@@ -100,52 +102,6 @@ int check_concurrent(struct sdevice_info *device, CPOSITION position)
 	   and let god judge us if a mutex or locking mecanism is wrong :\ 
 	*/
 	return TRUE;
-}
-int check_waiting_commands()
-{
-	int i = 0;
-	AvlTree *sub_avl = NULL;
-	device_info *dinf = NULL;
-	int created = FALSE;
-	
-	while(i < OFS_MAXWORKINGTHREADS)
-	{
-		if(working_threads[i].initialized == 1 && working_threads[i].active == 0)
-		{
-			// check working thread last device for a new job
-			wait_mutex(&cached_devices_mutex);
-			sub_avl = (AvlTree *)avl_getvalue(cached_devices, working_threads[i].deviceid);
-
-			if(sub_avl == NULL)
-			{
-				leave_mutex(&cached_devices_mutex);
-				i++;
-				continue;
-			}
-
-			dinf = (device_info *)avl_getvalue(*sub_avl, working_threads[i].logic_deviceid);
-
-			if(dinf == NULL)
-			{
-				leave_mutex(&cached_devices_mutex);
-				i++;
-				continue;
-			}
-			leave_mutex(&cached_devices_mutex);
-
-			if(length(&dinf->waiting) != 0)
-			{
-				// attempt starting this command
-				if(attempt_start(dinf, get_head_position(&dinf->waiting), working_threads[i].deviceid, working_threads[i].logic_deviceid))
-				{
-					created = TRUE;
-				}
-			}
-		}
-		i++;
-	}
-
-	return created;
 }
 
 /* Create a working thread */

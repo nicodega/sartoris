@@ -28,8 +28,8 @@ AvlTree tasks;
 struct mutex opened_files_mutex;		
 list opened_files;					
 
-list processing_queue;		
-struct mutex pending_devices_mutex;
+list devs_with_commands;		
+struct mutex devs_with_commands_mutex;
 lpat_tree mounted;		
 struct mutex mounted_mutex;
 
@@ -138,6 +138,7 @@ void _start()
 	init_mutex(&file_buffers_mutex);
 	init_mutex(&device_lock_mutex);
 	init_mutex(&max_directory_msg_mutex);
+	init_mutex(&devs_with_commands_mutex);
 
 	init(&lock_node_waiting);
 	init_file_buffers();
@@ -147,7 +148,7 @@ void _start()
 	max_directory_msg = 0;
 
 	/* init globals */
-	init(&processing_queue);
+	init(&devs_with_commands);
 	init(&opened_files);
 	lpt_init(&mounted);
 	avl_init(&tasks);
@@ -159,18 +160,18 @@ void _start()
     int k = 11;
     int ports[] = {OFS_DIRECTORY_PORT, OFS_CHARDEV_PORT, OFS_BLOCKDEV_PORT, STDFSS_PORT, STDSERVICE_PORT, OFS_STDDEVRES_PORT, OFS_IDLE_PORT, OFS_PMAN_PORT};
     int counts[8];
-    unsigned int mask = 0xFF;
+    unsigned int mask = 255;
 
 	while(!die)
 	{
-		while(wait_for_msgs_masked(ports, counts, 4, mask) == 0){}	
+		while(wait_for_msgs_masked(ports, counts, 8, mask) == 0){}	
 
         string_print("OFS ALIVE",4*160 - 18,k++);
 
-        while(counts[8])
+        while(counts[7])
         {
             get_msg(OFS_PMAN_PORT, &cmd, &senderid);
-            counts[8]--;
+            counts[7]--;
         }
 
         while(counts[6])
@@ -548,7 +549,7 @@ void _start()
 		}
 	
 		// start any idle commands if there are threads in idle state
-		idle_devs = length(&processing_queue);
+		idle_devs = length(&devs_with_commands);    // I won't lock the mutex because this is the only thread where we remove devs.
 
 		while(!die && check_idle() && idle_devs > 0)
 		{
@@ -556,7 +557,9 @@ void _start()
 			idle_thread = get_idle_working_thread();
 
 			// fill working_thread structure
-			idle_dev = (idle_device *)get_head(&processing_queue);
+            wait_mutex(&devs_with_commands_mutex);
+			idle_dev = (idle_device *)get_head(&devs_with_commands);
+            leave_mutex(&devs_with_commands_mutex);
 
 			dinf = get_cache_device_info(idle_dev->deviceid, idle_dev->logic_deviceid);
 
@@ -608,7 +611,9 @@ void _start()
 			while(working_threads[idle_thread].active = 0){ reschedule(); }
 
 			// free structures used
-			remove_at(&processing_queue, get_head_position(&processing_queue));
+            wait_mutex(&devs_with_commands_mutex);
+			remove_at(&devs_with_commands, get_head_position(&devs_with_commands));
+            leave_mutex(&devs_with_commands_mutex);
 			
 			free(idle_dev);
 

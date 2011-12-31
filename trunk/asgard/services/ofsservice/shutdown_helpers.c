@@ -348,7 +348,7 @@ void free_all_structures()
 	if(logic_devices != NULL) free(logic_devices);
 
 	// free idle devices
-	remove_all(&processing_queue);
+	remove_all(&devs_with_commands);
 
 	// free waiting nodes
 	remove_all(&lock_node_waiting);

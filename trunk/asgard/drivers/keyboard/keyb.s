@@ -339,7 +339,7 @@ no_control:
     and bl, ~(RALT)
     and bh, ~(KEY_EXT)
     ret
-ralt_press
+ralt_press:
     or bl, RALT
     and bh, ~(KEY_EXT)
     ret

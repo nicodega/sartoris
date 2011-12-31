@@ -23,6 +23,7 @@
 #include "ports.h"
 #include "scheduler.h"
 #include "task_thread.h"
+#include "interrupts.h"
 #include <drivers/pit/pit.h>
 
 void sch_init()
@@ -403,6 +404,8 @@ void sch_force_complete()
 	scheduler.last_runned = NULL;
 	scheduler.list_selector = (scheduler.list_selector == SCHED_MAXPRIORITY-1)? 0 : scheduler.list_selector + 1;
 }
+
+extern int blocked_threads[MAX_INTERRUPT];
 /* 
 This function will process messages from sartoris events.
 */
@@ -424,28 +427,48 @@ void sch_process_portblocks()
                 struct pm_thread *thr = tsk->first_thread;
                 int i;
                 unsigned int mask = 0;
+                int k = 0;
+                unsigned int cmask = 0, timask = 0, m;
             
                 // wake threads waiting for a message on the port
                 while(thr)
                 {
-                    if(thr->block_port_mask & (0x1 << msg.param))
+                    if(thr->block_ports_mask & (0x1 << msg.param))
                     {
-                        thr->flags &= ~THR_FLAG_BLOCKED_PORT;
+                        thr->flags &= ~(THR_FLAG_BLOCKED_PORT | THR_FLAG_BLOCKED_INT);
 
                         if(!thr->flags)
                             thr->state = THR_RUNNING;
           
                         // fix the task port_blocks array
-                        for(i = 0; i < 32; i++)
+                        m = thr->block_ports_mask;
+                        for(i = 0; m /*&& i < 32*/; i++)
                         {
-                            if(thr->block_port_mask & (0x1 << i))
+                            if(m & 0x1)
                                 tsk->port_blocks[i]--;
+                            m = (m >> 1);
                         }
-            
-                        thr->block_port_mask = 0;
+
+                        // if the thread is waiting for ints
+                        // decrease the int blocked_count
+                        if(thr->block_ints_mask)
+                        {
+                            pman_print_dbg("PMAN: block_ints_mask not 0!\n");
+                            m = thr->block_ints_mask;
+                            timask |= thr->block_ints_mask;
+                            for(k = 0; m /*&& k < 32*/; k++)
+                            {
+                                if((m & 0x1) && --blocked_threads[32 + (0x1 << k)])
+                                    cmask |= (0x1 << k);
+                                
+                                m = (m >> 1);
+                            }
+                            thr->block_ints_mask = 0;
+                        }
+                        thr->block_ports_mask = 0;
                         sch_activate(thr);
                     }
-                      
+                    
                     thr = thr->next_thread;
                 }
 
@@ -454,11 +477,130 @@ void sch_process_portblocks()
                     if(tsk->port_blocks[i])
                         mask |= (0x1 << i);
                 }
+
                 // set the wait again
                 if(mask)
-                {
                     evt_wait(tsk->id, SARTORIS_EVT_MSG, mask);
+                
+                if(cmask != timask)
+                {
+                    struct ints_evt_param int_params;
+                    int_params.mask = (timask & ~cmask);
+                    int_params.base = 32;
+                    evt_disable((int)&int_params, SARTORIS_EVT_INTS, 0);
                 }
+            }
+        }
+        else // int interrupt SARTORIS_EVT_INTS / SARTORIS_EVT_INT
+        {
+            pman_print_dbg("PMAN: INT EVT!\n");
+                            
+            struct pm_thread *thr = NULL, *ithr = NULL;
+            BOOL has_port_blocks = FALSE;
+            unsigned int mask = 0, i = 32, omask;
+            unsigned int imask = 0; // this will contain the interrupts to be disabled.
+            unsigned int mmask, k; // there are for message blocks disabling
+
+            if(msg.evt == SARTORIS_EVT_INT)
+                mask = (0x1 << (msg.param - 32));
+            else
+                mask = msg.param; // base will always be 32 because we only allow hardware ints blocking.
+
+            omask = mask; // keep the original mask
+            
+            while(mask && i < 64)
+            {
+                if(mask & 1)
+                {
+                    if(blocked_threads[i])
+                        blocked_threads[i]--;
+
+                    has_port_blocks = FALSE;
+                    mmask = 0;
+                    ithr = hardint_thr_handlers[i-32];
+
+                    if(ithr && ithr->state == THR_INTHNDL)
+                    {
+                        struct pm_task *tsk = tsk_get(ithr->task_id);
+                        
+                        thr = tsk->first_thread;
+ 
+                        // to speed up this awful algorithm, I'll check
+                        // every thread using the complete int mask.
+                        // This way ints from the same task will only 
+                        // be processed once.
+                        while(thr)
+                        {
+                            if(thr->block_ints_mask & omask)
+                            {
+                                // if a thread is waiting for an int which has not 
+                                // fired, decrement that int counter. If it's counter reached 0
+                                // set it's bit on imask to disable the wait
+
+                                // decrement ints blocked_threads
+                                unsigned int m = thr->block_ints_mask; 
+                                for(k = 0; m /*&& k < 32*/; k++)
+                                {
+                                    if(m & 0x1)
+                                    {
+                                        blocked_threads[k+32]--;
+                                        // If the thread was waiting for an int and it was
+                                        // not triggered, set it's imask if it reached 0 blocks
+                                        if(blocked_threads[k+32] == 0 && (omask & (0x1 << k)) == 0)
+                                            imask &= ~(0x1 << k);
+                                    }
+                                    m = (m >> 1);
+                                }
+                                
+                                if((thr->flags & THR_FLAG_BLOCKED_PORT) == THR_FLAG_BLOCKED_PORT)
+                                {
+                                    has_port_blocks = TRUE;
+
+                                    // fix the task port_blocks array
+                                    m = thr->block_ports_mask;
+                                    for(k = 0; m /*&& k < 32*/; k++)
+                                    {
+                                        if(m & 0x1)
+                                        {
+                                            tsk->port_blocks[k]--;
+                                            if(tsk->port_blocks[k] == 0)
+                                                mmask |= (0x1 << k);
+                                        }
+                                        m = (m >> 1);
+                                    }
+            
+                                    thr->block_ports_mask = 0;
+                                }
+
+                                thr->flags &= ~(THR_FLAG_BLOCKED_PORT | THR_FLAG_BLOCKED_INT);
+
+                                if(!thr->flags)
+                                    thr->state = THR_RUNNING;
+
+                                mask &= ~(thr->block_ints_mask >> (i-32)); // remove all processed ints from the mask
+                                thr->block_ints_mask = 0;
+                                sch_activate(thr);
+                            }
+
+                            thr = thr->next_thread;
+                        }
+
+                        // disable port events for this task if there are no more 
+                        // threads blocked
+                        if(has_port_blocks)
+                            evt_disable(tsk->id, SARTORIS_EVT_MSG, mmask);
+                    }
+                }
+                i++;
+                mask = (mask >> 1);
+            }
+
+            if(imask)
+            {
+                struct ints_evt_param int_params;
+                int_params.mask = imask;
+                int_params.base = 32;
+                evt_disable((int)&int_params, SARTORIS_EVT_INTS, 0);
             }
         }
     }

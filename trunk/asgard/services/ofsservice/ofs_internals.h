@@ -553,7 +553,6 @@ void clear_dir_buffer(unsigned char *buffer);
 int check_concurrent(struct sdevice_info *device, CPOSITION position);
 int destroy_working_thread(int id);
 int create_working_thread(int id);
-int check_waiting_commands();
 int get_msg_working_process(int deviceid, int logic_deviceid, int msgid);
 int attempt_start(device_info *logic_device, CPOSITION position, int deviceid, int logic_deviceid);
 int get_idle_working_thread();
@@ -566,8 +565,8 @@ extern AvlTree tasks;						// tasks with opened files/devices
 extern struct mutex opened_files_mutex;		// used for modifying tasks or opened files
 extern list opened_files;					// holds all stask_file_info structures for files
 
-extern list processing_queue;				// devices with pending jobs equeued.
-extern struct mutex pending_devices_mutex;
+extern list devs_with_commands;				// devices with pending jobs equeued.
+extern struct mutex devs_with_commands_mutex;
 extern lpat_tree mounted;					// info of mounted devices indexed by path
 extern struct mutex mounted_mutex;
 

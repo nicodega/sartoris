@@ -112,6 +112,7 @@ struct pm_task
 #define THR_FLAG_PAGEFAULT_TBL  2	/* Page fault being attended also raised a page table fault */
 #define THR_FLAG_BLOCKED        4	/* Thread is blocked by request.                            */
 #define THR_FLAG_BLOCKED_PORT   12	/* Thread is blocked by request for a port                  */
+#define THR_FLAG_BLOCKED_INT    20  /* thread is blocked by request for an int                  */
 
 struct pm_thread 
 {
@@ -143,8 +144,9 @@ struct pm_thread
 	/* Signals */
 	struct thr_signals signals;			    /* This is the signals container                */
 
-    unsigned int block_port_mask;           /* If a bit is 1 on this mask, the thread was 
+    unsigned int block_ports_mask;          /* If a bit is 1 on this mask, the thread was 
                                             blocked waiting for a message on the bit possition port. */
+    unsigned char block_ints_mask;          /* Hardware interrupts blocking this thread */
 } PACKED_ATT;
 
 

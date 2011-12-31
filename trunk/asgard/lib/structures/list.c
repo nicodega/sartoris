@@ -196,8 +196,12 @@ CPOSITION add_tail(list *lst, void *data){
 	return (CPOSITION)n;
 }
 
-void *get_head(list *lst){
-	return lst->first->data;
+void *get_head(list *lst)
+{
+    if(lst->first)
+	    return lst->first->data;
+    else
+        return NULL;
 }
 
 CPOSITION insert_after(list *lst, CPOSITION it, void *data){
