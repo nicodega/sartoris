@@ -83,7 +83,7 @@ void test_pmap()
     rem.req_id = 1;
     rem.response_port = 1;
     rem.safe = 1;                // is it safe to give this physical pages to any proc? or is it stil IO mapped.
-    rem.start_addr = file_map;   // linear address on task
+    rem.start_addr = (unsigned int)file_map;   // linear address on task
 
     send_msg(PMAN_TASK, PMAN_COMMAND_PORT, &msg);
 

@@ -36,6 +36,9 @@ BOOL int_can_attach(struct pm_thread *thr, UINT32 interrupt);
 BOOL int_attach(struct pm_thread *thr, UINT32 interrupt, int priority);
 BOOL int_dettach(struct pm_thread *thr);
 
+extern int blocked_threads[MAX_INTERRUPT];
+extern struct pm_thread *hardint_thr_handlers[32];
+
 UINT32 int_clear();
 void int_set(UINT32 x);
 

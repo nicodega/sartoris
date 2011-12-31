@@ -216,15 +216,16 @@ struct pm_msg_destroy_thread {
 
 #define THR_BLOCK       0
 #define THR_BLOCK_MSG   1
+#define THR_BLOCK_INT   2
 
 struct pm_msg_block_thread {
   unsigned char pm_type;
   unsigned char padding0;
   short req_id;
   unsigned char padding1;
-  char block_type;                  // THR_BLOCK_MSG / THR_BLOCK
+  char block_type;                  // THR_BLOCK_MSG / THR_BLOCK / THR_BLOCK_INT
   short thread_id;
-  unsigned int ports_mask;
+  unsigned int mask;
   int padding;
 } PACKED_ATT;
 

@@ -409,7 +409,7 @@ void *pya_get_pages_aligned(phy_allocator *pa, UINT32 pages, BOOL io, UINT32 ali
         while(start)
         {
             if(pstart % align != 0)
-                addr = PHYSICAL2LINEAR(pstart + (align - pstart % align));
+                addr = (void*)PHYSICAL2LINEAR(pstart + (align - pstart % align));
             else
                 addr = start;
 

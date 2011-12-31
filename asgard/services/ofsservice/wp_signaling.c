@@ -49,13 +49,9 @@ void get_signal_msg(int *dest, int wpid)
 
 void signal_idle()
 {
-    int msg[4];
 	wait_mutex(&idle_threads_mutex);
 	idle_threads++;
 	leave_mutex(&idle_threads_mutex);
-
-    if(length(&processing_queue) != 0 || check_waiting_commands() != 0)
-        send_msg(get_current_task(), OFS_IDLE_PORT, &msg);
 }
 void decrement_idle()
 {
@@ -84,6 +80,17 @@ void set_wait_for_signal(int threadid, int signal_type, int senderid)
 
 void wait_for_signal(int threadid)
 {
+    // We need to cli/sti to avoid the block/unblock messages 
+    // from comming in an unwanted order.. this is because 
+    // if we didn't cli/sti, when we send the block command
+    // an unblock could be sent to the main thread and we cannot
+    // use a mutex, because we could be interrupted just before 
+    // we leave it, blocking the OFS on the signal function.
+    // This can probably be done better... I'm too tired and it's
+    // working so... maybe some time in the future we should
+    // modify OFS WP handling to make it better for the current 
+    // asgard capabilities, or we could use PMAN signals instead.
+    __asm__ __volatile__ ("cli"::);
 	while(working_threads[threadid].waiting_for_signal == 1)
     { 
         // ask pman to block this thread
@@ -94,10 +101,13 @@ void wait_for_signal(int threadid)
         msg.block_type = THR_BLOCK;
         msg.thread_id = get_current_thread();
 
-        send_msg(PMAN_TASK, PMAN_COMMAND_PORT, &msg);
-
-        reschedule();    
+        send_msg(PMAN_TASK, PMAN_COMMAND_PORT, &msg);        
+        
+        __asm__ __volatile__ ("sti"::);
+        reschedule(); // thread will block here or just after the send msg...
+        __asm__ __volatile__ ("cli"::);	
     }
+    __asm__ __volatile__ ("sti"::);	
 }
 
 void signal(int threadid, int *msg, int senderid, int signal_type)
@@ -125,8 +135,10 @@ void signal(int threadid, int *msg, int senderid, int signal_type)
 		working_threads[threadid].signal_msg[2] = *(msg++);
 		working_threads[threadid].signal_msg[3] = *(msg);
 	}
-	
+
 	leave_mutex(&working_threads[threadid].waiting_for_signal_mutex);
+
+	working_threads[threadid].waiting_for_signal = 0;
 
     unb_msg.pm_type = PM_UNBLOCK_THREAD;
     unb_msg.req_id = 0;
@@ -134,8 +146,6 @@ void signal(int threadid, int *msg, int senderid, int signal_type)
     unb_msg.response_port = OFS_PMAN_PORT;
 
     send_msg(PMAN_TASK, PMAN_COMMAND_PORT, &unb_msg);
-
-	working_threads[threadid].waiting_for_signal = 0;
 }
 
 int get_resolution_signal_wp()

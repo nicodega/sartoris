@@ -35,6 +35,8 @@
 
 /* Container for signals waiting for a given interrupt. */
 struct interrupt_signals_container interrupt_signals[MAX_INTERRUPT];
+int blocked_threads[MAX_INTERRUPT];
+struct pm_thread *hardint_thr_handlers[32];
 
 void int_common_handler();
 void sartoris_evt_handler();
@@ -45,6 +47,14 @@ void int_init()
 	struct pm_thread *pmthr;
 	UINT32 i;
 
+    for(i = 0; i < MAX_INTERRUPT; i++)
+	{
+		blocked_threads[i] = 0;
+	}
+    for(i = 0; i < 32; i++)
+	{
+		hardint_thr_handlers[i] = NULL;
+	}
 	/* Create generic exceptions handler. */
 	hdl.task_num = PMAN_TASK;
 	hdl.invoke_mode = PRIV_LEVEL_ONLY;
@@ -279,17 +289,28 @@ BOOL int_can_attach(struct pm_thread *thr, UINT32 interrupt)
 /* create the interrupt handler */
 BOOL int_attach(struct pm_thread *thr, UINT32 interrupt, int priority)
 {
-	//if(IA32FIRST_INT <= interrupt && interrupt != 32 && interrupt < MAX_INTERRUPT)
-	//	destroy_int_handler(interrupt, INT_HANDLER_THR);
+	if(interrupt > 32 && interrupt < 64 && hardint_thr_handlers[interrupt-32])
+		destroy_int_handler(interrupt, thr->id);
 
 	if(create_int_handler(interrupt, thr->id, true, priority) != SUCCESS)
+    {
+        hardint_thr_handlers[interrupt-32] = NULL;
 		return FALSE;
+    }
+    hardint_thr_handlers[interrupt-32] = thr;
 	return TRUE;
 }
 
 BOOL int_dettach(struct pm_thread *thr)
 {
-	destroy_int_handler(thr->interrupt, thr->id);
+    if(thr->interrupt > 32 && thr->interrupt < 64)
+    {
+        if(hardint_thr_handlers[thr->interrupt-32] == thr)
+        {
+            hardint_thr_handlers[thr->interrupt-32] = NULL;
+            destroy_int_handler(thr->interrupt, thr->id);
+        }
+    }
 	if(create_int_handler(thr->interrupt, INT_HANDLER_THR, true, 10) != SUCCESS)
 		return FALSE;
 	return TRUE;
