@@ -48,6 +48,9 @@ int destroy_int_handler(int number, int thread);
 int ret_from_int(void);
 int get_last_int(unsigned int *error_code);
 void *get_last_int_addr();
+int pop_int();
+int push_int(int number);
+int resume_int();
 
 /* message passing */
 int open_port(int port, int priv, enum usage_mode mode);
@@ -81,18 +84,25 @@ int last_error();
 /* Events */
 #define SARTORIS_EVT_MSG            1
 #define SARTORIS_EVT_PORT_CLOSED    2
+#define SARTORIS_EVT_INT            3
+#define SARTORIS_EVT_INTS           4
 
 struct evt_msg
 {
     int evt;
     int id;
     int param;
-    int padding;
+    int param2;
 }  __attribute__ ((__packed__));
+
+struct ints_evt_param{
+	unsigned int mask;
+	int base;
+};
 
 int evt_set_listener(int thread, int port, int interrupt);
 int evt_wait(int id, int evt, int evt_param);
-int evt_disable(int id, int evt);
+int evt_disable(int id, int evt, int evt_param);
 
 #ifdef _METRICS_
 int get_metrics(struct sartoris_metrics *m);

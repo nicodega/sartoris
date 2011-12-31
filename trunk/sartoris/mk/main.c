@@ -18,6 +18,7 @@
  */
 
 #include "sartoris/kernel.h"
+#include "sartoris/kernel-data.h"
 #include "sartoris/cpu-arch.h"
 #include "sartoris/scr-print.h"
 #include "lib/indexing.h"
@@ -33,15 +34,15 @@
 
 #include "sartoris/scr-print.h"
 
-/* important interrupt handling data */
-int int_handlers[MAX_IRQ];            /* int number -> thread handler id           */
-unsigned char int_nesting[MAX_IRQ];   /* int number -> bool indicates nesting mode */
-unsigned char int_active[MAX_THR];    /* thread id -> bool indicating wether this  *
-                                       * thread is already handling an interrupt   */
+/* important interrupt handling data and ints stack */
+struct int_handler int_handlers[MAX_IRQ];
+unsigned char handling_int[MAX_THR];
 
-/* the infamous software interrupt stack */
-int int_stack[MAX_NESTED_INT];
-int int_stack_pointer;
+int int_stack_count;
+int int_stack_first;
+int free_int_stack_first;
+int stack_first_thread;
+
 int last_int;
 
 /* page fault info */
@@ -80,12 +81,19 @@ int initialize_kernel(void)
 	init_salloc();
 
 	/* initialize interrupt stack          */
-	int_stack_pointer = 0;
-	for (i = 0; i < MAX_IRQ; i++) 
+	int_stack_count = 0;
+    int_stack_first = -1;
+    last_int = -1;
+    stack_first_thread = -1;
+	
+    for (i = 0; i < MAX_IRQ; i++) 
 	{
-		int_handlers[i] = -1;
+		int_handlers[i].thr_id = -1;
+        int_handlers[i].int_num = i;
+        int_handlers[i].int_flags = INT_FLAG_NONE;
+        int_handlers[i].prev = -1;
 	}
-
+    
 	last_int = -1;
 
 	/* initialize metrics if necessary     */

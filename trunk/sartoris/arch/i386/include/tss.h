@@ -70,7 +70,6 @@ struct thr_state
                                    // on sartoris code.
     unsigned int sints;            // ammount of interrupts triggered while on sartoris code when a trace is being performed
 #ifdef FPU_MMX
-    unsigned int padding;
 	unsigned int mmx[128];         // for preserving FPU/MMX registers (given the size of thread and all the c_thread_unit, this will be 16 byte aligned)
 #endif
 };

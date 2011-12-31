@@ -26,7 +26,7 @@
 #define MAX_OPEN_PORTS				(MAX_TSK_OPEN_PORTS*MAX_TSK)   /* system-wide */
 #define MAX_MSG_ON_PORT				64 
 
-#define MAX_NESTED_INT 32
+#define MAX_NESTED_INT  MAX_IRQ
 
 #define INIT_TASK_NUM   31   /* INIT_TASK_NUM must NOT be zero                */ 
 #define INIT_THREAD_NUM 31   /* (zero is used as pre-init pseudo-task number) */
@@ -110,11 +110,14 @@ struct thread
 	void *stack;
     
 #ifdef __KERNEL__
-    struct permissions run_perms;      // this is a pointer to user space!
+    struct permissions run_perms;       // this is a pointer to user space!
     char page_faulted;					/* used to know if we have produced a page fault */
     char evts;                          // events active on this thread    
 	short last_error;                   // last error (see error.h)
-	int trace_task;                     // if -1 no task is allowed to trace this thread. If it's not -1, the specified task can.
+	int trace_task;                     // if -1 no task is allowed to trace this thread. If it's not -1, the specified task can.    
+    unsigned char last_runned_int;      // number of last interrupt raised handled by this thread.
+    unsigned char padding;
+    short last_poped_int;               // if different from -1 this will contain the last poped int (with pop_int) for this thread. 
 #endif
 } __attribute__ ((__packed__));
 

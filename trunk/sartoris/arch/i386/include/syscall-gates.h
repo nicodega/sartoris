@@ -72,7 +72,7 @@ extern int ttrace_mem_write_c(int thr_id, void *src, void *dst, int size);
 
 extern int evt_set_listener_c(int thread, int port, int interrupt);
 extern int evt_wait_c(int id, int evt);
-extern int evt_disable_c(int id, int evt);
+extern int evt_disable_c(int id, int evt, int evt_param);
 
 #ifdef _METRICS_
 extern int get_metrics_c(void);

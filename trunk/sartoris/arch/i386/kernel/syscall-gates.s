@@ -321,7 +321,7 @@ push_int_c:
 
 pop_int_c:
 	syscall_def_np pop_int
-	
+
 resume_int_c:
 	syscall_def_np resume_int
 
@@ -355,7 +355,7 @@ evt_wait_c:
     syscall_def 3, evt_wait
 
 evt_disable_c:
-    syscall_def 2, evt_disable
+    syscall_def 3, evt_disable
 
 ;; metrics
 			

@@ -363,14 +363,14 @@ push_int:
 	call POP_INT : 0x00000000
 	pop ebp
 	ret
-	
+
 resume_int:
 	push ebp
 	mov ebp, esp
-	call POP_INT : 0x00000000
+	call RESUME_INT : 0x00000000
 	pop ebp
 	ret
-
+	
 grant_page_mk:
 	push ebp
 	mov ebp, esp
@@ -446,7 +446,7 @@ evt_wait:
 evt_disable:
 	push ebp
 	mov ebp, esp
-	pass_arguments 2
+	pass_arguments 3
 	call EVT_DISABLE : 0x00000000
 	pop ebp
 	ret

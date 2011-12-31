@@ -79,7 +79,9 @@ int create_thread(int id, struct thread *thr)
                             thread->last_error = SERR_OK;
                             thread->trace_task = -1;
                             thread->evts = 0;
+                            thread->last_poped_int = -1;
                             task->thread_count++;
+                            handling_int[id] = MAX_IRQ;
 
                             init_perms(&thread->run_perms);
 
@@ -163,8 +165,8 @@ int destroy_thread(int id)
             /* destroy eny interrupts pointing to this thread */
             for(i = 0; i < MAX_IRQ; i++)
             {
-                if(int_handlers[i] == id)
-                    destroy_int_handler(i, id);
+                if(int_handlers[i].thr_id == id)
+                    result |= destroy_int_handler(i, id);
             }
 			
             if(result != FAILURE)
@@ -198,7 +200,7 @@ int destroy_thread(int id)
 
 int run_thread(int id) 
 {
-	int x, res;
+	int x, res, hint;
 	int prev_curr_thread;
 	int result;
 	struct thread *thread;
@@ -208,8 +210,21 @@ int run_thread(int id)
 	result = FAILURE;
 
 	x = mk_enter(); /* enter critical block */
-    	
-    if (0 <= id && id < MAX_THR && TST_PTR(id,thr))
+    
+    hint = handling_int[curr_thread];
+    if(hint != MAX_IRQ && (int_handlers[hint].int_flags & INT_FLAG_NESTING) != 0)
+    {
+        // attempt to run a thread from a nesting int.. fail
+        mk_leave(x);
+		return FAILURE;
+    }
+    
+    if(handling_int[id] != MAX_IRQ)
+    {        
+        bprintf("SARTORIS: Attempt to run a thread handling an int.\n");
+    }
+
+    if (0 <= id && id < MAX_THR && TST_PTR(id,thr) && handling_int[id] == MAX_IRQ)
 	{
         thread = GET_PTR(id,thr);
         
@@ -232,6 +247,14 @@ int run_thread(int id)
 				{
 					prev_curr_thread = curr_thread;
 					task = GET_PTR(thread->task_num,tsk);
+
+                    // if the current thread is handling a non nesting interrupt
+                    // we should set handling_int[curr_trhead] to MAX_IRQ
+                    if(hint != MAX_IRQ && (int_handlers[hint].int_flags & INT_FLAG_NESTING) == 0)
+                    {
+                        handling_int[curr_thread] = MAX_IRQ;
+                        int_handlers[hint].int_flags &= ~INT_FLAG_ACTIVE;
+                    }
 
 					curr_thread = id;
 					curr_task = thread->task_num;
@@ -276,8 +299,10 @@ int run_thread(int id)
     {
         if(0 > id || id >= MAX_THR)
             set_error(SERR_INVALID_ID);
-        else
+        else if(handling_int[curr_thread] == MAX_IRQ)
             set_error(SERR_INVALID_THR);
+        else
+            set_error(SERR_INTERRUPT_HANDLED);
     }
 
 	mk_leave(x); /* exit critical block */

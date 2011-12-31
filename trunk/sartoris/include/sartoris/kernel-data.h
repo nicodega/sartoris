@@ -20,21 +20,37 @@
 #ifndef _KERNEL_DATA_H_
 #define _KERNEL_DATA_H_
 
-extern int int_handlers[MAX_IRQ];
-extern unsigned char int_nesting[MAX_IRQ];
-extern unsigned char int_active[MAX_THR];
+struct int_handler
+{
+    int thr_id;
+    unsigned char int_num;
+    unsigned char int_flags;
+    /* This variable will be used for the ints stack */
+    short prev;
+} __attribute__ ((__packed__));
 
-extern int int_stack[MAX_NESTED_INT];
-extern int int_stack_pointer;
+extern struct int_handler int_handlers[MAX_IRQ];
+extern unsigned char handling_int[MAX_THR];
+
+extern int int_stack_count;
+extern int int_stack_first;
+extern int stack_first_thread;     // this will be the thread running before the first int on the stack.
 
 extern int last_int;
-
 extern struct page_fault last_page_fault;
 
 extern int curr_thread;
 extern int curr_task;
 extern void *curr_base;
 extern int curr_priv;
+
+/*
+Interrupt flags
+*/
+#define INT_FLAG_NONE       0
+#define INT_FLAG_NESTING    1   // A nesting interrupt
+#define INT_FLAG_ACTIVE     2   // The interrupt is active
+#define INT_FLAG_ACTIVATED  4   // This interrupt was triggered.
 
 /*
 Based on the following flags, wen we run out of MK memory, 
