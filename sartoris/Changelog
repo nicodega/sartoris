@@ -16,7 +16,7 @@
       but will let the OS handle te paging, and since we support so many threads now, we could not afford that on
       sartoris itself.
 	- Multiboot compliant loader (hopefully).
-	- Pop/Push/Resume Interrupts implemented for interrupt stack manipulation from non nested ints.
+	- Pop/Push/resume functions implemented for interrupt stack manipulation from non nested ints.
       This could be used on the OS on top to handle interrupts page faults, if they are allowed.
 	- Now ports must be opened manually. Compatibility with version 0.5.3 is deprecated.
 	- Kernel now loads itself from the first megabyte and up, preserving the BIOS.
@@ -34,11 +34,17 @@
       every ttrace function except for ttrace_end will fail.
     - Added two new messaging functions in order to check multiple port counts and receive multiple messages
       from one port at once (to avoid too many privilege switches).
-    - Added three system calls to support a new event subsystem. Currently there is only one event
-      which will send a message to a port when a task receives a message. This could be usefull for
-      schedulers, in order to put a task to sleep (if the task asks for it) until a message arrives to it.
+    - Added three system calls to support a new event subsystem. Currently there is are two supported events:
+      one will send a message to a port when a task receives a message, the other one will send a message to the port
+      when an interrupt is raised. This could be usefull for schedulers, in order to put a task to sleep 
+      (if the task asks for it) until a message arrives to one of it's first 32 ports or a specific int is raised.
       When/if the port is full when the event is raised, an interrupt will be triggered. Only one priv 1 
       service can handle events on the system.
+      IMPORTANT: if an event wait is issued for a msg on a port or an interrupt and there is already
+      a msg on the port, or the interrupt was raised before, the event wait will fail.
+    - Now a single thread can handle multiple nesting interrupts at the same time. If the thread is 
+      servicing an interrupt and another interrupt handled by it is raised, it'll be pushed onto the 
+      int_stack immediately before the last int pushed this way or the current int.
 
 [0.6.0] - Prerelease 8
 	- Fixed smos implementation with paging.

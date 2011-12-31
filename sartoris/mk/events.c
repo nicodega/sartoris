@@ -124,6 +124,7 @@ int evt_wait(int id, int evt, int evt_param)
 {
     int result = FAILURE, x, i;
     struct task *tsk = NULL;
+    struct thread *thr = NULL;
     
     if(evt_port)
     {
@@ -157,6 +158,84 @@ int evt_wait(int id, int evt, int evt_param)
                 }
                 mk_leave(x);
                 break;
+            case SARTORIS_EVT_INT:
+                x = mk_enter();
+                if(id > 0 && id < MAX_IRQ && int_handlers[id].thr_id != -1)
+                {                    
+                    if((int_handlers[id].int_flags & (INT_FLAG_ACTIVE | INT_FLAG_ACTIVATED)) == 0)
+                    {
+                        thr = GET_PTR(int_handlers[id].thr_id,thr);
+                        thr->evts = 1;
+                        result = SUCCESS;
+                    }
+                }
+                else
+                {
+                    set_error(SERR_INVALID_INTERRUPT);
+                }
+                mk_leave(x);
+                break;
+            case SARTORIS_EVT_INTS:
+                // validate param structure
+                if (VALIDATE_PTR(id) && VALIDATE_PTR(id + sizeof(struct ints_evt_param))) 
+			    {
+                    struct ints_evt_param *param = (struct ints_evt_param*)MAKE_KRN_PTR(id);
+
+                    // this could page fault
+                    int base = param->base, iid;
+                    unsigned int int_mask = param->mask;
+                    
+                    if(base < MAX_IRQ - 32 && int_mask > 0)
+                    {
+                        x = mk_enter();
+                        int i = 0;
+
+                        while(i < 32)
+                        {
+                            if(int_mask & (0x1 << i))
+                            {
+                                iid = base + i; 
+                                if(int_handlers[iid].thr_id == -1)
+                                    break;
+                                if((int_handlers[iid].int_flags & (INT_FLAG_ACTIVE | INT_FLAG_ACTIVATED)) != 0)
+                                    break;
+                                i++;
+                            }
+                        }
+
+                        if(i == 32)
+                        {
+                            result = SUCCESS;
+                            i = 0;
+
+                            while(i < 32)
+                            {
+                                if(int_mask & (0x1 << i))
+                                {
+                                    iid = base + i; 
+                                    thr = GET_PTR(int_handlers[iid].thr_id,thr);
+                                    thr->evts = 1;
+                                    i++;
+                                }
+                            }
+                        }
+                        else
+                        {
+                            set_error(SERR_INVALID_INTERRUPT);
+                        }
+
+                        mk_leave(x);
+                    }
+                    else
+                    {
+                        set_error(SERR_INVALID_INTERRUPT);
+                    }
+                }
+                else
+                {
+                    set_error(SERR_INVALID_PTR);
+                }
+                break;
         }
     }
     else
@@ -167,10 +246,11 @@ int evt_wait(int id, int evt, int evt_param)
     return result;
 }
 
-int evt_disable(int id, int evt)
+int evt_disable(int id, int evt, int evt_param)
 {
     int result = FAILURE, x;
     struct task *tsk = NULL;
+    struct thread *thr = NULL;
 
     if(evt_port)
     {
@@ -181,7 +261,9 @@ int evt_disable(int id, int evt)
                 if(id > 0 && id < MAX_TSK && TST_PTR(id,tsk))
                 {
                     tsk = GET_PTR(id,tsk);
-                    tsk->evts = 0;
+                    tsk->evt_ports_mask &= ~evt_param;
+                    if(!tsk->evt_ports_mask)
+                        tsk->evts = 0;
                     result = SUCCESS;
                 }
                 else
@@ -189,6 +271,60 @@ int evt_disable(int id, int evt)
                     set_error(SERR_INVALID_TSK);
                 }
                 mk_leave(x);
+                break;
+            case SARTORIS_EVT_INT:
+                x = mk_enter();
+                if(id > 0 && id < MAX_IRQ && int_handlers[id].thr_id != -1)
+                {                 
+                    thr = GET_PTR(int_handlers[id].thr_id,thr);   
+                    thr->evts = 0;
+                    result = SUCCESS;
+                }
+                else
+                {
+                    set_error(SERR_INVALID_INTERRUPT);
+                }
+                mk_leave(x);
+                break;
+            case SARTORIS_EVT_INTS:
+                // validate param structure
+                if (VALIDATE_PTR(id) && VALIDATE_PTR(id + sizeof(struct ints_evt_param))) 
+			    {
+                    struct ints_evt_param *param = (struct ints_evt_param*)MAKE_KRN_PTR(id);
+
+                    // this could page fault
+                    int base = param->base;
+                    unsigned int int_mask = param->mask;
+                    
+                    if(base < MAX_IRQ - 32 && int_mask > 0)
+                    {
+                        x = mk_enter();
+                        int i = 0, iid;
+
+                        while(i < 32)
+                        {
+                            if(int_mask & (0x1 << i))
+                            {
+                                iid = base + i; 
+                                if(int_handlers[iid].thr_id != -1)
+                                {
+                                    thr = GET_PTR(int_handlers[iid].thr_id,thr);
+                                    thr->evts = 0;
+                                }
+                                i++;
+                            }
+                        }
+                        mk_leave(x);
+                    }
+                    else
+                    {
+                        set_error(SERR_INVALID_INTERRUPT);
+                    }
+                }
+                else
+                {
+                    set_error(SERR_INVALID_PTR);
+                }
                 break;
         }
     }
@@ -209,13 +345,15 @@ void evt_raise(int id, int evt, int evt_param)
 {
     struct evt_msg msg;
     struct task *tsk = NULL;
-    int res = FAILURE;
+    struct thread *thr = NULL;
+    int res = FAILURE, x;
 
     if(evt_port)
     {
         msg.evt = evt;
         msg.id = id;
         msg.param = evt_param;
+        msg.param2 = 0;
 
         switch(evt)
         {
@@ -225,12 +363,65 @@ void evt_raise(int id, int evt, int evt_param)
                 tsk->evts = 0;              // disable events
                 if(enqueue(-1, evt_port, (int*)&msg) == FAILURE)
                 {
-                    /* Raise the event int */
+                    /* Raise the event int */                    
                     arch_event_raise();
 
                     if(evt_port && TST_PTR(id,tsk))
                         enqueue(-1, evt_port, (int*)&msg);
                 }
+                break;
+            case SARTORIS_EVT_INT:
+                thr = GET_PTR(int_handlers[evt_param].thr_id,thr);
+                struct evt_msg *emsg = (struct evt_msg*)evt_port->first;
+                char doenqueue = 0;
+                if(!emsg || emsg->evt == SARTORIS_EVT_MSG)
+                {
+                    // can't join anything
+                    doenqueue = true;
+                }
+                else if(emsg->evt == SARTORIS_EVT_INT)
+                {
+                    if(emsg->param != evt_param)
+                    {
+                        // try to join the events to avoid too many messages on the queue
+                        int base = MAX_IRQ - 32;
+                        int p = evt_param;
+
+                        while(evt_param < base){base -= 32;}
+
+                        if(evt_param + emsg->param - (base << 1) < 32)
+                        {
+                            msg.evt = SARTORIS_EVT_INTS;
+                            msg.param2 = base;
+                            msg.param = ((0x1 << evt_param) | (0x1 << emsg->param));
+                        }
+                    }
+                    else
+                    {
+                        doenqueue = false;
+                    }
+                }
+                else if(emsg->evt == SARTORIS_EVT_INTS)
+                {
+                    if(evt_param - emsg->param2 < 32)
+                    {
+                        msg.param = ((0x1 << evt_param) | emsg->param);
+                    }
+                    else
+                    {
+                        doenqueue = true;
+                    }
+                }
+                
+                if(doenqueue && enqueue(-1, evt_port, (int*)&msg) == FAILURE)
+                {
+                    /* Raise the event int */
+                    arch_event_raise();
+
+                    if(evt_port)
+                        enqueue(-1, evt_port, (int*)&msg);
+                }
+                int_handlers[evt_param].int_flags &= ~INT_FLAG_ACTIVATED;
                 break;
         }
     }

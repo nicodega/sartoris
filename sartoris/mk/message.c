@@ -239,7 +239,7 @@ int send_msg(int dest_task_id, int port, void *msg)
 		    {
                 p = task->open_ports[port];
 
-			    if (VALIDATE_PTR(msg)) 
+			    if (VALIDATE_PTR(msg) && VALIDATE_PTR((unsigned int)msg + MSG_LEN)) 
 			    {
 				    p = task->open_ports[port];
 

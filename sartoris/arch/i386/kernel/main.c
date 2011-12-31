@@ -108,7 +108,7 @@ void create_syscall_gates()
 
 	hook_syscall(36, 1, &pop_int_c, 0);
 	hook_syscall(37, 1, &push_int_c, 1);
-	hook_syscall(38, 1, &resume_int_c, 0);
+    hook_syscall(38, 1, &resume_int_c, 0);
 
     hook_syscall(39, 3, &last_error_c, 0);
     
@@ -120,7 +120,7 @@ void create_syscall_gates()
         
     hook_syscall(45, 1, &evt_set_listener_c, 3);
     hook_syscall(46, 1, &evt_wait_c, 3);
-    hook_syscall(47, 1, &evt_disable_c, 2);
+    hook_syscall(47, 1, &evt_disable_c, 3);
     
 #ifdef _METRICS_
 	hook_syscall(48, 1, &get_metrics_c, 0);
