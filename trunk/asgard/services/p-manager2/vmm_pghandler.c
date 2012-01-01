@@ -52,9 +52,13 @@ BOOL vmm_handle_page_fault(UINT16 *thr_id, BOOL internal)
 		get_page_fault(&pf);
         get_last_int(&error_code);
         
+		if(thr_id != NULL) 
+            *thr_id = pf.thread_id; 
+
         /* is sartoris requesting/returning memory? */
         if(pf.flags != PF_FLAG_NONE && pf.flags != PF_FLAG_EXT)
-        {
+        {   
+
             if(pf.flags == PF_FLAG_FREE)
             {
                 // sartoris is returning a page
@@ -83,6 +87,9 @@ BOOL vmm_handle_page_fault(UINT16 *thr_id, BOOL internal)
                 pman_print_dbg("PMAN: PF linear %x  (without base), task: %i, thr: %i\n", pf.linear - SARTORIS_PROCBASE_LINEAR, pf.task_id, pf.thread_id);
 		    if(pf.task_id == PMAN_TASK)
 			    pman_print_and_stop("PMAN: INTERNAL PF linear: %x, task: %i, thr: %i ", pf.linear, pf.task_id, pf.thread_id);
+            
+		    if(thr_id != NULL) 
+                *thr_id = thread_id;
 
 		    task_id = pf.task_id; 
 		    thread_id = pf.thread_id;
@@ -103,8 +110,6 @@ BOOL vmm_handle_page_fault(UINT16 *thr_id, BOOL internal)
 		    thread->vmm_info.fault_entry.swapped = 0;
 		    thread->vmm_info.fault_entry.unused = 0;
             thread->vmm_info.fault_task = task_id;
-
-		    if(thr_id != NULL) *thr_id = thread_id;
 
             /*
             Check it's not a page fault raised because of rights
@@ -357,11 +362,12 @@ Page Fault Interrupt Handler
 */
 void vmm_paging_interrupt_handler()
 {
+    UINT16 thread_id;
+
 	for(;;)
 	{
-		UINT16 thread_id;
-
-		if(vmm_handle_page_fault(&thread_id, 0) || sch_running() == 0xFFFF) 
+		
+		if(vmm_handle_page_fault(&thread_id, 0)) 
 		{
 			/* Resume scheduler for thread was put on hold */
 			run_thread(SCHED_THR);
@@ -369,7 +375,7 @@ void vmm_paging_interrupt_handler()
 		else
 		{
 			/* Resume currently running thread */
-			run_thread(sch_running());
+			run_thread(thread_id);
 		}
 	}
 }
