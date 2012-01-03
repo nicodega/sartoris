@@ -114,10 +114,8 @@ void cmd_process_msg()
                                     sch_deactivate(thr);
                                 }
                                 else if(((struct pm_msg_block_thread*)&msg)->block_type == THR_BLOCK_MSG)
-                                {                                    
+                                {
                                     // build the ports mask
-                                    tsk = tsk_get(thr->task_id);
-
                                     int k;
                                     unsigned int mask = ((struct pm_msg_block_thread*)&msg)->mask;
                                     
@@ -130,12 +128,14 @@ void cmd_process_msg()
                                     }
 
                                     if(evt_wait(thr->task_id, SARTORIS_EVT_MSG, mask) == SUCCESS)
-                                    {                    
+                                    {
                                         thr->flags |= THR_FLAG_BLOCKED_PORT;
                                         thr->state = THR_BLOCKED;
                                         thr->block_ports_mask = ((struct pm_msg_block_thread*)&msg)->mask;
                                         if((thr->flags & THR_FLAG_BLOCKED_INT) != THR_FLAG_BLOCKED_INT)
+                                        {
                                             sch_deactivate(thr);
+                                        }
                                     }
                                     else
                                     {
@@ -146,7 +146,7 @@ void cmd_process_msg()
                                         mask = ((struct pm_msg_block_thread*)&msg)->mask;
                                         for(k = 0; k < 32; k++)
                                         {                                        
-                                            if((mask & (0x1 << k)))
+                                            if(mask & (0x1 << k))
                                                 tsk->port_blocks[k]--;
                                         }
                                     }
@@ -204,6 +204,14 @@ void cmd_process_msg()
                                     }
                                 }
                             }
+                            else
+                            {
+                                cmd_inform_result(&msg, task_id, PM_ALREADY_BLOCKED, 0, 0);
+                            }
+                        }
+                        else
+                        {
+                            cmd_inform_result(&msg, task_id, PM_INVALID_THREAD, 0, 0);
                         }
                     }
                     break;
@@ -214,7 +222,7 @@ void cmd_process_msg()
 
                     if(tsk != NULL)
                     {
-                        thr = thr_get(((struct pm_msg_block_thread*)&msg)->thread_id);
+                        thr = thr_get(((struct pm_msg_unblock_thread*)&msg)->thread_id);
 
                         if(thr != NULL && thr->task_id == task_id)
                         {
@@ -256,10 +264,12 @@ void cmd_process_msg()
 
                                         if(!thr->flags)
                                             thr->state = THR_RUNNING;
-
+                                        
                                         thr->block_ports_mask = 0;
                                         if((thr->flags & THR_FLAG_BLOCKED_INT) != THR_FLAG_BLOCKED_INT)
+                                        {
                                             sch_activate(thr);
+                                        }
                                     }
                                 
                                     if((thr->flags & THR_FLAG_BLOCKED_INT) == THR_FLAG_BLOCKED_INT)
@@ -301,7 +311,6 @@ void cmd_process_msg()
                         else
                         {
                             cmd_inform_result(&msg, task_id, PM_INVALID_THREAD, 0, 0);
-							break;                            
                         }
                     }
                     break;
