@@ -156,14 +156,12 @@ void bochs_console_print(char *str)
     }
 }
 
-
 int print(char *format, ...) 
-{
+{    
 	/* call dvsprintf to construct string */
 	dvsprintf(outtext, format, (int*) (&format + 1));
 
     bochs_console_print(outtext);
-    
 	return 0;
 }
 
