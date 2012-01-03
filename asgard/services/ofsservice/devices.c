@@ -348,6 +348,7 @@ void init_logic_device(device_info *logic_device, int devicefile_nodeid, int buf
 	logic_device->device_nodeid = devicefile_nodeid;
 	logic_device->open_count = 0;
 	logic_device->umount = 0;
+	logic_device->queued_cmds = 0;
 
 	init_mutex(&logic_device->processing_mutex);
 	init_mutex(&logic_device->nodes_mutex);

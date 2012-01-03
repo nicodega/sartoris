@@ -122,20 +122,19 @@
 #define NONROOT_DEFAULT_SLOTS OFS_MAXWORKINGTHREADS
 
 // start_process responses //
-#define OFS_PROCESS_STARTED		0
-#define OFS_ENQUEUE			1
-#define OFS_PROCESS_NOTSTARTED		-1
+#define OFS_PROCESS_STARTED         0
+#define OFS_ENQUEUE                 1
+#define OFS_PROCESS_NOTSTARTED      -1
 
 
 #define OFS_THREADSIGNAL_DEVICELOCK	0x1
 #define OFS_THREADSIGNAL_NODELOCK	0x2
 #define OFS_THREADSIGNAL_MSG		0x3
 #define OFS_THREADSIGNAL_BUFFER		0x4
-#define OFS_THREADSIGNAL_START		0x5
-#define OFS_THREADSIGNAL_DEVICESLOTS	0x6
-#define OFS_THREADSIGNAL_DIRECTORYMSG	0x7
-#define OFS_THREADSIGNAL_NOSIGNAL	0x8
-
+#define OFS_THREADSIGNAL_DEVICESLOTS	0x5
+#define OFS_THREADSIGNAL_DIRECTORYMSG	0x6
+#define OFS_THREADSIGNAL_NOSIGNAL	0x7
+#define OFS_THREADSIGNAL_START      0x8
 
 struct node_lock_waiting
 {
@@ -197,6 +196,7 @@ struct dir_buffer
 	unsigned char buffer[OFS_DIR_BUFFERSIZE];
 };
 
+extern int working_threads_count;
 
 struct working_thread
 {
@@ -262,7 +262,6 @@ struct working_thread
 // Device processing info structure //
 // If a device is executing a command or has a command waiting this structure will
 // hold information on it
-
 struct sblocked_command
 {
 	struct stdfss_cmd command;	// the pending command
@@ -272,6 +271,7 @@ struct sblocked_command
 struct sdevice_info
 {
 	list waiting;			// holds stdfss messages waiting to be processed on the device
+    int queued_cmds;        // how many queued commands has the device.
 	AvlTree procesing;		// tree of commands being processed indexed by task id (only one by task at a given time)
 	struct mutex processing_mutex;	// this mutex will be used for checking waiting and procesing lists
 	
@@ -311,7 +311,8 @@ struct swaiting_command
 {
 	struct stdfss_cmd command;  // the pending command
 	int sender_id;              // id of the process for whose this command is pending
-	int life_time;
+	short life_time;
+    short queued;               // this member will be 1 if the command was already queued for execution
 };
 
 // idle devices struct //
@@ -414,14 +415,8 @@ typedef struct sdev_file dev_file;
 #define MAX(a,b) ((a > b)? a : b)
 
 // Function definitions //
-#ifdef WIN32DEBUGGER
-DWORD WINAPI ofs_main(LPVOID lpParameter);
-DWORD WINAPI working_process(LPVOID lpParameter);
-#else
 void ofs_main();
 void working_process();
-#endif
-
 
 void close_mutexes();
 void close_filebuffer_mutexes();
@@ -503,13 +498,14 @@ int write_buffer(char *buffer, unsigned int buffer_size, unsigned int lba, int c
 /* Working processes and signaling */
 int locking_send_msg(int totask, int port, void *msg, int wpid);
 void get_signal_msg(int *dest, int wpid);
-void signal_idle();
 void decrement_idle();
 int check_idle();
 void set_wait_for_signal(int threadid, int signal_type, int senderid);
 void wait_for_signal(int threadid);
 void signal(int threadid, int *msg, int senderid, int signal_type);
 int get_resolution_signal_wp();
+void wake_wp(int threadid);
+void wp_sleep(int threadid);
 
 /* Bitmaps handling */
 unsigned int *get_free_nodes(int count, int force_preserve, struct smount_info *minf, int command, int wpid, struct stdfss_res **ret);
@@ -558,6 +554,7 @@ int attempt_start(device_info *logic_device, CPOSITION position, int deviceid, i
 int get_idle_working_thread();
 void cleanup_working_threads();
 struct stdfss_res *check_path(char *path, int command);
+int check_waiting_commands(int wpid);
 
 // Global Variables declaration //
 
@@ -566,7 +563,6 @@ extern struct mutex opened_files_mutex;		// used for modifying tasks or opened f
 extern list opened_files;					// holds all stask_file_info structures for files
 
 extern list devs_with_commands;				// devices with pending jobs equeued.
-extern struct mutex devs_with_commands_mutex;
 extern lpat_tree mounted;					// info of mounted devices indexed by path
 extern struct mutex mounted_mutex;
 
@@ -593,7 +589,6 @@ extern int initialized;
 extern  list lock_node_waiting;
 extern struct mutex node_lock_mutex;
 extern struct mutex device_lock_mutex;
-	
 extern int max_directory_msg;
 extern struct mutex max_directory_msg_mutex;
 
