@@ -56,6 +56,7 @@ int sch_schedule()
 	static BOOL intraised = FALSE;
 	struct pm_thread *thread = NULL;
     struct pm_task *task = NULL;
+    int lrp;
 	
 	/* Deal with last_runned thread */
 	if(scheduler.last_runned != NULL)
@@ -69,15 +70,18 @@ int sch_schedule()
 			else
 				pman_print_and_stop("SCHED: Thread %i has state changed status: %i ", scheduler.last_runned->id, scheduler.last_runned->state);
 
-			if(scheduler.first[scheduler.last_runned->sch.priority] != scheduler.last[scheduler.last_runned->sch.priority])
+            lrp = scheduler.last_runned->sch.priority;
+			if(scheduler.first[lrp] != scheduler.last[lrp])
 			{
-				scheduler.first[scheduler.last_runned->sch.priority] = scheduler.last_runned->sch.next;
-				scheduler.last_runned->sch.next->sch.prev = NULL;
+                // remove last runned from the list
+                scheduler.first[lrp] = scheduler.last_runned->sch.next;
+				scheduler.first[lrp]->sch.prev = NULL;
 				scheduler.last_runned->sch.next = NULL;
 
-				scheduler.last[scheduler.last_runned->sch.priority]->sch.next = scheduler.last_runned;
-				scheduler.last_runned->sch.prev = scheduler.last[scheduler.last_runned->sch.priority];
-				scheduler.last[scheduler.last_runned->sch.priority] = scheduler.last_runned;
+                // add it at the end
+                scheduler.last[lrp]->sch.next = scheduler.last_runned;
+				scheduler.last_runned->sch.prev = scheduler.last[lrp];
+				scheduler.last[lrp] = scheduler.last_runned;
 			}
 
 			scheduler.last_runned->sch.quantums = sch_priority_quantum(scheduler.last_runned->sch.priority);
@@ -101,6 +105,7 @@ int sch_schedule()
 	/* Run next thread */
     if(thread->signals.pending_int)
     {
+        pman_print_dbg("PMAN: Run thread pending int %i\n", thread->id);
         task = tsk_get(thread->task_id);
 
         // try to run the soft int
@@ -114,7 +119,7 @@ int sch_schedule()
     }
     else
     {
-	    run_thread(thread->id);
+        run_thread(thread->id);
     }
 
 	/* Next time we are runned either by an int or run_thread, we will start here! */
@@ -129,20 +134,36 @@ int sch_schedule()
 	return intraised;
 }
 
+void dump_lists(int p)
+{
+    pman_print_dbg("PMAN: Blocked:");
+    struct pm_thread *t = scheduler.first_blocked;
+    while(t)
+    {
+        pman_print_dbg(" %i(%i,%i)", t->id, t->sch.prev? t->sch.prev->id : -1, t->sch.blocked);
+        t = t->sch.next;
+    }
+    pman_print_dbg("\nPMAN: Sched (%i,%i):", scheduler.first[p]->id, scheduler.last[p]->id);
+	t = scheduler.first[p];
+    while(t)
+    {
+        pman_print_dbg(" %i(%i,%i)", t->id, t->sch.prev? t->sch.prev->id : -1, t->sch.blocked);
+        t = t->sch.next;
+    }
+    pman_print_dbg("\n");
+}
+
 /*
 	Send a Thread onto the blocked list
 */
 void sch_deactivate(struct pm_thread *thr)
-{	
-	if(thr->sch.recursion > 0)
-	{
-        thr->sch.recursion++;
-		return;
-	}
-
-	thr->sch.recursion++;
-
-	if(thr->sch.blocked == TRUE) return;	
+{
+   // pman_print_dbg("PMAN: SCH DEACTIVATE thr: %i\n", thr->id);
+    
+    thr->sch.recursion++;
+	
+    if(thr->sch.recursion > 1 || thr->sch.blocked == TRUE)
+	    return;
 	
 	/* Remove From Scheduling list */
 	sch_remove(thr);
@@ -169,37 +190,36 @@ void sch_deactivate(struct pm_thread *thr)
 /* Remove a Thread from the blocked list */
 void sch_activate(struct pm_thread *thr)
 {	
-	if(thr->sch.recursion > 1)
+    //pman_print_dbg("PMAN: SCH ACTIVATE thr: %i\n", thr->id);
+    
+    if(thr->sch.recursion > 1)
 	{
 		thr->sch.recursion--;
+        if(thr->id == 19) pman_print_dbg("PMAN: Activate thr DEC REC: 19 drec: %i\n", thr->sch.recursion);
 		return;
 	}
 
 	if(thr->sch.recursion != 0) thr->sch.recursion--;
 
-	if(thr->sch.blocked != TRUE) return;
+	if(thr->sch.blocked != TRUE)
+    {        
+        if(thr->id == 19) pman_print_dbg("PMAN: Activate thr: 19 THR WAS NOT BLOCKED\n");
+        return;
+    }
 
 	thr->sch.blocked = FALSE;
 
-	/* Remove the Thread from blocked list */
-	if(thr == scheduler.first_blocked)
-	{
-		scheduler.first_blocked = scheduler.first_blocked->sch.next;
-		if(scheduler.first_blocked != NULL)
-			scheduler.first_blocked->sch.prev = NULL;
-	}
-	else
-	{
-		if(thr->sch.next != NULL) thr->sch.next->sch.prev = thr->sch.prev;
-		if(thr->sch.prev != NULL) thr->sch.prev->sch.next = thr->sch.next;
-	}
-
+	/* Remove the Thread from the blocked list */
+    if(thr->sch.next) thr->sch.next->sch.prev = thr->sch.prev;
+    if(thr->sch.prev) thr->sch.prev->sch.next = thr->sch.next;
+    if(thr == scheduler.first_blocked) scheduler.first_blocked = thr->sch.next;
+	
 	/* Place the thread at the end of its priority list */
 	if(scheduler.first[thr->sch.priority] != NULL)
 	{
 		scheduler.last[thr->sch.priority]->sch.next = thr;
 		thr->sch.next = NULL;
-		thr->sch.prev = scheduler.last[thr->sch.priority];		
+		thr->sch.prev = scheduler.last[thr->sch.priority];
 	}
 	else
 	{
@@ -208,15 +228,18 @@ void sch_activate(struct pm_thread *thr)
 		thr->sch.prev = NULL;
 	}
 	scheduler.last[thr->sch.priority] = thr;
-	thr->sch.quantums = sch_priority_quantum(thr->sch.priority);
+
+    thr->sch.quantums = sch_priority_quantum(thr->sch.priority);
 	scheduler.active_threads++;
 }
 
 // add a thread to the scheduler as inactive
 void sch_add(struct pm_thread *thr)
 {
-	thr->sch.blocked = TRUE;
-	if(scheduler.first_blocked == NULL)
+	
+    thr->sch.blocked = TRUE;
+	
+    if(scheduler.first_blocked == NULL)
 	{
 		scheduler.first_blocked = thr;
 		thr->sch.next = NULL;
@@ -229,13 +252,14 @@ void sch_add(struct pm_thread *thr)
 		thr->sch.prev = NULL;
 		scheduler.first_blocked = thr;
 	}
-	scheduler.total_threads++;
+	
+    scheduler.total_threads++;
 }
 
 // remove a task from scheduler
 void sch_remove(struct pm_thread *thr)
-{		
-	if(!thr->sch.blocked)
+{	
+    if(!thr->sch.blocked)
 	{
 		/* Remove from its priority list */
 		if(scheduler.last[thr->sch.priority] == thr)
@@ -252,10 +276,9 @@ void sch_remove(struct pm_thread *thr)
 	else
 	{
 		/* remove from blocked list */
-		if(scheduler.first_blocked == thr)
-			scheduler.first_blocked = thr->sch.next;
-		if(thr->sch.next != NULL)
-			thr->sch.next->sch.prev = thr->sch.prev;
+        if(thr->sch.next) thr->sch.next->sch.prev = thr->sch.prev;
+        if(thr->sch.prev) thr->sch.prev->sch.next = thr->sch.next;
+        if(thr == scheduler.first_blocked) scheduler.first_blocked = thr->sch.next;
 	}
 
 	thr->sch.next = thr->sch.prev = NULL;
@@ -265,12 +288,12 @@ void sch_remove(struct pm_thread *thr)
 		scheduler.last_runned = NULL;
 		scheduler.list_selector = scheduler.list_selector+1 % SCHED_MAXPRIORITY;
 	}
-	else if(scheduler.running == thr) 
+	if(scheduler.running == thr) 
 	{
 		scheduler.running = NULL;
 		scheduler.list_selector = scheduler.list_selector+1 % SCHED_MAXPRIORITY;
 	}
-
+    
 	scheduler.total_threads--;
 }
 
@@ -330,7 +353,6 @@ void sch_reschedule(struct pm_thread *thr, UINT32 possition)
 
 	/* If thread is blocked (this should not happen.. but it can happen) don't reschedule */
 	if(thread->state != THR_WAITING) return;
-	
 	/* 
 	Place the thread at the given possition. 
 	*/
@@ -421,7 +443,7 @@ void sch_process_portblocks()
         if(msg.evt == SARTORIS_EVT_MSG || msg.evt == SARTORIS_EVT_PORT_CLOSED)
         {
             struct pm_task *tsk = tsk_get(msg.id);
-
+                        
             if(tsk)
             {
                 struct pm_thread *thr = tsk->first_thread;
@@ -453,7 +475,6 @@ void sch_process_portblocks()
                         // decrease the int blocked_count
                         if(thr->block_ints_mask)
                         {
-                            pman_print_dbg("PMAN: block_ints_mask not 0!\n");
                             m = thr->block_ints_mask;
                             timask |= thr->block_ints_mask;
                             for(k = 0; m /*&& k < 32*/; k++)
@@ -480,10 +501,13 @@ void sch_process_portblocks()
 
                 // set the wait again
                 if(mask)
+                {
                     evt_wait(tsk->id, SARTORIS_EVT_MSG, mask);
+                }
                 
                 if(cmask != timask)
                 {
+                    pman_print_dbg("PMAN: EVT_MSG setting int block!.\n");
                     struct ints_evt_param int_params;
                     int_params.mask = (timask & ~cmask);
                     int_params.base = 32;

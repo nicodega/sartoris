@@ -88,7 +88,7 @@ struct pm_thread *thr_create(UINT16 id, struct pm_task *task)
 	
 	task->first_thread = thr;
 	task->num_threads++;
-
+    
     return thr;
 }
 
@@ -122,11 +122,11 @@ int thr_destroy_thread(UINT16 thread_id)
 {
 	struct pm_thread * thr = thr_get(thread_id);
 	int ret = 0;
-
-	/*
-	NOTE: Don't think about resting VMM info on this function.
+    	
+    /*
+	NOTE: Don't think even about reseting VMM info on this function.
 	It will be used if we already have a pending read/write of a page 
-	for this thread, and thread must stay KILLED.
+	for this thread, and the thread must stay KILLED.
 	*/
 
 	if(thr == NULL) 
@@ -143,7 +143,10 @@ int thr_destroy_thread(UINT16 thread_id)
 		{
 			struct pm_task *task = tsk_get(thr->task_id);
 
-            if(task == NULL) return -1;
+            if(task == NULL)
+            {
+                return -1;
+            }
 
 			if(thr->state != THR_KILLED) 
             {
@@ -164,35 +167,40 @@ int thr_destroy_thread(UINT16 thread_id)
 				    }
 				    currTrhead->next_thread = thr->next_thread;
 			    }
+
+                if(thr->flags & (THR_FLAG_PAGEFAULT | THR_FLAG_PAGEFAULT_TBL))
+                {
+                    /* Thread is waiting for a page fault (either swap or PF) 
+                    We will leave it in a killed state.
+                    */
+				    thr->state = THR_KILLED;
+				    ret = 1;
+                }
+
+                // remove the thread signals
+                remove_thr_signals(thr);
+
+			    if(thr->interrupt != 0)	
+				    int_dettach(thr);
+                
+			    /* Remove thread from scheduler */
+			    sch_remove(thr);
+
+                if(ret != 1)
+                {
+                    thread_info[thr->id] = NULL;
+                    kfree(thr);
+                    thr = NULL;
+                }
             }
+            else
+            {
+                task->killed_threads--;
 
-            // remove the thread signals
-            remove_thr_signals(thr);
-
-			if(thr->state != THR_KILLED && (thr->flags & (THR_FLAG_PAGEFAULT | THR_FLAG_PAGEFAULT_TBL)))
-			{
-                /* Thread is waiting for a page fault (either swap or PF) */
-				thr->state = THR_KILLED;
-				ret = 1;
-			}
-			else
-			{
                 thread_info[thr->id] = NULL;
                 kfree(thr);
                 thr = NULL;
-			}
-						
-			if(thr != NULL)
-			{
-                if(thr->state == THR_KILLED) 
-				    task->killed_threads--;
-
-				if(thr->interrupt != 0)	
-					int_dettach(thr);
-
-				/* Remove thread from scheduler */
-				sch_remove(thr);
-			}
+            }
 
 			return ret;
 		}
