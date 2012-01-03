@@ -27,8 +27,8 @@
 extern "C" {
 #endif
 
-void enter_block(void);
-void exit_block(void);
+int enter_block(void);
+void exit_block(int);
 void ack_int_master(void);
 
 #ifdef __cplusplus
