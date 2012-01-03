@@ -25,7 +25,7 @@
 
 void init_mutex(struct mutex *mon)
 {
-	enter_block();
+	int x = enter_block();
 
 	mon->available_turn = 0;
 	mon->locking_turn = 0;
@@ -33,7 +33,7 @@ void init_mutex(struct mutex *mon)
 	mon->locked = UNLOCKED;
 	mon->recursion = 0;
 
-	exit_block();
+	exit_block(x);
 }
 
 
@@ -42,12 +42,12 @@ void wait_mutex(struct mutex *mon)
 {
 	int currthread = get_current_thread();
 	unsigned int turn;
-	enter_block();
+	int x = enter_block();
 
 	if(mon->locking_thread == currthread && mon->locked == LOCKED)
 	{
 		mon->recursion++;
-		exit_block();
+		exit_block(x);
 		return;
 	}
 
@@ -59,7 +59,7 @@ void wait_mutex(struct mutex *mon)
 		mon->locking_turn = mon->available_turn = 0;
 		mon->recursion = 0;
 	
-		exit_block();
+		exit_block(x);
 		return;	
 	}
 
@@ -69,7 +69,7 @@ void wait_mutex(struct mutex *mon)
 
 	turn = mon->available_turn;	
 
-	exit_block();
+	exit_block(x);
 
 	while(turn != mon->locking_turn){ reschedule(); }
 
@@ -83,19 +83,19 @@ void leave_mutex(struct mutex *mon)
 {
 	int currthread = get_current_thread();
 
-	enter_block();
+	int x = enter_block();
 
 	// check this thread has the mutex
 	if(mon->locking_thread != currthread || mon->locked != LOCKED)
 	{
-		exit_block();
+		exit_block(x);
 		return;
 	}
 
 	if(mon->locking_thread == currthread && mon->locked == LOCKED && mon->recursion > 1)
 	{
 		mon->recursion--;
-		exit_block();
+		exit_block(x);
 		return;
 	}
 
@@ -109,7 +109,7 @@ void leave_mutex(struct mutex *mon)
 
 		mon->locked = WAITING; // intermediate state, indicating the mutex is waiting for next thread
 		mon->recursion = 0;
-		exit_block();
+		exit_block(x);
 		return;
 	}
 	
@@ -119,7 +119,7 @@ void leave_mutex(struct mutex *mon)
 	mon->locking_thread = -1;
 	mon->recursion = 0;
 
-	exit_block();
+	exit_block(x);
 }
 
 
@@ -138,16 +138,16 @@ int own_mutex(struct mutex *mon)
 {
 	int currthread = get_current_thread();
 
-	enter_block();
+	int x = enter_block();
 
 	// check this thread has the mutex
 	if(mon->locking_thread == currthread && mon->locked == LOCKED)
 	{
-		exit_block();
+		exit_block(x);
 		return 1;
 	}
 
-	exit_block();
+	exit_block(x);
 
 	return 0;
 }

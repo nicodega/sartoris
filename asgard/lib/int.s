@@ -25,11 +25,18 @@ global exit_block
 global ack_int_master
 	
 enter_block:
+   ;; pushf
+   ;; pop eax
+   ;; and eax, 0x00000200
 	cli
 	ret
 
 exit_block:
+    ;;mov eax, [esp+8]
+    ;;and eax, 0x00000200
+    ;;jz exit_block_no_sti
 	sti
+exit_block_no_sti:
 	ret
 
 ack_int_master:		

@@ -182,7 +182,6 @@ int wait_sigh(SIGNALHANDLER sigh)
 		if(chkres != 0)
 		{
             remove_signal(sigh);
-
 			break;		// finished.
 		}
         else
