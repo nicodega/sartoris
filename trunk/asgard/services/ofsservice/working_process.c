@@ -21,8 +21,6 @@
 
 #include "ofs_internals.h"
 
-int check_waiting_commands(int wpid);
-
 /* This function represents a working thread. */
 void working_process()
 {
@@ -39,7 +37,7 @@ void working_process()
 
 	thread = &working_threads[myid];
 	
-	set_wait_for_signal(myid, OFS_THREADSIGNAL_START, -1);
+    set_wait_for_signal(myid, OFS_THREADSIGNAL_START, -1);
 
 	thread->initialized = 1; // set as initialized
 
@@ -47,9 +45,7 @@ void working_process()
 	{
 		// wait until a START signal is rised 
 		wait_for_signal(myid);
-
-		thread->active = 1;
-
+                
 		// remember to get slots on evey process and free them when finished
 		// using defined function here. Same goes for buffers.
 
@@ -183,67 +179,10 @@ void working_process()
 		if(own_mutex(&device_lock_mutex)) print("device_lock_mutex left locked", thread->command.command);
 		if(own_mutex(&max_directory_msg_mutex)) print("max_directory_msg_mutex left locked", thread->command.command);
 
-		set_wait_for_signal(myid, OFS_THREADSIGNAL_START, -1);
-		
-		thread->active = 0;
-        check_waiting_commands(myid);
+        set_wait_for_signal(myid, OFS_THREADSIGNAL_START, -1);
+        signal_idle();
 	}
 	
-}
-
-/*
-This function will see if there are any pending commands on the devs_with_commands
-list, or if the device of the wp has pending comands.
-If any commands are found an iddle message will be sent to the main thread, if not 
-the thread will be signaled as iddle but no command will be sent.
-*/
-int check_waiting_commands(int wpid)
-{
-    int msg[4];
-	AvlTree *sub_avl = NULL;
-	device_info *dinf = NULL;
-	int created = FALSE;
-	
-	if(working_threads[wpid].initialized == 1 && working_threads[wpid].active == 0)
-	{
-		// check working thread last device for a new job
-		wait_mutex(&cached_devices_mutex);
-		sub_avl = (AvlTree *)avl_getvalue(cached_devices, working_threads[wpid].deviceid);
-
-		if(sub_avl == NULL)
-		{
-			leave_mutex(&cached_devices_mutex);
-			return;
-		}
-
-		dinf = (device_info *)avl_getvalue(*sub_avl, working_threads[wpid].logic_deviceid);
-
-		if(dinf == NULL)
-		{
-			leave_mutex(&cached_devices_mutex);
-			return;
-		}
-		leave_mutex(&cached_devices_mutex);
-
-		if(length(&dinf->waiting) != 0)
-		{
-			// attempt starting this command
-			if(attempt_start(dinf, get_head_position(&dinf->waiting), working_threads[wpid].deviceid, working_threads[wpid].logic_deviceid))
-			{
-				created = TRUE;
-			}
-		}
-	}
-    
-	signal_idle();
-
-    // If there is a device with pending commands, send the idle message
-    wait_mutex(&devs_with_commands_mutex);
-    //if(created || length(&devs_with_commands) != 0)
-    send_msg(get_current_task(), OFS_IDLE_PORT, &msg);
-    leave_mutex(&devs_with_commands_mutex);
-
-	return created;
 }
 
      

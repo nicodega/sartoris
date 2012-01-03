@@ -21,15 +21,13 @@
 
 #include "ofs_internals.h"
 
-
 // Global Variables declaration //
 
 AvlTree tasks;
 struct mutex opened_files_mutex;		
 list opened_files;					
 
-list devs_with_commands;		
-struct mutex devs_with_commands_mutex;
+list devs_with_commands;
 lpat_tree mounted;		
 struct mutex mounted_mutex;
 
@@ -48,6 +46,7 @@ int new_threadid;
 
 int idle_threads;
 struct mutex idle_threads_mutex;
+int working_threads_count;
 	
 int initialized;
 
@@ -62,7 +61,6 @@ struct mutex max_directory_msg_mutex;
 struct stdservice_res dieres;
 int dieid;
 int dieretport;
-int ofs_task;
 
 // This is the main service thread //
 void _start()
@@ -93,15 +91,13 @@ void _start()
 	open_port(OFS_CHARDEV_PORT, 2, PRIV_LEVEL_ONLY);
 	open_port(OFS_BLOCKDEV_PORT, 2, PRIV_LEVEL_ONLY);
 	open_port(STDFSS_PORT, -1, UNRESTRICTED);
-	open_port(STDSERVICE_PORT, 0, PRIV_LEVEL_ONLY); 		// should set perms only to the scheduler
+	open_port(STDSERVICE_PORT, 1, PRIV_LEVEL_ONLY); 		// should set perms only to the scheduler
 	open_port(OFS_STDDEVRES_PORT, 2, PRIV_LEVEL_ONLY);
 	open_port(OFS_PMAN_PORT, 0, PRIV_LEVEL_ONLY);
 	open_port(OFS_IDLE_PORT, 1, PRIV_LEVEL_ONLY);
 
 	// set interrupts
 	__asm__ ("sti"::);
-
-    ofs_task = get_current_task();
 
 	init_mem(mbuffer, 1024 * 1024);
 
@@ -110,6 +106,7 @@ void _start()
 	ver_res.ret = STDFSSERR_OK;
 
 	idle_threads = OFS_MAXWORKINGTHREADS; // all threads are idle
+    working_threads_count = 0;            // no threads where created
 	init_working_threads();
 
 	// register service //
@@ -138,7 +135,6 @@ void _start()
 	init_mutex(&file_buffers_mutex);
 	init_mutex(&device_lock_mutex);
 	init_mutex(&max_directory_msg_mutex);
-	init_mutex(&devs_with_commands_mutex);
 
 	init(&lock_node_waiting);
 	init_file_buffers();
@@ -161,10 +157,11 @@ void _start()
     int ports[] = {OFS_DIRECTORY_PORT, OFS_CHARDEV_PORT, OFS_BLOCKDEV_PORT, STDFSS_PORT, STDSERVICE_PORT, OFS_STDDEVRES_PORT, OFS_IDLE_PORT, OFS_PMAN_PORT};
     int counts[8];
     unsigned int mask = 255;
-
+    int wp_idle_cmd[4];
+    int rett = 0;
 	while(!die)
 	{
-		while(wait_for_msgs_masked(ports, counts, 8, mask) == 0){}	
+		while((rett = wait_for_msgs_masked(ports, counts, 8, mask)) == 0){}	
 
         string_print("OFS ALIVE",4*160 - 18,k++);
 
@@ -176,7 +173,15 @@ void _start()
 
         while(counts[6])
         {
-            get_msg(OFS_IDLE_PORT, &cmd, &senderid);
+            get_msg(OFS_IDLE_PORT, wp_idle_cmd, &senderid);
+            
+            // a WP has changed it's status to idle, check if there are pending commands.
+            if(working_threads[wp_idle_cmd[0]].active == 0 && !check_waiting_commands(wp_idle_cmd[0]) && counts[3] == 0)
+            {
+                // put the thread to sleep                
+                wp_sleep(wp_idle_cmd[0]);
+            }
+
             counts[6]--;
         }
 
@@ -200,7 +205,6 @@ void _start()
 
 			dirservice_count--;
 		}
-
 
 		service_count = counts[4];
 
@@ -355,7 +359,7 @@ void _start()
 		while(!die && stdfss_count != 0)
 		{
 			get_msg(STDFSS_PORT, &cmd, &senderid);		
-
+            
 			if(blocked)
 			{
 				// service is shuting down, send error msg
@@ -528,20 +532,18 @@ void _start()
 					waiting_cmd->command = cmd;
 					waiting_cmd->sender_id = senderid;
 					waiting_cmd->life_time = OFS_COMMAND_LIFETIME;
+                    waiting_cmd->queued = 0;
 
 					wait_mutex(&dinf->processing_mutex);
 					add_tail(&dinf->waiting, (void *)waiting_cmd);
 					leave_mutex(&dinf->processing_mutex);
-
+                    
 					// cache device info again, just in case it has been removed
 					dinf = cache_device_info(deviceid, logic_deviceid, dinf);
 
 					dinf->hits++; // hit logic device
 
-					if(!attempt_start(dinf, get_tail_position(&dinf->waiting), deviceid, logic_deviceid))
-					{
-						//print("failed to start",0);
-					}
+					attempt_start(dinf, get_tail_position(&dinf->waiting), deviceid, logic_deviceid);
 
 					stdfss_count--;
 				}
@@ -549,73 +551,69 @@ void _start()
 		}
 	
 		// start any idle commands if there are threads in idle state
-		idle_devs = length(&devs_with_commands);    // I won't lock the mutex because this is the only thread where we remove devs.
+		idle_devs = length(&devs_with_commands);
 
 		while(!die && check_idle() && idle_devs > 0)
 		{
 			// there are idle threads wich can be started
 			idle_thread = get_idle_working_thread();
 
-			// fill working_thread structure
-            wait_mutex(&devs_with_commands_mutex);
-			idle_dev = (idle_device *)get_head(&devs_with_commands);
-            leave_mutex(&devs_with_commands_mutex);
+            if(idle_thread != -1 || working_threads_count != OFS_MAXWORKINGTHREADS)
+            {
+			    // fill working_thread structure
+			    idle_dev = (idle_device *)get_head(&devs_with_commands);
 
-			dinf = get_cache_device_info(idle_dev->deviceid, idle_dev->logic_deviceid);
+			    dinf = get_cache_device_info(idle_dev->deviceid, idle_dev->logic_deviceid);
 
-			waiting_cmd = (waiting_command *)get_head(&dinf->waiting);
+			    waiting_cmd = (waiting_command *)get_head(&dinf->waiting);
 		
-			working_threads[idle_thread].command = waiting_cmd->command;
-			working_threads[idle_thread].deviceid = idle_dev->deviceid;
-			working_threads[idle_thread].logic_deviceid = idle_dev->logic_deviceid;
-			working_threads[idle_thread].taskid = waiting_cmd->sender_id;
-			working_threads[idle_thread].locked_device = 0;
-			working_threads[idle_thread].buffer_wait = 0;
-			working_threads[idle_thread].mounting = 0;
-			working_threads[idle_thread].locked_node = -1;
-			working_threads[idle_thread].locked_dirnode = -1;
+			    working_threads[idle_thread].command = waiting_cmd->command;
+			    working_threads[idle_thread].deviceid = idle_dev->deviceid;
+			    working_threads[idle_thread].logic_deviceid = idle_dev->logic_deviceid;
+			    working_threads[idle_thread].taskid = waiting_cmd->sender_id;
+			    working_threads[idle_thread].locked_device = 0;
+			    working_threads[idle_thread].buffer_wait = 0;
+			    working_threads[idle_thread].mounting = 0;
+			    working_threads[idle_thread].locked_node = -1;
+			    working_threads[idle_thread].locked_dirnode = -1;
 
-			// create thread if it was not initialized
-			if(working_threads[idle_thread].initialized == 0)
-			{
-				if(!create_working_thread(idle_thread))
-				{
-					// no new threads can be created
-					idle_devs--;
-					continue;
-				}
-			}
+			    // create thread if it was not initialized
+			    if(working_threads[idle_thread].initialized == 0)
+			    {                
+                    if(!create_working_thread(idle_thread))
+				    {
+					    // no new threads can be created
+					    idle_devs--;
+					    continue;
+				    }
+			    }
 
-			decrement_idle();
+			    decrement_idle();
 
-			wait_mutex(&dinf->umount_mutex);
-			if(waiting_cmd->command.command == STDFSS_UMOUNT)
-			{
-				dinf->umount = TRUE; // set umount flag to 1 so no other commands are started until umount finishes
-			}
-			leave_mutex(&dinf->umount_mutex);
+			    wait_mutex(&dinf->umount_mutex);
+			    if(waiting_cmd->command.command == STDFSS_UMOUNT)
+			    {
+				    dinf->umount = TRUE; // set umount flag to 1 so no other commands are started until umount finishes
+			    }
+			    leave_mutex(&dinf->umount_mutex);
 
-			// add waiting command to procesing avl
-			wait_mutex(&dinf->processing_mutex);
-			{
-				avl_insert(&dinf->procesing, waiting_cmd, waiting_cmd->sender_id);
-				remove_at(&dinf->waiting, get_head_position(&dinf->waiting));
-			}
-			leave_mutex(&dinf->processing_mutex);
-
-			// signal thread for start
-			signal(idle_thread, NULL, -1, OFS_THREADSIGNAL_START);
-
-			// when a thread is signaled for starting we should wait until it
-			// becomes active
-			while(working_threads[idle_thread].active = 0){ reschedule(); }
-
-			// free structures used
-            wait_mutex(&devs_with_commands_mutex);
-			remove_at(&devs_with_commands, get_head_position(&devs_with_commands));
-            leave_mutex(&devs_with_commands_mutex);
+			    // add waiting command to procesing avl
+			    wait_mutex(&dinf->processing_mutex);
+			    {
+				    remove_at(&dinf->waiting, get_head_position(&dinf->waiting));
+                    dinf->queued_cmds--;
+				    avl_insert(&dinf->procesing, waiting_cmd, waiting_cmd->sender_id);
+			    }
+			    leave_mutex(&dinf->processing_mutex);
+            
+			    // free structures used
+			    remove_at(&devs_with_commands, get_head_position(&devs_with_commands));
 			
-			free(idle_dev);
+			    free(idle_dev);
+
+                // signal thread for start (this will set the active flag)
+                wake_wp(idle_thread);
+            }
 
 			idle_devs--;
 		}

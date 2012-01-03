@@ -22,6 +22,8 @@
 #include "ofs_internals.h"
 #include <services/pmanager/services.h>
 
+int working_threads_count = 0;
+
 /* ofs internals */
 int attempt_start(device_info *logic_device, CPOSITION position, int deviceid, int logic_deviceid)
 {
@@ -33,30 +35,33 @@ int attempt_start(device_info *logic_device, CPOSITION position, int deviceid, i
 
 	// see if the device is not processing commands or the
 	// command can be issued concurrently with other commands 
-	if(avl_get_total(&logic_device->procesing) == 0 || check_concurrent(logic_device, position))
+	if((avl_get_total(&logic_device->procesing) == 0 || check_concurrent(logic_device, position)))
 	{
 		// put the command in front of the waiting list //
 		bring_to_front(&logic_device->waiting, position);
-						
+
 		// add the device to the devs_with_commands list, for processing //
 		idle_dev = (idle_device *)malloc(sizeof(idle_device));
 
 		idle_dev->logic_deviceid = logic_deviceid;
 		idle_dev->deviceid = deviceid;
 
-        wait_mutex(&devs_with_commands_mutex);
 		add_tail(&devs_with_commands, idle_dev);
-        leave_mutex(&devs_with_commands_mutex);
-
+        
 		// decrement all waiting commands lifetime
 		it = get_head_position(&logic_device->waiting);
+
+        // set this command queued value to 1
+        waiting_cmd = (struct swaiting_command *)get_at(it);
+        waiting_cmd->queued = 1;
+        logic_device->queued_cmds++;
 
 		while(it != NULL)
 		{
 			waiting_cmd = (struct swaiting_command *)get_next(&it);
 			if(waiting_cmd->life_time != 0) waiting_cmd->life_time--;
 		}
-
+        
 		leave_mutex(&logic_device->processing_mutex);
 		return TRUE;
 	}
@@ -66,6 +71,9 @@ int attempt_start(device_info *logic_device, CPOSITION position, int deviceid, i
 	return FALSE;
 }
 
+/*
+This function assumes device->processing_mutex is locked.
+*/
 int check_concurrent(struct sdevice_info *device, CPOSITION position)
 {
 	struct swaiting_command *waiting_cmd = NULL, *wc = NULL;
@@ -77,7 +85,8 @@ int check_concurrent(struct sdevice_info *device, CPOSITION position)
 	// UMOUNTS are NOT concurrent
 	if(waiting_cmd->command.command == STDFSS_UMOUNT 
         || waiting_cmd->command.command == STDFSS_TAKEOVER
-        || waiting_cmd->command.command == STDFSS_RETURN) return FALSE;
+        || waiting_cmd->command.command == STDFSS_RETURN 
+        || working_threads_count == length(&devs_with_commands)) return FALSE;
 
 	// check the task is not processing something (one process running at the same time for a given task)
     // On takeovers we must check there are no operations from the current owner.
@@ -92,7 +101,10 @@ int check_concurrent(struct sdevice_info *device, CPOSITION position)
 	while(it != NULL)
 	{
 		waiting_cmd = (struct swaiting_command *)get_next(&it);
-		if(waiting_cmd->life_time == 0 || waiting_cmd->command.command == STDFSS_UMOUNT) return FALSE;
+		if(waiting_cmd->life_time == 0 
+            || waiting_cmd->command.command == STDFSS_UMOUNT
+            || waiting_cmd->command.command == STDFSS_TAKEOVER
+            || waiting_cmd->command.command == STDFSS_RETURN ) return FALSE;
 	}
 
 	// check there is no umount command being executed
@@ -102,6 +114,89 @@ int check_concurrent(struct sdevice_info *device, CPOSITION position)
 	   and let god judge us if a mutex or locking mecanism is wrong :\ 
 	*/
 	return TRUE;
+}
+
+/*
+This function will see if there are any pending commands on the devs_with_commands
+list, or if the device of the specified wp has pending comands.
+If any commands are found it'll return TRUE.
+*/
+int check_waiting_commands(int wpid)
+{
+    int msg[4];
+	AvlTree *sub_avl = NULL;
+	device_info *dinf = NULL;
+	int waiting = FALSE;
+    waiting_command *waiting_cmd = NULL;
+	
+	// check working thread last device for a new job
+	wait_mutex(&cached_devices_mutex);
+	sub_avl = (AvlTree *)avl_getvalue(cached_devices, working_threads[wpid].deviceid);
+
+	if(sub_avl == NULL)
+	{
+		leave_mutex(&cached_devices_mutex);
+		return;
+	}
+
+	dinf = (device_info *)avl_getvalue(*sub_avl, working_threads[wpid].logic_deviceid);
+
+	if(dinf == NULL)
+	{
+		leave_mutex(&cached_devices_mutex);
+		return;
+	}
+	leave_mutex(&cached_devices_mutex);
+
+    /*
+    NOTE: The device for this thread could be already on the devs_with_commands
+    list and that's why we check the queued value.
+    */
+
+    if(working_threads_count != length(&devs_with_commands))
+    {
+        // Attempt to start other commands on the device
+        CPOSITION it = get_head_position(&dinf->waiting);
+        CPOSITION oit = NULL;
+        int did = working_threads[wpid].deviceid;
+        int ldid = working_threads[wpid].logic_deviceid;
+
+	    while(it != NULL)
+	    {
+            oit = it;
+            waiting_cmd = (struct swaiting_command *)get_next(&it);
+
+            wait_mutex(&dinf->processing_mutex);
+            // if the device has too many queued commands, don't enqueue anymore
+            if(avl_get_total(&dinf->procesing) + dinf->queued_cmds > (OFS_MAXWORKINGTHREADS >> 1)
+                || (OFS_MAXWORKINGTHREADS == 1 && dinf->queued_cmds > 0))
+            {
+                leave_mutex(&dinf->processing_mutex);
+                break;
+            }
+            leave_mutex(&dinf->processing_mutex);
+
+		    if(waiting_cmd->life_time == 0 
+                || waiting_cmd->command.command == STDFSS_UMOUNT
+                || waiting_cmd->command.command == STDFSS_TAKEOVER
+                || waiting_cmd->command.command == STDFSS_RETURN ) break;
+
+            if(waiting_cmd->queued)
+            {
+                // continue to the next command 
+                continue;
+            }
+
+            waiting |= attempt_start(dinf, oit, did, ldid);
+	    }
+    }
+
+    if(!waiting && length(&devs_with_commands))
+    {
+        waiting = TRUE;
+    }
+	
+	return waiting;
 }
 
 /* Create a working thread */
@@ -135,6 +230,8 @@ int create_working_thread(int id)
 	// wait until thread get's it's ID
 	while(!working_threads[id].initialized){ reschedule(); }
 
+    working_threads_count++;
+
 	return TRUE;
 }
 
@@ -161,6 +258,8 @@ int destroy_working_thread(int id)
 	working_threads[id].active = 0;
 	working_threads[id].initialized = 0;
 	working_threads[id].threadid = -1;
+
+    working_threads_count--;
 
 	return TRUE;
 }
@@ -201,7 +300,7 @@ void cleanup_working_threads()
 	if(idle_initialized_threads >= OFS_MAXINITIALIZED_IDLE_WORKINGTHREADS)
 	{
 		// cleanup
-		i =0;
+		i = 0;
 
 		while(i < OFS_MAXWORKINGTHREADS && j < OFS_WOKINGTHREADS_CLEANUPAMMOUNT)
 		{
