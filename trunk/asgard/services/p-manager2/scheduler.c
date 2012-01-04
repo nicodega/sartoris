@@ -24,7 +24,10 @@
 #include "scheduler.h"
 #include "task_thread.h"
 #include "interrupts.h"
+#include "layout.h"
 #include <drivers/pit/pit.h>
+
+void idle_thread();
 
 void sch_init()
 {
@@ -48,6 +51,23 @@ void sch_init()
 	scheduler.list_selector = 0;
 	scheduler.total_threads = 0;
 	scheduler.active_threads = 0;
+
+    /* Create the idle thread */
+    struct thread hdl;
+    struct pm_thread *pmthr;
+        
+    hdl.task_num = PMAN_TASK;
+	hdl.invoke_mode = PRIV_LEVEL_ONLY;
+	hdl.invoke_level = 1;
+	hdl.ep = &idle_thread;
+	hdl.stack = (ADDR)STACK_ADDR(PMAN_IDLESTACK_ADDR);
+
+	if(create_thread(IDLE_THR, &hdl))
+		pman_print_and_stop("PMAN: scheduler.c FAILED To create idle Thread");
+
+    pmthr = thr_create(IDLE_THR, NULL);
+	pmthr->task_id = PMAN_TASK;
+	pmthr->state = THR_WAITING;
 }
 
 /* Tis function will start next scheduled thread  */
@@ -91,12 +111,23 @@ int sch_schedule()
 
 	/* Schedule next thread */
 	
-	// Find next list thread
+	// Find next thread on the lists or idle
+    if(pman_stage == PMAN_STAGE_RUNING)
+    {
+        while(scheduler.active_threads == 0)
+        {
+            pman_print_dbg("PMAN: Activating Idle Thread\n");
+            // we couldn't find a thread to run.. run the idle thread!
+            //run_thread(IDLE_THR);
+            pman_print_dbg("PMAN: Returned from Idle Thread\n");
+        }
+    }
+
 	while(scheduler.first[scheduler.list_selector] == NULL) 
 	{
-		scheduler.list_selector = (scheduler.list_selector == SCHED_MAXPRIORITY-1)? 0 : scheduler.list_selector + 1;			
-	}
-	
+		scheduler.list_selector = (scheduler.list_selector == SCHED_MAXPRIORITY-1)? 0 : scheduler.list_selector + 1;
+    }
+    	
 	thread = scheduler.running = scheduler.first[scheduler.list_selector];
 	thread->sch.quantums--; // spent a quantum
     	
@@ -630,3 +661,15 @@ void sch_process_portblocks()
     }
 }
 
+/*
+This is the code for the idle thread. This thread will be scheduled only
+when there are no processes on the scheduling lists.
+*/
+void idle_thread()
+{
+    __asm__ __volatile__ ("cli"::);
+    for(;;)
+    {
+        idle_cpu();
+    }
+}

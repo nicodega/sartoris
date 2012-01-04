@@ -511,7 +511,7 @@ void vmm_swap_found(UINT32 partition_size, UINT32 ldevid)
 	/* Create threads */
 	thr.task_num = PMAN_TASK;
 	thr.invoke_mode = PRIV_LEVEL_ONLY;
-	thr.invoke_level = 3;
+	thr.invoke_level = 1;
 	thr.ep = &vmm_page_aging;
 	thr.stack = (void *)STACK_ADDR(PMAN_AGING_STACK_ADDR);
 
@@ -523,7 +523,7 @@ void vmm_swap_found(UINT32 partition_size, UINT32 ldevid)
 
 	thr.task_num = PMAN_TASK;
 	thr.invoke_mode = PRIV_LEVEL_ONLY;
-	thr.invoke_level = 3;
+	thr.invoke_level = 1;
 	thr.ep = &vmm_page_stealer;
 	thr.stack = (void *)STACK_ADDR(PMAN_STEALING_STACK_ADDR);
 
