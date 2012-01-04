@@ -36,6 +36,8 @@ int set_thread_run_perms(int thr_id, struct permissions *perms);
 int set_thread_run_mode(int thr_id, int priv, int mode);
 int get_current_thread(void);
 
+void idle_cpu();
+
 /* paging */
 int page_in(int task, void *linear, void *physical, int level, int attrib);
 int page_out(int task, void *linear, int level);

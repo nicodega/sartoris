@@ -24,6 +24,8 @@ global run_thread
 global run_thread_int
 global get_current_thread
 
+global idle_cpu
+
 global grant_page_mk
 global page_in
 global page_out
@@ -156,6 +158,13 @@ get_current_thread:
 	push ebp
 	mov ebp, esp
 	call GET_CURRENT_THREAD : 0x00000000
+	pop ebp
+	ret
+
+idle_cpu:
+	push ebp
+	mov ebp, esp
+	call IDLE_CPU : 0x00000000
 	pop ebp
 	ret
 

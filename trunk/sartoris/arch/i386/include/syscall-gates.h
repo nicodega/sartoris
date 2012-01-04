@@ -27,6 +27,8 @@ extern int run_thread_c(int id);
 extern int run_thread_int_c(int id, void *eip, void *stack);
 extern int get_current_thread_c(int);
 
+extern void idle_cpu_c(void);
+
 extern int page_in_c(int task, void *linear, void *physical, int level, int attrib);
 extern int page_out_c(int task, void *linear, int level);
 extern int flush_tlb_c(void);

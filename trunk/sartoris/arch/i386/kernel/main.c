@@ -121,9 +121,11 @@ void create_syscall_gates()
     hook_syscall(45, 1, &evt_set_listener_c, 3);
     hook_syscall(46, 1, &evt_wait_c, 3);
     hook_syscall(47, 1, &evt_disable_c, 3);
+
+    hook_syscall(48, 1, &idle_cpu_c, 0);
     
 #ifdef _METRICS_
-	hook_syscall(48, 1, &get_metrics_c, 0);
+	hook_syscall(49, 1, &get_metrics_c, 0);
 #endif
 }
 

@@ -509,3 +509,7 @@ int get_current_thread(void)
     return curr_thread;
 }
 
+void idle_cpu()
+{
+    arch_idle_cpu();
+}
