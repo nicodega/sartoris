@@ -44,7 +44,7 @@
       a msg on the port, or the interrupt was raised before, the event wait will fail.
     - Now a single thread can handle multiple nesting interrupts at the same time. If the thread is 
       servicing an interrupt and another interrupt handled by it is raised, it'll be pushed onto the 
-      int_stack immediately before the last int pushed this way or the current int.
+      int_stack immediately before the last int handled by the current handler.
 
 [0.6.0] - Prerelease 8
 	- Fixed smos implementation with paging.

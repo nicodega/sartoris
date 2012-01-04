@@ -108,6 +108,10 @@ void *arch_event_raise(void);
 void arch_issue_page_fault(void);
 #endif
 
+#ifndef HAVE_INL_IDLE_CPU
+void arch_idle_cpu(void);
+#endif
+
 #ifndef MAKE_KRN_PTR
 # define MAKE_KRN_PTR(x) ((void*)x)
 #endif

@@ -58,7 +58,9 @@
 %define EVT_WAIT                 (0x33 << 3)
 %define EVT_DISABLE              (0x34 << 3)
 
+%define IDLE_CPU                 (0x35 << 3)
+
 %ifdef _METRICS_
-%define GET_METRICS              (0x35 << 3)
+%define GET_METRICS              (0x36 << 3)
 %endif
 

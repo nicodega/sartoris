@@ -150,6 +150,9 @@ global evt_wait_c
 extern evt_disable
 global evt_disable_c
 
+extern idle_cpu
+global idle_cpu_c
+
 extern curr_state
 extern stack_winding_syscall
 extern stack_unwind_syscall
@@ -314,6 +317,9 @@ run_thread_c:
 
 run_thread_int_c:
 	syscall_def 3, run_thread
+
+idle_cpu_c:
+	syscall_def_np idle_cpu
 	
 ;; int stack manipulation
 push_int_c:

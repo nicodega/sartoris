@@ -3,6 +3,15 @@
 
 #include "kernel-arch.h"
 
+#define HAVE_INL_IDLE_CPU
+
+static inline void arch_idle_cpu(void)
+{
+    __asm__ __volatile__ ("sti;"::);
+    __asm__ __volatile__ ("hlt;" : :);
+    __asm__ __volatile__ ("cli" : :);
+}
+
 #define HAVE_INL_CLI
 
 extern unsigned int get_flags(void);
@@ -14,7 +23,7 @@ static inline int arch_cli(void)
 	flags = get_flags();  
 	if (flags & 0x00000200) 
 	{
-		__asm__ ("cli" : :);
+		__asm__ __volatile__ ("cli" : :);
 		return 1;
 	} 
 	else 
@@ -32,7 +41,7 @@ static inline void arch_sti(int x) { if (x) __asm__ ("sti" : :); }
 static inline void *arch_get_page_fault(void) 
 { 
 	void *pf_a; 
-	__asm__ ("movl %%cr2, %0" : "=r" (pf_a) : : "cc");
+	__asm__ __volatile__ ("movl %%cr2, %0" : "=r" (pf_a) : : "cc");
 	return pf_a;
 } 
 
