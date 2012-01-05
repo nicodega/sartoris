@@ -90,6 +90,7 @@
 #define PM_NO_PERMISSION                0x0020
 #define PM_INVALID_THREAD               0x0021
 #define PM_ALREADY_BLOCKED              0x0022
+#define PM_INVALID_INT_MASK             0x0023
 
 #define PM_THREAD_OK                0x0000
 #define PM_THREAD_ID_INVALID        0x0001
@@ -214,9 +215,10 @@ struct pm_msg_destroy_thread {
   short padding[4];
 } PACKED_ATT;
 
-#define THR_BLOCK       0
-#define THR_BLOCK_MSG   1
-#define THR_BLOCK_INT   2
+#define THR_BLOCK          0
+#define THR_BLOCK_MSG      1
+#define THR_BLOCK_INT      2
+#define THR_BLOCK_INTMSG   3
 
 struct pm_msg_block_thread {
   unsigned char pm_type;
@@ -225,8 +227,8 @@ struct pm_msg_block_thread {
   unsigned char padding1;
   char block_type;                  // THR_BLOCK_MSG / THR_BLOCK / THR_BLOCK_INT
   short thread_id;
-  unsigned int mask;
-  int padding;
+  unsigned int port_mask;
+  unsigned int int_mask;
 } PACKED_ATT;
 
 struct pm_msg_unblock_thread {
