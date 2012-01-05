@@ -180,8 +180,11 @@ int thr_destroy_thread(UINT16 thread_id)
                 // remove the thread signals
                 remove_thr_signals(thr);
 
-			    if(thr->interrupt != 0)	
+			    if(thr->interrupt != 0)
+                {
+                    sched_unblock_int(thr->interrupt);  // if there where threads blocked for this int, unblock them
 				    int_dettach(thr);
+                }
                 
 			    /* Remove thread from scheduler */
 			    sch_remove(thr);
