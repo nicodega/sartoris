@@ -149,6 +149,7 @@ int evt_wait(int id, int evt, int evt_param)
                     {
                         tsk->evts = 1;
                         tsk->evt_ports_mask = (unsigned int)evt_param;
+                        set_error(SERR_OK);
                         result = SUCCESS;
                     }
                 }
@@ -161,12 +162,17 @@ int evt_wait(int id, int evt, int evt_param)
             case SARTORIS_EVT_INT:
                 x = mk_enter();
                 if(id > 0 && id < MAX_IRQ && int_handlers[id].thr_id != -1)
-                {                    
+                {
+                    set_error(SERR_OK);
                     if((int_handlers[id].int_flags & (INT_FLAG_ACTIVE | INT_FLAG_ACTIVATED)) == 0)
                     {
                         thr = GET_PTR(int_handlers[id].thr_id,thr);
                         thr->evts = 1;
                         result = SUCCESS;
+                    }
+                    else if(int_handlers[id].int_flags & INT_FLAG_ACTIVATED)
+                    {
+                        int_handlers[id].int_flags &= ~INT_FLAG_ACTIVATED;
                     }
                 }
                 else
@@ -180,43 +186,54 @@ int evt_wait(int id, int evt, int evt_param)
                 if (VALIDATE_PTR(id) && VALIDATE_PTR(id + sizeof(struct ints_evt_param))) 
 			    {
                     struct ints_evt_param *param = (struct ints_evt_param*)MAKE_KRN_PTR(id);
-
                     // this could page fault
                     int base = param->base, iid;
                     unsigned int int_mask = param->mask;
-                    
-                    if(base < MAX_IRQ - 32 && int_mask > 0)
+                    unsigned int int_mask2 = param->mask;
+                                        
+                    if(base <= MAX_IRQ - 32 && int_mask > 0)
                     {
                         x = mk_enter();
                         int i = 0;
 
-                        while(i < 32)
+                        while(int_mask)
                         {
-                            if(int_mask & (0x1 << i))
+                            if(int_mask & 0x1)
                             {
                                 iid = base + i; 
                                 if(int_handlers[iid].thr_id == -1)
+                                {
                                     break;
+                                }
+
                                 if((int_handlers[iid].int_flags & (INT_FLAG_ACTIVE | INT_FLAG_ACTIVATED)) != 0)
+                                {
+                                    if(int_handlers[iid].int_flags & INT_FLAG_ACTIVATED)
+                                    {
+                                        int_handlers[iid].int_flags &= ~INT_FLAG_ACTIVATED;
+                                    }
                                     break;
-                                i++;
+                                }
                             }
+                            i++;
+                            int_mask = (int_mask >> 1);
                         }
 
-                        if(i == 32)
+                        if(int_mask == 0)
                         {
                             result = SUCCESS;
                             i = 0;
 
-                            while(i < 32)
+                            while(i < 32 && int_mask2)
                             {
-                                if(int_mask & (0x1 << i))
+                                if(int_mask2 & 0x1)
                                 {
                                     iid = base + i; 
                                     thr = GET_PTR(int_handlers[iid].thr_id,thr);
                                     thr->evts = 1;
-                                    i++;
                                 }
+                                i++;
+                                int_mask2 = (int_mask2 >> 1);
                             }
                         }
                         else
@@ -296,23 +313,25 @@ int evt_disable(int id, int evt, int evt_param)
                     int base = param->base;
                     unsigned int int_mask = param->mask;
                     
-                    if(base < MAX_IRQ - 32 && int_mask > 0)
+                    if(base <= MAX_IRQ - 32 && int_mask > 0)
                     {
                         x = mk_enter();
                         int i = 0, iid;
 
-                        while(i < 32)
+                        while(int_mask)
                         {
-                            if(int_mask & (0x1 << i))
+                            if(int_mask & 0x1)
                             {
                                 iid = base + i; 
                                 if(int_handlers[iid].thr_id != -1)
                                 {
                                     thr = GET_PTR(int_handlers[iid].thr_id,thr);
                                     thr->evts = 0;
+                                    bprintf("-> evt_wait: int %i thr: %i events disabled.\n", iid, int_handlers[iid].thr_id);
                                 }
-                                i++;
                             }
+                            i++;
+                            int_mask = (int_mask >> 1);
                         }
                         mk_leave(x);
                     }
@@ -372,8 +391,10 @@ void evt_raise(int id, int evt, int evt_param)
                 break;
             case SARTORIS_EVT_INT:
                 thr = GET_PTR(int_handlers[evt_param].thr_id,thr);
+
                 struct evt_msg *emsg = (struct evt_msg*)evt_port->first;
-                char doenqueue = 0;
+                char doenqueue = true;
+                
                 if(!emsg || emsg->evt == SARTORIS_EVT_MSG)
                 {
                     // can't join anything
@@ -391,26 +412,25 @@ void evt_raise(int id, int evt, int evt_param)
 
                         if(evt_param + emsg->param - (base << 1) < 32)
                         {
-                            msg.evt = SARTORIS_EVT_INTS;
-                            msg.param2 = base;
-                            msg.param = ((0x1 << evt_param) | (0x1 << emsg->param));
+                            // transform the existing message on an INTS event
+                            emsg->evt = SARTORIS_EVT_INTS;
+                            emsg->param2 = base;
+                            emsg->param = ((0x1 << evt_param) | (0x1 << emsg->param));
+                            doenqueue = false;
                         }
                     }
                     else
                     {
+                        // same int, ignore it
                         doenqueue = false;
                     }
                 }
                 else if(emsg->evt == SARTORIS_EVT_INTS)
                 {
-                    if(evt_param - emsg->param2 < 32)
-                    {
+                    if(emsg->param2 < evt_param && evt_param - emsg->param2 < 32)
                         msg.param = ((0x1 << evt_param) | emsg->param);
-                    }
                     else
-                    {
                         doenqueue = true;
-                    }
                 }
                 
                 if(doenqueue && enqueue(-1, evt_port, (int*)&msg) == FAILURE)
@@ -421,7 +441,7 @@ void evt_raise(int id, int evt, int evt_param)
                     if(evt_port)
                         enqueue(-1, evt_port, (int*)&msg);
                 }
-                int_handlers[evt_param].int_flags &= ~INT_FLAG_ACTIVATED;
+                thr->evts = 0;  // disable the int event
                 break;
         }
     }
