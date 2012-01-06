@@ -162,7 +162,7 @@ void handle_int(int number)
 			// did we pagefault on a kernel dynamic memory page?
 			if(last_page_fault.linear < (void*)MAX_ALLOC_LINEAR)
 			{
-                bprintf("mk/INTERRUPT.C: PF ON KERNEL DYNAMIC\n");
+                bprintf("mk/INTERRUPT.C: PF ON KERNEL DYNAMIC task: %i thread: %i addr: %x\n", curr_task, curr_thread, last_page_fault.linear);
 
 				// try to map an existing kernel table onto the task
 				if(last_page_fault.linear > (void*)KERN_LMEM_SIZE 
@@ -215,11 +215,10 @@ void handle_int(int number)
 			last_int = number;
             int_handlers[number].int_flags |= (INT_FLAG_ACTIVE | INT_FLAG_ACTIVATED);
 			arch_run_thread(h);
-
+            
             if(thread->evts)
-            {
                 evt_raise(h, SARTORIS_EVT_INT, number);
-            }
+            
         }
         else if(h != curr_thread && (int_handlers[number].int_flags & INT_FLAG_ACTIVE) == 0 && (int_handlers[number].int_flags & INT_FLAG_NESTING))
         {

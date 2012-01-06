@@ -7,9 +7,19 @@
 
 static inline void arch_idle_cpu(void)
 {
-    __asm__ __volatile__ ("sti;"::);
-    __asm__ __volatile__ ("hlt;" : :);
-    __asm__ __volatile__ ("cli" : :);
+    __asm__ __volatile__ (
+        "pushf;"
+        "pop %%eax;"
+        "movl %%ecx, %%eax;"
+        "andl %%eax, 0x00000200;"
+        "jz 1f;"
+        "sti;"
+        "1:"
+        "hlt;"
+        "andl %%ecx, 0x00000200;"
+        "jnz 2f;"
+        "cli;"
+        "2:":  :  : "cc", "eax", "ecx");
 }
 
 #define HAVE_INL_CLI
