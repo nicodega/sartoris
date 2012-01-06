@@ -297,6 +297,7 @@ BOOL int_attach(struct pm_thread *thr, UINT32 interrupt, int priority)
         hardint_thr_handlers[interrupt-32] = NULL;
 		return FALSE;
     }
+    blocked_threads[interrupt] = 0;
     hardint_thr_handlers[interrupt-32] = thr;
 	return TRUE;
 }

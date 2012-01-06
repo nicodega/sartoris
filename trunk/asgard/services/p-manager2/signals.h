@@ -81,7 +81,8 @@ struct signals
 
 extern struct signals signals;          // global signals container.
 
-#define SCHED_HERTZ 200                 // 200 cycles per second
+#define SCHED_HERTZ       200           // 200 cycles per second
+#define SCHED_HERTZ_IDLE  1             // 1 cycle per second?          
 
 /* The pit will be programmed by setting SCHED_HERTZ.
 Pit speed in miliseconds will be:

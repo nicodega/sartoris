@@ -1,19 +1,19 @@
 /*
-*	Console Service.
+*       Console Service.
 *
-*	Copyright (C) 2002, 2003, 2004, 2005
+*       Copyright (C) 2002, 2003, 2004, 2005
 *       
-*	Santiago Bazerque 	sbazerque@gmail.com			
-*	Nicolas de Galarreta	nicodega@gmail.com
+*       Santiago Bazerque       sbazerque@gmail.com                     
+*       Nicolas de Galarreta    nicodega@gmail.com
 *
-*	
-*	Redistribution and use in source and binary forms, with or without 
-* 	modification, are permitted provided that conditions specified on 
-*	the License file, located at the root project directory are met.
+*       
+*       Redistribution and use in source and binary forms, with or without 
+*       modification, are permitted provided that conditions specified on 
+*       the License file, located at the root project directory are met.
 *
-*	You should have received a copy of the License along with the code,
-*	if not, it can be downloaded from our project site: sartoris.sourceforge.net,
-*	or you can contact us directly at the email addresses provided above.
+*       You should have received a copy of the License along with the code,
+*       if not, it can be downloaded from our project site: sartoris.sourceforge.net,
+*       or you can contact us directly at the email addresses provided above.
 *
 *
 */
@@ -44,13 +44,12 @@
 #define MAX(a,b) ((a > b)? a : b)
 
 
-#define CSL_STDDEV_PORT 		1
-#define CSL_STDCHARDEV_PORT 	2
-#define CSL_PMAN_PORT	 		3
+#define CSL_STDDEV_PORT         1
+#define CSL_STDCHARDEV_PORT     2
 
-#define CSL_FORCE_ECHO		0x1
-#define CSL_FORCE_NOECHO	0x2
-#define CSL_FORCE_NONE		0x0
+#define CSL_FORCE_ECHO          0x1
+#define CSL_FORCE_NOECHO        0x2
+#define CSL_FORCE_NONE          0x0
 
 #define CTL_KEY_MASK 0x3c
 #define CONTROL_MASK 0x0c
@@ -92,10 +91,10 @@ extern int dieretport;
 
 struct key_suscription
 {
-	int taskid;
-	char keycodes[MAX_SUSCRIPTIONS];
-	int port;
-	int susc;
+        int taskid;
+        char keycodes[MAX_SUSCRIPTIONS];
+        int port;
+        int susc;
 } PACKED_ATT;
 
 extern int mouse_suscriptions_ports[MAX_MOUSE_SUSCRIPTIONS];
@@ -104,36 +103,36 @@ extern int msuscs;
 
 struct vterm 
 {
-	int scanning_pos;
-	int scanning;
-	int cursor_pos;
-	int input_len;
-	int print_len;	
-	char attribute;
-	int max_input_len;
-	int input_smo;
-	int input_owner_id;
-	char screen_buf[80*25*2];
-	char input_buf[IBUF_SIZE];
-	char delimiter;
-	char echo;
-	char modified;
-	char done;
+        int scanning_pos;
+        int scanning;
+        int cursor_pos;
+        int input_len;
+        int print_len;  
+        char attribute;
+        int max_input_len;
+        int input_smo;
+        int input_owner_id;
+        char screen_buf[80*25*2];
+        char input_buf[IBUF_SIZE];
+        char delimiter;
+        char echo;
+        char modified;
+        char done;
 
-	char msg_id;
-	char usedelim;
-	char scanc;	// indicates whether a read or read c was issued
-	char passmem;
+        char msg_id;
+        char usedelim;
+        char scanc;     // indicates whether a read or read c was issued
+        char passmem;
 
-	int command;
-	int ret_port;
+        int command;
+        int ret_port;
 
-	int owners;
-	int exclusive; // exclusive ownership won't be implemented because the ofs service treats all writes as exclusive
-	int ownerid[MAX_OWNERS]; // array of device owners
-	int force_echo[MAX_OWNERS];
+        int owners;
+        int exclusive; // exclusive ownership won't be implemented because the ofs service treats all writes as exclusive
+        int ownerid[MAX_OWNERS]; // array of device owners
+        int force_echo[MAX_OWNERS];
 
-	list suscribers;
+        list suscribers;
 } PACKED_ATT;
 
 void create_keyb_thread(void);

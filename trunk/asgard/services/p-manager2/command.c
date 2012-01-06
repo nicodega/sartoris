@@ -531,6 +531,8 @@ void cmd_block_thread(UINT16 task_id, struct pm_msg_block_thread *cmd, struct pm
 
     thr = thr_get(cmd->thread_id);
 
+    if(pman_stage != PMAN_STAGE_RUNING) return;
+
     if(thr != NULL && (thr->state == THR_WAITING || thr->state == THR_BLOCKED || thr->state == THR_RUNNING) && thr->task_id == task_id)
     {
         if(!(thr->state == THR_BLOCKED && (thr->flags & THR_FLAG_BLOCKED)))
@@ -543,7 +545,82 @@ void cmd_block_thread(UINT16 task_id, struct pm_msg_block_thread *cmd, struct pm
             }
             else 
             {
-                if(cmd->block_type == THR_BLOCK_MSG || cmd->block_type == THR_BLOCK_INTMSG)
+                int failed = 0;
+                unsigned int disable_ints_fail = 0;
+                if(cmd->block_type == THR_BLOCK_INT || cmd->block_type == THR_BLOCK_INTMSG)
+                {
+                    int intmask = cmd->int_mask;
+                    struct pm_thread *tthr;
+                    int enabled = 0;
+                    int intmask_calc = 0;
+
+                    // block the thread until an int happens
+                    // check it's not the interrupt handler thread
+                    if(intmask)
+                    { 
+                        // check there is not an int handled by this thread
+                        if( ((0x1 << (thr->interrupt - 32)) & intmask) == 0 )
+                        {
+                            tthr = tsk->first_thread;
+
+                            // check all ints are handled by threads on this task
+                            while(tthr)
+                            {
+                                // check the interrupt 
+                                if(tthr->state == THR_INTHNDL && tthr->interrupt > 32 && tthr->interrupt < 64 )
+                                    intmask_calc |= (0x1 << tthr->interrupt-32);
+                                            
+                                tthr = tthr->next_thread;
+                            }
+
+                            if((intmask_calc & intmask) == intmask)
+                            {
+                                int_params.mask = intmask;
+                                int_params.base = 32;
+
+                                if(evt_wait((int)&int_params, SARTORIS_EVT_INTS, 0) == SUCCESS)
+                                {
+                                    thr->flags |= THR_FLAG_BLOCKED_INT;
+                                    thr->state = THR_BLOCKED;
+                                    thr->block_ints_mask = intmask;
+
+                                    // increment ints blocked threads
+                                    int k = 0;
+                                    while(intmask)
+                                    {
+                                        if(intmask & 0x1)
+                                        {
+                                            blocked_threads[32 + k]++;
+                                            if(blocked_threads[32 + k] == 1)
+                                            {
+                                                disable_ints_fail |= (0x1 << k);
+                                            }
+                                        }
+                                        k++;
+                                        intmask = (intmask >> 1);
+                                    }
+                                
+                                    if((thr->flags & THR_FLAG_BLOCKED_PORT) != THR_FLAG_BLOCKED_PORT) 
+                                        sch_deactivate(thr);
+                                }
+                                else
+                                {
+                                    failed = 1;
+                                }
+                            }
+                            else
+                            {
+                                failed = 1;
+                            }
+                        }
+                        else
+                        {
+                            failed = 1;
+                        }
+                    }
+                }
+
+                if(cmd->block_type == THR_BLOCK_MSG || (cmd->block_type == THR_BLOCK_INTMSG && !failed))
                 {
                     // build the ports mask
                     int k = 0;
@@ -578,81 +655,42 @@ void cmd_block_thread(UINT16 task_id, struct pm_msg_block_thread *cmd, struct pm
                             if(mask & (0x1 << k))
                                 tsk->port_blocks[k]--;
                         }
-                    }
-                }
-                
-                if(cmd->block_type == THR_BLOCK_INT || cmd->block_type == THR_BLOCK_INTMSG)
-                {
-                    int intmask = cmd->int_mask;
-                    struct pm_thread *tthr;
-                    int enabled = 0;
-                    int intmask_calc = 0;
 
-                    // block the thread until an int happens
-                    // check it's not the interrupt handler thread
-                    if(intmask)
-                    { 
-                        // check there is not an int handled by this thread
-                        if( ((0x1 << (thr->interrupt - 32)) & intmask) == 0 )
-                        {
-                            tthr = tsk->first_thread;
-
-                            // check all ints are handled by threads on this task
-                            while(tthr)
+                        if(cmd->block_type == THR_BLOCK_INTMSG)
+                        {                            
+                            // see if we must disable the int events
+                            if(disable_ints_fail)
                             {
-                                // check the interrupt 
-                                if(tthr->state == THR_INTHNDL && tthr->interrupt > 33 && tthr->interrupt < 64 )
-                                    intmask_calc |= (0x1 << tthr->interrupt);
-                                            
-                                tthr = tthr->next_thread;
-                            }
-
-                            if((intmask_calc & intmask) == intmask)
-                            {
-                                int_params.mask = intmask;
+                                struct ints_evt_param int_params;
+                                int_params.mask = disable_ints_fail;
                                 int_params.base = 32;
-
-                                if(evt_wait((int)&int_params, SARTORIS_EVT_INTS, 0) == SUCCESS)
-                                {
-                                    thr->flags |= THR_FLAG_BLOCKED_INT;
-                                    thr->state = THR_BLOCKED;                                                
-                                    thr->block_ints_mask = intmask;
-
-                                    // increment ints blocked threads
-                                    int k = 0;
-                                    while(intmask)
-                                    {
-                                        if(intmask & 0x1)
-                                             blocked_threads[32 + k]++;
-                                        k++;
-                                        intmask = (intmask >> 1);
-                                    }
-                                
-                                    if((thr->flags & THR_FLAG_BLOCKED_PORT) != THR_FLAG_BLOCKED_PORT) 
-                                        sch_deactivate(thr);
-                                }
+                                evt_disable((int)&int_params, SARTORIS_EVT_INTS, 0);
                             }
-                            else
+
+                            // decrement blocked_threads
+                            unsigned int m = thr->block_ints_mask;
+
+                            k = 0;
+                            while(m)
                             {
-                                cmd_inform_result(cmd, task_id, PM_INVALID_INT_MASK, 0, 0);
+                                if(m & 0x1)
+                                {
+                                    blocked_threads[32 + k]--;
+                                }
+                                k++;
+                                m = (m >> 1);
                             }
-                        }
-                        else
-                        {
-                            cmd_inform_result(cmd, task_id, PM_INVALID_THREAD, 0, 0);
+                            thr->flags &= ~THR_FLAG_BLOCKED_INT;
+                            thr->state = THR_WAITING;
+                            thr->block_ints_mask = 0;
+
+                            sch_activate(thr);
+        
                         }
                     }
                 }
             }
         }
-        else
-        {
-            cmd_inform_result(cmd, task_id, PM_ALREADY_BLOCKED, 0, 0);
-        }
-    }
-    else
-    {
-        cmd_inform_result(cmd, task_id, PM_INVALID_THREAD, 0, 0);
     }
 }
 
@@ -702,7 +740,7 @@ void cmd_unblock_thread(UINT16 task_id, struct pm_msg_unblock_thread *cmd, struc
                     thr->flags &= ~THR_FLAG_BLOCKED_PORT;
 
                     if(!thr->flags)
-                        thr->state = THR_RUNNING;
+                        thr->state = THR_WAITING;
 
                     thr->block_ports_mask = 0;
                     if((thr->flags & THR_FLAG_BLOCKED_INT) != THR_FLAG_BLOCKED_INT)
@@ -731,7 +769,7 @@ void cmd_unblock_thread(UINT16 task_id, struct pm_msg_unblock_thread *cmd, struc
                     thr->flags &= ~THR_FLAG_BLOCKED_INT;
 
                     if(!thr->flags)
-                        thr->state = THR_RUNNING;
+                        thr->state = THR_WAITING;
 
                     thr->block_ints_mask = 0;
 
