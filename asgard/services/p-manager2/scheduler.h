@@ -63,7 +63,7 @@ void sch_activate(struct pm_thread *thr);
 // add a thread to the scheduler as inactive
 void sch_add(struct pm_thread *thr);
 // remove a thread from scheduler
-void sch_remove(struct pm_thread *thr);
+void sched_thread_killed(struct pm_thread *thr);
 
 void sch_init_node(struct sch_node *n);
 unsigned short sch_priority_quantum(INT32 priority);

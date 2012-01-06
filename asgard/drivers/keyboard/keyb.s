@@ -156,7 +156,6 @@ extern kbd_buf
 extern full_buf
 
 global keyb_int_thread_entry
-global read_code        ; not really global, but i want to breakpoint
         
 section .text
 

@@ -28,6 +28,9 @@
 #include <drivers/pit/pit.h>
 
 void idle_thread();
+void sch_remove(struct pm_thread *thr);
+
+struct pm_thread *idlthread;
 
 void sch_init()
 {
@@ -54,7 +57,6 @@ void sch_init()
 
     /* Create the idle thread */
     struct thread hdl;
-    struct pm_thread *pmthr;
         
     hdl.task_num = PMAN_TASK;
 	hdl.invoke_mode = PRIV_LEVEL_ONLY;
@@ -65,9 +67,12 @@ void sch_init()
 	if(create_thread(IDLE_THR, &hdl))
 		pman_print_and_stop("PMAN: scheduler.c FAILED To create idle Thread");
 
-    pmthr = thr_create(IDLE_THR, NULL);
-	pmthr->task_id = PMAN_TASK;
-	pmthr->state = THR_WAITING;
+    idlthread = thr_create(IDLE_THR, NULL);
+	idlthread->task_id = PMAN_TASK;
+	idlthread->state = THR_WAITING;
+    idlthread->sch.priority = 0;
+
+    sch_add(idlthread);
 }
 
 /* Tis function will start next scheduled thread  */
@@ -111,18 +116,24 @@ int sch_schedule()
 
 	/* Schedule next thread */
 	
-	// Find next thread on the lists or idle
+    // if there are no threads waiting, run idle and then return upong comeback
+    // NOTE: we cannot keep waiting because a command might have arrived to PMAN
+    // such as a port/int event.
     if(pman_stage == PMAN_STAGE_RUNING)
     {
-        while(scheduler.active_threads == 0)
+        if(scheduler.active_threads == 0)
         {
-            pman_print_dbg("PMAN: Activating Idle Thread\n");
-            // we couldn't find a thread to run.. run the idle thread!
-            //run_thread(IDLE_THR);
-            pman_print_dbg("PMAN: Returned from Idle Thread\n");
+            scheduler.list_selector = 0;
+            
+            // activate the idle thread
+            if(idlthread->sch.blocked)
+            {
+                sch_activate(idlthread);
+            }
         }
     }
 
+	// Find next thread on the lists or idle
 	while(scheduler.first[scheduler.list_selector] == NULL) 
 	{
 		scheduler.list_selector = (scheduler.list_selector == SCHED_MAXPRIORITY-1)? 0 : scheduler.list_selector + 1;
@@ -151,6 +162,18 @@ int sch_schedule()
     else
     {
         run_thread(thread->id);
+    }
+
+    if(pman_stage == PMAN_STAGE_RUNING)
+    {
+        if(!idlthread->sch.blocked && scheduler.active_threads > 1)
+        {
+            // deactivate the idle thread 
+            if(!idlthread->sch.blocked)
+            {
+                sch_deactivate(idlthread);
+            }
+        }
     }
 
 	/* Next time we are runned either by an int or run_thread, we will start here! */
@@ -215,7 +238,6 @@ void sch_deactivate(struct pm_thread *thr)
 		thr->sch.prev = NULL;
 		scheduler.first_blocked = thr;
 	}
-	scheduler.active_threads--;
 }
 
 /* Remove a Thread from the blocked list */
@@ -226,15 +248,13 @@ void sch_activate(struct pm_thread *thr)
     if(thr->sch.recursion > 1)
 	{
 		thr->sch.recursion--;
-        if(thr->id == 19) pman_print_dbg("PMAN: Activate thr DEC REC: 19 drec: %i\n", thr->sch.recursion);
 		return;
 	}
 
 	if(thr->sch.recursion != 0) thr->sch.recursion--;
 
 	if(thr->sch.blocked != TRUE)
-    {        
-        if(thr->id == 19) pman_print_dbg("PMAN: Activate thr: 19 THR WAS NOT BLOCKED\n");
+    {
         return;
     }
 
@@ -267,7 +287,6 @@ void sch_activate(struct pm_thread *thr)
 // add a thread to the scheduler as inactive
 void sch_add(struct pm_thread *thr)
 {
-	
     thr->sch.blocked = TRUE;
 	
     if(scheduler.first_blocked == NULL)
@@ -491,11 +510,11 @@ void sch_process_portblocks()
                         thr->flags &= ~(THR_FLAG_BLOCKED_PORT | THR_FLAG_BLOCKED_INT);
 
                         if(!thr->flags)
-                            thr->state = THR_RUNNING;
+                            thr->state = THR_WAITING;
           
                         // fix the task port_blocks array
                         m = thr->block_ports_mask;
-                        for(i = 0; m /*&& i < 32*/; i++)
+                        for(i = 0; m; i++)
                         {
                             if(m & 0x1)
                                 tsk->port_blocks[i]--;
@@ -508,11 +527,9 @@ void sch_process_portblocks()
                         {
                             m = thr->block_ints_mask;
                             timask |= thr->block_ints_mask;
-                            for(k = 0; m /*&& k < 32*/; k++)
+                            for(k = 0; m; k++)
                             {
-                                if((m & 0x1) && --blocked_threads[32 + (0x1 << k)])
-                                    cmask |= (0x1 << k);
-                                
+                                blocked_threads[32 + k]--;
                                 m = (m >> 1);
                             }
                             thr->block_ints_mask = 0;
@@ -535,24 +552,31 @@ void sch_process_portblocks()
                 {
                     evt_wait(tsk->id, SARTORIS_EVT_MSG, mask);
                 }
-                
-                if(cmask != timask)
+
+                if(timask)
                 {
-                    pman_print_dbg("PMAN: EVT_MSG disabling int block!.\n");
-                    struct ints_evt_param int_params;
-                    int_params.mask = (timask & ~cmask);
-                    int_params.base = 32;
-                    evt_disable((int)&int_params, SARTORIS_EVT_INTS, 0);
+                    for(k = 0; timask; k++)
+                    {
+                        if((timask & 0x1) && blocked_threads[32 + k] == 0)
+                            cmask |= (0x1 << k);
+                        timask = (timask >> 1);
+                    }
+                
+                    if(cmask)
+                    {
+                        struct ints_evt_param int_params;
+                        int_params.mask = cmask;
+                        int_params.base = 32;
+                        evt_disable((int)&int_params, SARTORIS_EVT_INTS, 0);
+                    }
                 }
             }
         }
         else // int interrupt SARTORIS_EVT_INTS / SARTORIS_EVT_INT
         {
-            pman_print_dbg("PMAN: INT EVT!\n");
-
             struct pm_thread *thr = NULL, *ithr = NULL;
             BOOL has_port_blocks = FALSE;
-            unsigned int mask = 0, i = 33, omask;
+            unsigned int mask = 0, i = 32, omask;
             unsigned int dmask = 0;                     // this will contain the interrupts to be disabled.
             unsigned int pdmask, k;                      // these are for message blocks disabling
             struct pm_task *tsk = NULL;
@@ -563,7 +587,7 @@ void sch_process_portblocks()
                 mask = msg.param;                       // base will always be 32 because we only allow hardware ints blocking.
 
             omask = mask;                               // keep the original mask in omask
-            
+                       
             while(mask && i < 64)
             {
                 if((mask & 1) && blocked_threads[i])
@@ -593,7 +617,7 @@ void sch_process_portblocks()
 
                                 // decrement ints blocked_threads
                                 unsigned int m = thr->block_ints_mask; 
-                                for(k = 33; m; k++)
+                                for(k = 32; m; k++)
                                 {
                                     if(m & 0x1)
                                     {
@@ -601,12 +625,14 @@ void sch_process_portblocks()
                                         // if the thread was waiting for another int 
                                         // and it's count reached 0, disable the wait
                                         if(blocked_threads[k] == 0 && k != i)
-                                            dmask &= ~(0x1 << k-32);
+                                        {
+                                            dmask |= (0x1 << k-32);
+                                        }
                                     }
                                     m = (m >> 1);
                                 }
                                 
-                                if((thr->flags & THR_FLAG_BLOCKED_PORT) == THR_FLAG_BLOCKED_PORT)
+                                if(thr->block_ports_mask)
                                 {
                                     has_port_blocks = TRUE;
 
@@ -629,7 +655,7 @@ void sch_process_portblocks()
                                 thr->flags &= ~(THR_FLAG_BLOCKED_PORT | THR_FLAG_BLOCKED_INT);
 
                                 if(!thr->flags)
-                                    thr->state = THR_RUNNING;
+                                    thr->state = THR_WAITING;
 
                                 mask &= ~(thr->block_ints_mask >> (i-32)); // remove all processed ints from the mask
                                 
@@ -644,7 +670,9 @@ void sch_process_portblocks()
                         // disable port events for this task if there are no more 
                         // threads blocked
                         if(has_port_blocks)
+                        {
                             evt_disable(tsk->id, SARTORIS_EVT_MSG, pdmask);
+                        }
                     }
                 }
                 i++;
@@ -668,10 +696,11 @@ when there are no processes on the scheduling lists.
 */
 void idle_thread()
 {
-    __asm__ __volatile__ ("cli"::);
+    __asm__ __volatile__ ("sti"::);
     for(;;)
     {
         idle_cpu();
+        pman_print_dbg("back from idle\n");
     }
 }
 
@@ -737,7 +766,7 @@ void sched_unblock_int(int number)
 
                         // fix the task port_blocks array
                         m = thr->block_ports_mask;
-                        for(k = 0; m /*&& k < 32*/; k++)
+                        for(k = 0; m; k++)
                         {
                             if(m & 0x1)
                             {
@@ -781,9 +810,66 @@ void sched_unblock_int(int number)
 
 /*
 This function should be invoked when a thread is being killed.
+disable sartoris events if the thread is blocked.
+Remove the thread from the scheduler.
 */
-void sched_thread_killed(struct pm_thread *ithr)
+void sched_thread_killed(struct pm_thread *thr)
 {
+    unsigned int m, dmask = 0;
+    struct pm_task *tsk = NULL;
+    int k;
 
+    // remove the thread
+    sch_remove(thr);
+
+    tsk = tsk_get(thr->task_id);
+
+    // if the thread was blocked by ints or ports, see 
+    // if we must disable sartoris events for them
+    if(thr->block_ints_mask)
+    {
+        m = thr->block_ints_mask;
+        for(k = 0; m; k++)
+        {
+            blocked_threads[32 + k]--;
+            if(blocked_threads[32 + k] == 0)
+                dmask |= (0x1 << k);
+            m = (m >> 1);
+        }
+        
+        thr->block_ints_mask = 0;
+
+        if(dmask)
+        {
+            struct ints_evt_param int_params;
+            int_params.mask = dmask;
+            int_params.base = 32;
+            evt_disable((int)&int_params, SARTORIS_EVT_INTS, 0);
+        }
+    }
+
+    if(thr->block_ports_mask)
+    {        
+        dmask = 0;
+
+        // fix the task port_blocks array
+        m = thr->block_ports_mask;
+
+        for(k = 0; m; k++)
+        {
+            if(m & 0x1)
+            {
+                tsk->port_blocks[k]--;
+                if(tsk->port_blocks[k] == 0)
+                    dmask |= (0x1 << k);
+            }
+            m = (m >> 1);
+        }
+            
+        thr->block_ports_mask = 0;
+
+        if(dmask)
+            evt_disable(tsk->id, SARTORIS_EVT_MSG, dmask);
+    }
 }
 

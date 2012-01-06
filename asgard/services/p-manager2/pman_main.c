@@ -102,4 +102,5 @@ void process_manager()
 
 	/* Print "You can now turn off your computer" Message */
 	pman_print_and_stop("You can now Safely turn off your computer.");
+    __asm__ __volatile__ ("cli; hlt;"::);
 }

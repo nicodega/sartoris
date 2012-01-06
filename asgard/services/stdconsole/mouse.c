@@ -1,19 +1,19 @@
 /*
-*	Console Service.
+*       Console Service.
 *
-*	Copyright (C) 2002, 2003, 2004, 2005
+*       Copyright (C) 2002, 2003, 2004, 2005
 *       
-*	Santiago Bazerque 	sbazerque@gmail.com			
-*	Nicolas de Galarreta	nicodega@gmail.com
+*       Santiago Bazerque       sbazerque@gmail.com                     
+*       Nicolas de Galarreta    nicodega@gmail.com
 *
-*	
-*	Redistribution and use in source and binary forms, with or without 
-* 	modification, are permitted provided that conditions specified on 
-*	the License file, located at the root project directory are met.
+*       
+*       Redistribution and use in source and binary forms, with or without 
+*       modification, are permitted provided that conditions specified on 
+*       the License file, located at the root project directory are met.
 *
-*	You should have received a copy of the License along with the code,
-*	if not, it can be downloaded from our project site: sartoris.sourceforge.net,
-*	or you can contact us directly at the email addresses provided above.
+*       You should have received a copy of the License along with the code,
+*       if not, it can be downloaded from our project site: sartoris.sourceforge.net,
+*       or you can contact us directly at the email addresses provided above.
 *
 *
 */
@@ -50,24 +50,24 @@ void init_mouse()
 
 void create_mouse_thread(void) 
 {
-	struct pm_msg_create_thread msg_create_thr;
-	struct pm_msg_response      msg_res;
-	int port = 3, sender_id = 0, i;
+        struct pm_msg_create_thread msg_create_thr;
+        struct pm_msg_response      msg_res;
+        int port = 3, sender_id = 0, i;
 
-	msg_create_thr.pm_type = PM_CREATE_THREAD;
-	msg_create_thr.req_id = 0;
-	msg_create_thr.response_port = port;
-	msg_create_thr.task_id = get_current_task();
-	msg_create_thr.flags = 0;
-	msg_create_thr.entry_point = &mouse_int_handler;
-	msg_create_thr.interrupt = 44;      // int 12
-	msg_create_thr.int_priority = 1;
+        msg_create_thr.pm_type = PM_CREATE_THREAD;
+        msg_create_thr.req_id = 0;
+        msg_create_thr.response_port = port;
+        msg_create_thr.task_id = get_current_task();
+	    msg_create_thr.stack_addr = NULL;
+        msg_create_thr.entry_point = &mouse_int_handler;
+        msg_create_thr.interrupt = 44;      // int 12
+        msg_create_thr.int_priority = 1;
 
-	send_msg(PMAN_TASK, PMAN_COMMAND_PORT, &msg_create_thr);
+        send_msg(PMAN_TASK, PMAN_COMMAND_PORT, &msg_create_thr);
 
-	while (get_msg_count(port) == 0){reschedule();}
+        while (get_msg_count(port) == 0){reschedule();}
 
-	get_msg(port, &msg_res, &sender_id);
+        get_msg(port, &msg_res, &sender_id);
     
     // initialize the mouse
     mouse_init(MOUSE_RESOLUTION, MOUSE_SCALING, MOUSE_SAMPLING_RATE);

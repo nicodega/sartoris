@@ -146,7 +146,7 @@ struct pm_thread
 
     unsigned int block_ports_mask;          /* If a bit is 1 on this mask, the thread was 
                                             blocked waiting for a message on the bit possition port. */
-    unsigned char block_ints_mask;          /* Hardware interrupts blocking this thread */
+    unsigned int block_ints_mask;           /* Hardware interrupts blocking this thread */
 } PACKED_ATT;
 
 

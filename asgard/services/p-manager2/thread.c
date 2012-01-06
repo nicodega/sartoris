@@ -187,7 +187,7 @@ int thr_destroy_thread(UINT16 thread_id)
                 }
                 
 			    /* Remove thread from scheduler */
-			    sch_remove(thr);
+			    sched_thread_killed(thr);
 
                 if(ret != 1)
                 {
