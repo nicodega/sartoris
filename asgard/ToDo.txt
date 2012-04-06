@@ -1,0 +1,9 @@
+- Test shared interrupts
+- Test soft interrupts
+- test signals (the linux like ones)
+	- signal()
+	- abort()
+	- changing stacks, etc.
+- Test memory sharing
+- Test physical memory mapping more than once
+- Test new mutexes not using ints (lib/mutex.c)
