@@ -28,13 +28,13 @@
 #define RED   1
 #define BLACK 0
 
-rbnode *getUncle(rbnode *n);
-rbnode *getGrandParent(rbnode *n);
-void leftRotate(rbt *t, rbnode *n);
-void rightRotate(rbt *t, rbnode *n);
-rbnode *singleRotation (rbt *t, rbnode *n, int dir );
-rbnode *doubleRotation(rbt *t, rbnode *n, int dir );
-void rb_insertFixup(rbt *t, rbnode *n);
+#define is_red(n) (n != NULL && n->color == RED)
+
+void rb_left_rotate(rbt *t, rbnode *n);
+void rb_right_rotate(rbt *t, rbnode *n);
+rbnode *rb_single_rotation (rbnode *n, int dir );
+rbnode *rb_double_rotation(rbnode *n, int dir );
+void rb_insert_rebalance(rbt *t, rbnode *n);
 
 rbnode *rb_search(rbt *t, UINT32 value) 
 {
@@ -108,6 +108,7 @@ int rb_insert(rbt *t, rbnode *n, BOOL insert_only_if_found)
 	if(parent == NULL) 
 	{ 
 		t->root = n;
+	    t->root->color = BLACK;
 	} 
 	else 
 	{
@@ -115,6 +116,9 @@ int rb_insert(rbt *t, rbnode *n, BOOL insert_only_if_found)
 			parent->link[0] = n;
 		else
 			parent->link[1] = n;
+    
+        // rebalance the tree
+	    rb_insert_rebalance(t, n);
 	}
 
     // fix max and min
@@ -124,169 +128,81 @@ int rb_insert(rbt *t, rbnode *n, BOOL insert_only_if_found)
         t->min = n;
     else if(t->max->value < n->value)
         t->max = n;
-    
-    // fix the tree
-	rb_insertFixup(t, n);
     return 1;
 }
 
-rbnode *getUncle(rbnode *n)
+// This algorithm implementation is a non-recursive adaptation of 
+// an explanation on red black trees by Julienne Walker, thanks a lot!
+// I thought the implementation was simple enough for all the 
+// insertion cases and the code is cleaner and shorter this way.
+void rb_insert_rebalance(rbt *t, rbnode *n) 
 {
-    if(n->parent == NULL || n->parent->parent == NULL) 
-		return NULL;
-	if(n->parent->parent->link[0] == n->parent)
-		return n->parent->parent->link[1];
-	else
-		return n->parent->parent->link[0];
-}
+    rbnode *r = n->parent, *p = n;
+    int dir;
 
-rbnode *getGrandParent(rbnode *n)
-{
-    if(n->parent == NULL || n->parent->parent == NULL) 
-			return NULL;
-	return n->parent->parent;
-}
+    // the node n was inserted at the bottom
+    // go up fixing the tree
+    dir = r->value < n->value;
 
-void rb_insertFixup(rbt *t, rbnode *n) 
-{
-	rbnode *y = NULL;
-		
-	while (n->parent != NULL && n->parent->color == RED) 
-	{
-		if (n->parent == getGrandParent(n)->link[0]) 
-		{
-			y = getUncle(n);
-				
-			if (y != NULL && y->color == RED) 
-			{
-				n->parent->color = BLACK;
-				y->color = BLACK;
+    while(r && is_red(r->link[dir])) 
+    {
+        if ( is_red(r->link[!dir]) )
+        {
+            r->color = RED;
+            r->link[0]->color = BLACK;
+            r->link[1]->color = BLACK;
+        }
+        else 
+        {
+            if ( is_red(r->link[dir]->link[dir]) )
+                r = rb_single_rotation( r, !dir );
+            else if ( is_red( r->link[dir]->link[!dir] ) )
+                r = rb_double_rotation( r, !dir );
+        }
+                
+        p = r;
+        r = r->parent;  // go to the upper tree
+        if(r)
+        {
+            r->link[r->value < p->value] = p; // r might have changed, update it on it's parent
+            dir = r->value < n->value;
+        }
+    }
 
-				n = getGrandParent(n);
-				if(n != NULL)
-					n->color = RED;
-			} 
-			else 
-			{
-				if (n == n->parent->link[1]) 
-				{
-					n = n->parent;
-					leftRotate(t, n);
-				}
-				n->parent->color = BLACK;
-				getGrandParent(n)->color = RED;
-				rightRotate(t, getGrandParent(n));
-			}
-		}
-		else 
-		{
-			y = getUncle(n);
-				
-			if (y != NULL && y->color == RED) 
-			{
-				n->parent->color = BLACK;
-				y->color = BLACK;
-				n = getGrandParent(n);
-				if(n != NULL)
-					n->color = RED;
-			} 
-			else 
-			{
-				if (n == n->parent->link[0]) 
-				{
-					n = n->parent;
-					rightRotate(t, n);
-				}
-				n->parent->color = BLACK;
-				getGrandParent(n)->color = RED;
-				leftRotate(t, n->parent->parent);
-			}
-		}
-	}
-
+    if(r == NULL)
+        t->root = p;
+        
     // save us from a red violation at the root
-	(t->root)->color = BLACK;
+	t->root->color = BLACK;
 }
 
-void leftRotate(rbt *t, rbnode *n) 
+// this function performs a rotation on the specified direction (0 left, 1 right)
+rbnode *rb_single_rotation( rbnode *n, int dir )
 {
-	/* Left rotation maintining coloring */
-	rbnode *y = n->link[1];
-		
-	/* Hang a on n's parent */
-	if(n->parent == NULL)
-	{
-		t->root = y;
-		y->parent = NULL;
-	}
-	else
-	{
-		y->parent = n->parent;
-		if(n->parent->link[0] == n)
-			n->parent->link[0] = y;
-		else
-			n->parent->link[1] = y;
-	}
-		
-    /* put on the right what was on y's left */
-	n->link[1] = y->link[0];
-	if(y->link[0] != NULL)
-		y->link[0]->parent = n;
-		
-	/* Hang n on y's left */
-	n->parent = y;
-	y->link[0] = n;
-}
-	
-void rightRotate(rbt *t, rbnode *n) 
-{
-	/* Right rotation maintining coloring */
-	rbnode *y = n->link[0];
-		
-	/* Hang a on n's parent */
-	if(n->parent == NULL)
-	{
-		t->root = y;
-		y->parent = NULL;
-	}
-	else
-	{
-		y->parent = n->parent;
-		if(n->parent->link[0] == n)
-			n->parent->link[0] = y;
-		else
-			n->parent->link[1] = y;
-	}
-		
-	/* put on the left what was on y's right */
-	n->link[0] = n->link[0]->link[1];
-	if(y->link[1] != NULL)
-		y->link[1]->parent = n;
-		
-	/* Hang n on y's right */
-	n->parent = y;
-	y->link[1] = n;
-}
-
-rbnode *singleRotation (rbt *t, rbnode *n, int dir )
-{    
     rbnode *save = n->link[!dir];
 
-    if(dir == 0)
-        leftRotate(t, n);
-    else
-        rightRotate(t, n);
+    n->link[!dir] = save->link[dir];
+    if(n->link[!dir]) 
+        n->link[!dir]->parent = n;
+    save->link[dir] = n;
+    save->parent = n->parent;
+    n->parent = save;
 
     n->color = RED;
     save->color = BLACK;
 
-    return save;
+    return save; // return the new root
 }
 
-rbnode *doubleRotation(rbt *t, rbnode *n, int dir )
+// this function will perform first a rotation on the oposite direction
+// on the node child on that direction and then on the specified
+// direction on the node
+rbnode *rb_double_rotation(rbnode *n, int dir )
 {
-    n->link[!dir] = singleRotation(t, n->link[!dir], !dir );
-    return singleRotation(t, n, dir );
+    n->link[!dir] = rb_single_rotation(n->link[!dir], !dir );
+    if(n->link[!dir])
+        n->link[!dir]->parent = n;
+    return rb_single_rotation(n, dir );
 }
 
 void rb_remove_child(rbt *t, rbnode *n)
@@ -319,11 +235,11 @@ void rb_remove(rbt *t, rbnode *n)
     // This algorithm implementation was taken (mostly)
     // from an explanation on red black trees by Julienne Walker
     // thanks for that! deletion is really a pain in the ass!
-    rbnode head;
+    rbnode head = {0};
     rbnode *q, *p, *g, *s; /* Helpers */
     rbnode *f = NULL;      /* Found item */
     int dir = 1;
- 
+
     s = NULL;
 
     if ( t->root != NULL ) 
@@ -348,19 +264,19 @@ void rb_remove(rbt *t, rbnode *n)
                 f = q;
  
             /* Push the red node down */
-            if ( q->color == BLACK && q->link[dir]->color == BLACK ) 
+            if ( !is_red(q) && !is_red(q->link[dir]) ) 
             {
-                if ( q->link[!dir]->color == RED )
+                if ( is_red(q->link[!dir]) )
                 {
-                    p = singleRotation (t, q, dir );
+                    p = p->link[last] = rb_single_rotation (q, dir );
                 }
-                else if ( q->link[!dir]->color == BLACK ) 
+                else if ( !is_red(q->link[!dir]) ) 
                 {
                     s = p->link[!last];
  
                     if ( s != NULL ) 
                     {
-                        if ( s->link[!last]->color == BLACK && s->link[last]->color == BLACK ) 
+                        if ( !is_red(s->link[!last]) && !is_red(s->link[last]) ) 
                         {
                             /* Color flip */
                             p->color = BLACK;
@@ -369,12 +285,12 @@ void rb_remove(rbt *t, rbnode *n)
                         }
                         else 
                         {
-                            int dir2 = g->link[1] == p;
+                            int dir2 = (g->link[1] == p);
  
-                            if ( s->link[last]->color == RED )
-                                doubleRotation(t, p, last );
-                            else if ( s->link[!last]->color == RED )
-                                singleRotation(t, p, last );
+                            if ( is_red(s->link[last]) )
+                                g->link[dir2] = rb_double_rotation(p, last );
+                            else if ( is_red(s->link[!last]))
+                                g->link[dir2] = rb_single_rotation(p, last );
  
                             /* Ensure correct coloring */
                             q->color = g->link[dir2]->color = RED;
@@ -390,11 +306,11 @@ void rb_remove(rbt *t, rbnode *n)
         if ( f != NULL ) 
         {
             if(t->min == f && t->max == f)
-                t->min = t->max = n->parent;
+                t->min = t->max = NULL;
             else if(t->min == f)
-                t->min = n->parent;
+                t->min = (q == f)? p : q;
             else if(t->max == f)
-                t->max = n->parent;
+                t->max = q;
 
             // remove every thread from the list.
             s = f->next;
@@ -406,11 +322,28 @@ void rb_remove(rbt *t, rbnode *n)
                 s = g;
             }
 
-            f->value = q->value;
-            f->next = q->next;
-            f->prev = NULL;
-            f->parent = q->parent;
-            p->link[p->link[1] == q] = q->link[q->link[0] == NULL];            
+            /* 
+            On the original algorithm f value is replaced with q's one,
+            but we cannot do that since our nodes are static (belong to a thread or something)
+            */
+            s = q->link[q->link[0] == NULL];
+            
+            q->color = f->color;
+            q->link[0] = f->link[0];
+            q->link[1] = f->link[1];
+            q->parent = f->parent;
+                      
+            if(q->link[0])
+                q->link[0]->parent = q;
+
+            if(q->link[1])
+                q->link[1]->parent = q;
+
+            // NOTE: p could be f.
+            if(p == f)
+                q->link[p->link[1] == q] = s;
+            else
+                p->link[p->link[1] == q] = s;
         }
  
         /* Update root and make it black */
@@ -428,13 +361,13 @@ all it's left tree has been evaluated.
 */
 BOOL rb_free_value(rbt *t, UINT32 *value)
 {
-    int cand = 0;
+    unsigned int cand = 0;
     rbnode *n = t->min;
     BOOL fromLeft = 0;
 
     while(n)
     {
-	    if (fromLeft || !n->link[0])
+	    if (fromLeft || (!n->link[0] && ! (n->color & 2)))
 		{
             if( n->value > cand || n == t->max )
             {
@@ -450,7 +383,8 @@ BOOL rb_free_value(rbt *t, UINT32 *value)
 				    n->color &= ~2;
 				    n = n->parent;
                 }
-                if(n != t->max)
+
+                if(n != t->max || t->max->value != 0xFFFFFFFF)
                 {
                     *value = cand;
 			        return TRUE;
@@ -464,13 +398,13 @@ BOOL rb_free_value(rbt *t, UINT32 *value)
         }
 	    if(!(n->color & 2))
         {
-		    n->color |= 2;
 		    if(n->link[0] && !(n->link[0]->color & 2))
             {
 			    fromLeft = FALSE;
 			    n = n->link[0];
 			    continue;
             }
+            n->color |= 2;
 		    if(n->link[1] && !(n->link[1]->color & 2))
 			{
                 fromLeft = FALSE;
@@ -489,6 +423,7 @@ BOOL rb_free_value(rbt *t, UINT32 *value)
 		}
     }
     *value = cand;
+    return TRUE;
 }
 
     
@@ -499,14 +434,14 @@ and invoking the callback for each node.
 void rb_inorder(rbt *t, void (*callback)(rbnode *n))
 {
     rbnode *n = t->min;
-    BOOL fromLeft = 0;
+    BOOL fromLeft = FALSE;
 
     while(n)
     {
-	    if (fromLeft || !n->link[0])
+	    if (fromLeft || (!n->link[0] && ! (n->color & 2)))
 		{
             callback(n);
-			
+
             if( n == t->max )
             {
                 while(n)
@@ -518,17 +453,18 @@ void rb_inorder(rbt *t, void (*callback)(rbnode *n))
 				    n->color &= ~2;
 				    n = n->parent;
                 }
+                return;
             }
         }
 	    if(!(n->color & 2))
         {
-		    n->color |= 2;
 		    if(n->link[0] && !(n->link[0]->color & 2))
             {
 			    fromLeft = FALSE;
 			    n = n->link[0];
 			    continue;
             }
+            n->color |= 2;
 		    if(n->link[1] && !(n->link[1]->color & 2))
 			{
                 fromLeft = FALSE;
@@ -547,3 +483,74 @@ void rb_inorder(rbt *t, void (*callback)(rbnode *n))
 		}
     }
 }
+
+
+#ifdef DEBUG_PRINT
+void print_node(rbnode *n)
+{
+    pman_print_dbg("%i ", n->value);
+}
+
+void test_marks(rbnode *n)
+{
+    if(!n) return;
+    if(n->color & 2)
+        pman_print_dbg("\nmarked node: %i", n->value);
+    if(n->link[0])
+        test_marks(n->link[0]);
+    if(n->link[1])
+        test_marks(n->link[1]);
+}
+
+int blacks = 0;
+int mblacks = -1;
+
+int validate_rb_n(rbnode *n)
+{
+    if(!n) return 1;
+    
+    // 2.Both children of every red node are black.
+    if(n->color == RED &&
+        ((n->link[0] && n->link[0]->color != BLACK) || (n->link[1] && n->link[1]->color != BLACK)))
+    {
+        pman_print_dbg("\nchild of red node %i is not black.", n->value);
+        return 0;
+    }
+    // 3.Every simple path from a given node to any of its descendant leaves contains the same number of black nodes.
+    if(n->color == BLACK)
+        blacks++;
+    
+    if(!n->link[0] && !n->link[1])
+    {
+        if(mblacks == -1)
+            mblacks = blacks;
+        else if(mblacks != blacks)
+        {
+            // it's a leaf, check blacks against the maximum blacks
+            pman_print_dbg("\nfrom root to leaf %i there are different blacks count.", n->value);
+            return 0;
+        }
+    }
+    else
+    {
+        if(!validate_rb_n(n->link[0])) return 0;
+        if(!validate_rb_n(n->link[1])) return 0;
+    }
+    if(n->color == BLACK)
+        blacks--;
+    return 1;
+}
+
+int validate_rb(rbt *t)
+{
+    mblacks = -1;
+    blacks = 1;
+    // 1.The root is black
+    if(t->root->color != BLACK)
+    {
+        pman_print_dbg("\nroot is not black");
+        return 0;
+    }
+    return validate_rb_n(t->root);
+}
+#endif

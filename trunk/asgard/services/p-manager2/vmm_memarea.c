@@ -31,14 +31,11 @@ This will allow us to insert, remove and query for collitions in O(log(n)) time.
 #define BLACK 0
 
 #define MAX(a,b) ((a > b)? a : b)
+ma_node *ma_single_rotation(ma_node *n, int dir );
+ma_node *ma_double_rotation(ma_node *n, int dir );
+void ma_insert_rebalance(memareas *t, ma_node *n);
 
-ma_node *ma_uncle(ma_node *n);
-ma_node *ma_gparent(ma_node *n);
-void ma_lrotation(memareas *t, ma_node *n);
-void ma_rrotation(memareas *t, ma_node *n);
-ma_node *ma_single_rotation(memareas *t, ma_node *n, int dir );
-ma_node *ma_double_rotation(memareas *t, ma_node *n, int dir );
-void ma_fix_insert(memareas *t, ma_node *n);
+#define is_red(n) (n != NULL && n->color == RED)
 
 static inline int intersects(ma_node *n, UINT32 low, UINT32 high)
 {
@@ -184,10 +181,8 @@ int ma_insert(memareas *t, ma_node *n)
 		else
 		{
             if(n->low == current->low)
-            {
                return FALSE;
-            }
-			current = current->link[1];				
+            current = current->link[1];				
 		}
         if(parent->max < n->high)
             parent->max = n->high;
@@ -200,6 +195,7 @@ int ma_insert(memareas *t, ma_node *n)
 	if(parent == NULL) 
 	{ 
 		*t = n;
+        (*t)->color = BLACK;
 	} 
 	else 
 	{
@@ -207,6 +203,9 @@ int ma_insert(memareas *t, ma_node *n)
 			parent->link[0] = n;
 		else
 			parent->link[1] = n;
+        
+        // fix the tree
+	    ma_fix_insert(t, n);
 	}
     
     if(n->link[0] && n->link[1])
@@ -216,92 +215,69 @@ int ma_insert(memareas *t, ma_node *n)
     else if(n->link[1])
         n->max = MAX(n->high, n->link[1]->max);
 
-    // fix the tree
-	ma_fix_insert(t, n);
     return TRUE;
 }
 
-ma_node *ma_uncle(ma_node *n)
+// This algorithm implementation is a non-recursive adaptation of 
+// an explanation on red black trees by Julienne Walker, thanks a lot!
+// I thought the implementation was simple enough for all the 
+// insertion cases and the code is cleaner and shorter this way.
+void ma_insert_rebalance(memareas *t, ma_node *n) 
 {
-    if(n->parent == NULL || n->parent->parent == NULL) 
-		return NULL;
-	if(n->parent->parent->link[0] == n->parent)
-		return n->parent->parent->link[1];
-	else
-		return n->parent->parent->link[0];
-}
+    ma_node *r = n->parent, *p = n;
+    int dir;
 
-ma_node *ma_gparent(ma_node *n)
-{
-    if(n->parent == NULL || n->parent->parent == NULL) 
-			return NULL;
-	return n->parent->parent;
-}
+    // the node n was inserted at the bottom
+    // go up fixing the tree
+    dir = r->low < n->low;
 
-void ma_fix_insert(memareas *t, ma_node *n) 
-{
-	ma_node *y = NULL;
-		
-	while (n->parent != NULL && n->parent->color == RED) 
-	{
-		if (n->parent == ma_gparent(n)->link[0]) 
-		{
-			y = ma_uncle(n);
-				
-			if (y != NULL && y->color == RED) 
-			{
-				n->parent->color = BLACK;
-				y->color = BLACK;
+    while(r && is_red(r->link[dir])) 
+    {
+        if ( is_red(r->link[!dir]) )
+        {
+            r->color = RED;
+            r->link[0]->color = BLACK;
+            r->link[1]->color = BLACK;
+        }
+        else 
+        {
+            if ( is_red(r->link[dir]->link[dir]) )
+                r = rb_single_rotation( r, !dir );
+            else if ( is_red( r->link[dir]->link[!dir] ) )
+                r = rb_double_rotation( r, !dir );
+        }
+                
+        p = r;
+        r = r->parent;  // go to the upper tree
+        if(r)
+        {
+            r->link[r->low < p->low] = p; // r might have changed, update it on it's parent
+            dir = r->low < n->low;
+        }
+    }
 
-				n = ma_gparent(n);
-				if(n != NULL)
-					n->color = RED;
-			} 
-			else 
-			{
-				if (n == n->parent->link[1]) 
-				{
-					n = n->parent;
-					ma_lrotation(t, n);
-				}
-				n->parent->color = BLACK;
-				ma_gparent(n)->color = RED;
-				ma_rrotation(t, ma_gparent(n));
-			}
-		}
-		else 
-		{
-			y = ma_uncle(n);
-				
-			if (y != NULL && y->color == RED) 
-			{
-				n->parent->color = BLACK;
-				y->color = BLACK;
-				n = ma_gparent(n);
-				if(n != NULL)
-					n->color = RED;
-			} 
-			else 
-			{
-				if (n == n->parent->link[0]) 
-				{
-					n = n->parent;
-					ma_rrotation(t, n);
-				}
-				n->parent->color = BLACK;
-				ma_gparent(n)->color = RED;
-				ma_lrotation(t, n->parent->parent);
-			}
-		}
-	}
-
+    if(r == NULL)
+        *t = p;
+        
     // save us from a red violation at the root
 	(*t)->color = BLACK;
 }
 
-void ma_fix_maxs(ma_node *n, ma_node *y)
+// this function performs a rotation on the specified direction (0 left, 1 right)
+ma_node *rb_single_rotation( ma_node *n, int dir )
 {
-    // fix maxs
+    ma_node *save = n->link[!dir];
+
+    n->link[!dir] = save->link[dir];
+    if(n->link[!dir]) 
+        n->link[!dir]->parent = n;
+    save->link[dir] = n;
+    save->parent = n->parent;
+    n->parent = save;
+
+    n->color = RED;
+    save->color = BLACK;
+
     if(n->link[0] && n->link[1])
         n->max = MAX(n->high, MAX(n->link[0]->max, n->link[1]->max));
     else if(n->link[0])
@@ -309,97 +285,25 @@ void ma_fix_maxs(ma_node *n, ma_node *y)
     else if(n->link[1])
         n->max = MAX(n->high, n->link[1]->max);
 
-    if(y->link[0] && y->link[1])
-        y->max = MAX(y->high, MAX(y->link[0]->max, y->link[1]->max));
-    else if(y->link[0])
-        y->max = MAX(y->high, y->link[0]->max);
-    else if(y->link[1])
-        y->max = MAX(y->high, y->link[1]->max);
+    if(save->link[0] && save->link[1])
+        save->max = MAX(save->high, MAX(save->link[0]->max, save->link[1]->max));
+    else if(save->link[0])
+        save->max = MAX(save->high, save->link[0]->max);
+    else if(save->link[1])
+        save->max = MAX(save->high, save->link[1]->max);
+
+    return save; // return the new root
 }
 
-void ma_lrotation(memareas *t, ma_node *n) 
+// this function will perform first a rotation on the oposite direction
+// on the node child on that direction and then on the specified
+// direction on the node
+ma_node *rb_double_rotation(ma_node *n, int dir )
 {
-	/* Left rotation maintining coloring */
-	ma_node *y = n->link[1];
-		
-	/* Hang a on n's parent */
-	if(n->parent == NULL)
-	{
-		*t = y;
-		y->parent = NULL;
-	}
-	else
-	{
-		y->parent = n->parent;
-		if(n->parent->link[0] == n)
-			n->parent->link[0] = y;
-		else
-			n->parent->link[1] = y;
-	}
-		
-    /* put on the right what was on y's left */
-	n->link[1] = y->link[0];
-	if(y->link[0] != NULL)
-		y->link[0]->parent = n;
-		
-	/* Hang n on y's left */
-	n->parent = y;
-	y->link[0] = n;
-
-    ma_fix_maxs(n,y);
-}
-	
-void ma_rrotation(memareas *t, ma_node *n) 
-{
-	/* Right rotation maintining coloring */
-	ma_node *y = n->link[0];
-		
-	/* Hang a on n's parent */
-	if(n->parent == NULL)
-	{
-		*t = y;
-		y->parent = NULL;
-	}
-	else
-	{
-		y->parent = n->parent;
-		if(n->parent->link[0] == n)
-			n->parent->link[0] = y;
-		else
-			n->parent->link[1] = y;
-	}
-		
-	/* put on the left what was on y's right */
-	n->link[0] = n->link[0]->link[1];
-	if(y->link[1] != NULL)
-		y->link[1]->parent = n;
-		
-	/* Hang n on y's right */
-	n->parent = y;
-	y->link[1] = n;
-
-    ma_fix_maxs(n,y);
-}
-
-ma_node *ma_single_rotation(memareas *t, ma_node *n, int dir )
-{    
-    ma_node *save = n->link[!dir];
-
-    if(dir == 0)
-        ma_lrotation(t, n);
-    else
-        ma_rrotation(t, n);
-
-    n->color = RED;
-    save->color = BLACK;
-
-    return save;
-}
-
-ma_node *ma_double_rotation(memareas *t, ma_node *n, int dir )
-{
-    n->link[!dir] = ma_single_rotation(t, n->link[!dir], !dir );
-    return ma_single_rotation(t, n, dir );
+    n->link[!dir] = rb_single_rotation(n->link[!dir], !dir );
+    if(n->link[!dir])
+        n->link[!dir]->parent = n;
+    return rb_single_rotation(n, dir );
 }
 
 // this implements a top-down Red Black t deletion.
@@ -408,8 +312,8 @@ void ma_remove(memareas *t, ma_node *n)
     // This algorithm implementation was taken (mostly)
     // from an explanation on red black trees by Julienne Walker
     // thanks for that! deletion is really a pain in the ass!
-    ma_node head;
-    ma_node *q, *p, *g, *s; /* Helpers. p is the parent node. q is the current node. g is the grandparent node. s is the sibling. */
+    ma_node head = {0};
+    ma_node *q, *p, *g, *s; /* Helpers */
     ma_node *f = NULL;      /* Found item */
     int dir = 1, last;
  
@@ -430,28 +334,26 @@ void ma_remove(memareas *t, ma_node *n)
             /* Update helpers */
             g = p, p = q;
             q = q->link[dir];
-            dir = (q->low < n->low);
+            dir = q->low < n->low;
  
-            /* if we found the node, save it */
+            /* Save found node */
             if ( q->low == n->low )
                 f = q;
  
             /* Push the red node down */
-            if ( q->color == BLACK && q->link[dir]->color == BLACK ) 
+            if ( !is_red(q) && !is_red(q->link[dir]) ) 
             {
-                if ( q->link[!dir]->color == RED )
+                if ( is_red(q->link[!dir]) )
                 {
-                    // current node sibling is red, and the current node is black.
-                    // perform single rotation on the direction of the sought node.
-                    p = ma_single_rotation (t, q, dir );
+                    p = p->link[last] = ma_single_rotation(q, dir );
                 }
-                else if ( q->link[!dir]->color == BLACK ) 
+                else if ( !is_red(q->link[!dir]) ) 
                 {
                     s = p->link[!last];
  
                     if ( s != NULL ) 
                     {
-                        if ( s->link[!last]->color == BLACK && s->link[last]->color == BLACK ) 
+                        if ( !is_red(s->link[!last]) && !is_red(s->link[last]) ) 
                         {
                             /* Color flip */
                             p->color = BLACK;
@@ -462,10 +364,10 @@ void ma_remove(memareas *t, ma_node *n)
                         {
                             int dir2 = (g->link[1] == p);
  
-                            if ( s->link[last]->color == RED )
-                                ma_double_rotation(t, p, last );
-                            else if ( s->link[!last]->color == RED )
-                                ma_single_rotation(t, p, last );
+                            if ( is_red(s->link[last]) )
+                                g->link[dir2] = ma_double_rotation(p, last );
+                            else if ( is_red(s->link[!last]))
+                                g->link[dir2] = ma_single_rotation(p, last );
  
                             /* Ensure correct coloring */
                             q->color = g->link[dir2]->color = RED;
@@ -479,12 +381,37 @@ void ma_remove(memareas *t, ma_node *n)
  
         /* Replace and remove if found */
         if ( f != NULL ) 
-        {            
-            f->low = q->low;
-            f->high = q->high;
-            f->parent = q->parent;
-            f->max = q->max;
-            p->link[p->link[1] == q] = q->link[q->link[0] == NULL];
+        {                        
+            /* 
+            On the original algorithm f value is replaced with q's one,
+            but we cannot do that since our nodes are static (belong to a thread or something)
+            */
+            s = q->link[q->link[0] == NULL];
+            
+            q->color = f->color;
+            q->link[0] = f->link[0];
+            q->link[1] = f->link[1];
+            q->parent = f->parent;
+                      
+            if(q->link[0])
+                q->link[0]->parent = q;
+
+            if(q->link[1])
+                q->link[1]->parent = q;
+
+            // NOTE: p could be f.
+            if(p == f)
+                q->link[p->link[1] == q] = s;
+            else
+                p->link[p->link[1] == q] = s;
+
+            // fix maximum
+            if(q->link[0] && q->link[1])
+                q->max = MAX(q->high, MAX(q->link[0]->max, q->link[1]->max));
+            else if(q->link[0])
+                q->max = MAX(q->high, q->link[0]->max);
+            else if(q->link[1])
+                q->max = MAX(q->high, q->link[1]->max);
         }
  
         /* Update root and make it black */
@@ -494,70 +421,3 @@ void ma_remove(memareas *t, ma_node *n)
     }
 }
 
-/* 
-See if a segment with the specified length can be inserted on the tree
-without collitions. 
-It'll return the start address available for the segment.
-This function will take O(n) time.
-*/
-/*
-unsigned int ma_alloc(memareas *t, unsigned int start, unsigned int length)
-{
-    ma_node *n = t->min;
-    BOOL fromLeft = 0;
-    unsigned int high = n->high;
-
-    if(start < n->low && n->low - start >= length) return min;
-
-    while(n)
-    {
-	    if (fromLeft || !n->link[0])
-		{
-            if((start < t->low && t->low < high && t->low - high >= length) || n == t->max )
-            {
-                while(n)
-                {
-				    if(n->link[0])
-					    n->link[0]->color &= ~2;
-				    if(n->link[1])
-					    n->link[1]->color &= ~2;
-				    n->color &= ~2;
-				    n = n->parent;
-                }
-                if(n == t->max)
-                    return t->max->low;
-                else
-                    return high;
-            }
-            if(high < n->high)
-                high = n->high;
-        }
-	    if(!(n->color & 2))
-        {
-		    n->color |= 2;
-		    if(n->link[0] && !(n->link[0]->color & 2))
-            {
-			    fromLeft = FALSE;
-			    n = n->link[0];
-			    continue;
-            }
-		    if(n->link[1] && !(n->link[1]->color & 2))
-			{
-                fromLeft = FALSE;
-			    n = n->link[1];
-			    continue;
-            }
-        }
-	    if(n->parent != NULL)
-        {
-		    fromLeft = (n->parent->link[0] == n);
-		    if( n->link[0] )
-			    n->link[0]->color &= ~2;
-		    if( n->link[1] )
-			    n->link[1]->color &= ~2;
-		    n = n->parent;
-		}
-    }
-    return 0;
-}
-*/
