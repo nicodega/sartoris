@@ -31,7 +31,7 @@ char hbuffer[80];
 char hdigits[10];
 
 // gets input from stdin and puts it on stdout
-// usage: less
+// usage: more
 int main(int argc, char **args) 
 {
 	FILE *f, *console;
