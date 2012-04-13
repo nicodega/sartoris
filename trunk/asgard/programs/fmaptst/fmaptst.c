@@ -79,7 +79,7 @@ void test_pmap()
     unsigned int read = file_map[3];
     
     // close the pmap
-    rem.pm_type;
+    rem.pm_type = PM_PMAP_REMOVE;
     rem.req_id = 1;
     rem.response_port = 1;
     rem.safe = 1;                // is it safe to give this physical pages to any proc? or is it stil IO mapped.
