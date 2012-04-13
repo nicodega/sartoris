@@ -62,10 +62,11 @@ Any operating system designed to run modern hardware must overcome the (rather c
 Therefore, it seems reasonable to encapsulate the routines that interact directly with the processor, and that is what the Sartoris microkernel intends to do. Moreover, in order to provide a suitable abstraction to the operating system, the microkernel does not need to provide many other functions. The system calls provided by Sartoris can be grouped as follows:\footnote{Every processor architecture has unique features that must be handled in the kernel (i.e. performance monitoring hardware). A small number of architecture specific system calls will provide the necessary cpu dependent functions. }
 
 \begin{enumerate}
-\item[]\textbf{Task and thread management.} These system calls cover the creation of processor tasks and threads. Sartoris does not, however, load processes from disk or perform any scheduling of the CPU. These chores are to be performed by services running on top of the microkernel (usually, a process-manager task). Under Sartoris, an interrupt handler is just a special thread that is invoked by the microkernel every time the corresponding interrupt request line is raised. Hence, the scheduling thread may be created by binding an ordinary thread to the timer interrupt. Sartoris also provides a (privileged) way to run a thread starting at a specific pointer and and optional different stack, allowing something similar to a software interrupt on a given thread, guaranteeing when the execution of the thread "`soft interrupt"' finishes, the state of the thread will be the same as it was before it started execution (just as an interrupt).
+\item[]\textbf{Task and thread management.} These system calls cover the creation of processor tasks and threads. Sartoris does not, however, load processes from disk or perform any scheduling of the CPU. These chores are to be performed by services running on top of the microkernel (usually, a process-manager task). Under Sartoris, an interrupt handler is just a special thread that is invoked by the microkernel every time the corresponding interrupt request line is raised. Hence, the scheduling thread may be created by binding an ordinary thread to the timer interrupt. Sartoris also provides a (privileged) way to run a thread starting at a specific pointer and an optional different stack, allowing something similar to a software interrupt on a given thread, guaranteeing when the execution of the thread "`soft interrupt"' finishes, the state of the thread will be the same as it was before it started execution (just as an interrupt).
 \item[]\textbf{Memory management.} This subsystem presents an abstracted view of the paging mechanism of the underlying processor, as well as an implementation of inter-task memory sharing through Sartoris SMOs (shared memory objects), which are chunks of binary data that can be easily accessed from multiple tasks. Again, the microkernel does not perform any paging directly (except in exceptional cases like interprocess communication, where some temporary mappings may be created and later destroyed during the execution of a system call). It just provides support for the easy creation and modification of page tables, (mostly) independently of the processor page table format and peculiarities.
 \item[]\textbf{Message passing.} The kernel provides an asynchronous messaging system, in the form of a set of ports assigned to each task. Each port functions as a mailbox where fixed-sized messages from other tasks are received. These system calls cover the creation, deletion and management of ports.
 \item[]\textbf{Thread Tracing.} This set of system calls provides a way for a task to access a given thread state while it's not running. With these system calls, the tracing task can read/write the thread registers and read/write it's memory. This functionallity could be included on the same group as "`Task and thread management"' but we consider the set of calls different enough to put them in their own group.
+\item[]\textbf{Events.} These system calls provide a way for a single system service (i.e. a service with privilege level 1) to be "`told"' when a message arrives at a given port of a task, or an interrupt is issued on a thread. This could be used by the O.S. on top to implement thread blocking based on messages or interrupts.
 \end{enumerate}
 
 \noindent{}Before each of the subsystems is further described, the main issues considered in the design will be reviewed:
@@ -97,7 +98,7 @@ A task is composed by a virtual address space (defined by a set of page tables) 
 When Paging is disabled, \textsf{mem\_adr} indicates the physical address where this task should be placed in main memory\footnote{The organization of the tasks in physical memory is therefore under absolute control of the operating system.}, but if Paging is enabled, this field will be the desired task Base Address, and it must be greater than \textsf{MIN\_TASK\_OFFSET} defined on \textsf{kernel.h}.
 \textsf{Size} indicates the size (in bytes) of the task being created, and \textsf{priv\_level} indicates its privilege level. This number might be used by the operating system to restrict the ability to send messages to ports and to run specific threads using privilege levels. Zero is the most privileged level, and levels zero and one have a special meaning to the microkernel, because they are the only levels that can access the input$/$output space.\\
 
-In order to initialize the task memory contents (if not donr directly by memory mapping using paging) sartoris provides a system call \textsf{int init\_task(int task, int *src, unsigned int size);} which will copy the contents of the current task memort pointed by \textsf{src} with the size specified by \textsf{size} to the task \textsf{task}. If paging is enabled on the microkernel, pages from the task \textsf{mem\_adr} to \textsf{size} must be paged in.\\
+In order to initialize the task memory contents (if not done directly by memory mapping using paging) sartoris provides a system call \textsf{int init\_task(int task, int *src, unsigned int size);} which will copy the contents of the current task memory pointed by \textsf{src} with the size specified by \textsf{size} to the task \textsf{task}. If paging is enabled on the microkernel, pages from the task \textsf{mem\_adr} to \textsf{size} must be paged in.\\
 
 It should be noted that System Calls to create and destroy tasks, threads and interrupt handlers are restricted to tasks running in privilege level zero. The system call \textsf{ret\_from\_int} is restricted to levels zero and one.\footnote{Notice that the numerical privilege levels used by the microkerenl are independant of those defined by the underlying processor architecture. For example, threads running with mircrokerenel privlege 0 in the x86 implementation of Sartoris are running with a processor privilege level of 1, since level 0 is being used by the microkernel itself.}
 Tasks are destroyed using the similar function \textsf{destroy\_task}, which receives the address of the task being destroyed.\\
@@ -115,7 +116,7 @@ A thread is a processor state associated with a given task. The maximum amount o
 \\
 where \textsf{task\_num} is the task that defines the context in which this thread is to be created (which must have been already created), \textsf{ep} is this thread's entry point, \textsf{stack} is the initial stack value, and \textsf{invoke\_mode} is one of the following:
 \begin{enumerate}
-\item[] \textsf{PERM\_REQ}: In this mode, it is necessary (additionally to the privilege level constraints) to have specific authorization (obtained through the function \textsf{set\_thread\_run\_perm}) to run this thread.\footnote{Right now, on implementation for Sartoris 2, this functionallity is no longer supported. Perhaps on a future version it will be supported again.}
+\item[] \textsf{PERM\_REQ}: In this mode, it is necessary (additionally to the privilege level constraints) to have specific authorization (obtained through the function \textsf{set\_thread\_run\_perm}) to run this thread.\footnote{Right now, on implementation for Sartoris 2, this functionallity is supported by providing a user space page with a permissions bitmap.}
 \item[] \textsf{PRIV\_LEVEL\_ONLY}: In this mode only the usual privilege level constraints are applied to the function \textsf{run\_thread} applied to this thread\footnote{see the description of the function \textsf{run\_thread} below}.
 \item[] \textsf{DISABLED}: The thread is disabled, and it can't be invoked by anyone.
 \item[] \textsf{UNRESTRICTED}: Any task can run this thread.
@@ -150,6 +151,8 @@ Sartoris also implements three system calls for interrupt stack manipulation, na
 
 This system calls might be useful for example when a page fault is to be serviced for an interrupt. The OS on top could pop the interrupt from the top of the stack, and resume execution of the interrupt now present at the top (if any), while it fetches the page. Once the page has been retrieved, it could push the interrupt back on the stack and resume it's execution.
 
+Also important, is the fact that a single thread might handle more than one interrupt. In this case, if a thread is handling an interrupt, and another interrupt handled by it raises, sartoris will not preempt the thread execution, but will prepare the new int for execution immediately after the current one is finished (i.e. the thread invokes \textsf{ret\_from\_int}).
+
 \section{Messaging system}
 The kernel provides an asynchronous inter-task message system through the \textsf{send\_msg}, \textsf{get\_msg} and \textsf{get\_msg\_count} system calls. The messages have a fixed size defined by the implementation, and the kernel guarantees that messages arrive in FIFO order, but each message queue has a maximum capacity which is also implementation-defined. When a message is sent using the function \textsf{int send\_msg(int to\_address, int port, void *msg)}, the contents of the message pointed by \textsf{msg} are copied to the queue for port number \textsf{port} of task \textsf{to\_address}. The receiving of messages is done in an analogous fashion using the function \textsf{int get\_msg(int port, void *msg, int *id)}, which removes the fist message in the supplied \textsf{port}'s queue and copies it's contents to the address \textsf{msg}. The variable \textsf{id} is used to return the id of the sender task. Both functions return 0 on success. 
 The function \textsf{int get\_msg\_count(int port)} returns the amount of messages waiting in the queue of the supplied port.
@@ -165,6 +168,13 @@ In order to provide a secure messaging system, Sartoris defines the following po
 The protection mode for a port can be modified using the \textsf{set\_port\_mode} system call. Permissions can be granted (or removed) to individual tasks using the \textsf{set\_port\_perm} system call.
 \item[]\textsf{UNRESTRICTED}: Any task can sen a message to this port.
 \end{enumerate} 
+
+There are also a set of messaging functions designed to avoid multiple privilege level changes which allow checking port counts and retreiving more than one message at a time, namely:
+
+\begin{enumerate}
+\item[]\textsf{get\_msgs}: Get up to \textsf{maxlen} messages from the specified port. If the port is closed while this syscall y being executed or there are no messages it'll return \textsf{0}, otherwise it'll return how many messages where read onto the specified array.
+\item[]\textsf{get\_msg\_counts}: This function will place on the \textsf{counts} array, the message count for each port on the \textsf{ports} array. If an error occurs, it'll return a negative number, if not, it'll return a value grater than \textsf{0} when there are messages on any of the specified ports or \textsf{0} if all ports are empty.
+\end{enumerate}
 
 \section{Memory management} \label{sec:memorymanagement}
 
@@ -199,10 +209,10 @@ Where \textsf{task\_id} and \textsf{thread\_id} contains the id of the task and 
 \item[] \textsf{PF\_FLAG\_NONE}: A normal page fault interrupt (i.e. the thread belongs to the given task and it's not an interrupt from sartoris).
 \item[] \textsf{PF\_FLAG\_FREE}: See section \ref{sec:dynamicmemory}.
 \item[] \textsf{PF\_FLAG\_PG}: See section \ref{sec:dynamicmemory}.
-\item[] \textsf{PF\_FLAG\_EXT}: The page fault was raised because a thread is reading/writing from/to a Shared Memory Object from another taskThis flag indicates the given thread, does not belong the task specified on the \textsf{task\_id} field.
+\item[] \textsf{PF\_FLAG\_EXT}: The page fault was raised because a thread is reading/writing from/to a Shared Memory Object from another task. This flag indicates the given thread, does not belong the task specified on the \textsf{task\_id} field.
 \end{enumerate}
 
-\subsection{Shared Memory} \label{sec:dynamicmemory}
+\subsection{Shared Memory} \label{sec:sharedmemory}
 
 The microkernel must supply a mechanism to perform memory sharing. Therefore, each task can access a set of Shared Memory Objects which allow other tasks to access its address space in a controlled way. However, there is no memory aliasing, and access is limited to reading from and writing to the shared sections using system calls that copy memory contents from one task address space to another.
 
@@ -261,9 +271,33 @@ If sartoris is compiled with the METRICS define, it will provide the \textsf{int
 \indent unsigned int allocated\_ports;       // Ports allocated with dynamic memory\\
 \indent unsigned int allocated\_indexes;     // Allocated indexes (dynamic memory)\\
 \indent unsigned int dynamic\_pages;         // How many pages where requested to the OS for dynamic memory\\
-\indent unsigned int alloc\_dynamic\_pages;   // How many pages are we holding but not using\\\}; \\
+\indent unsigned int alloc\_dynamic\_pages;   // How many pages is sartoris holding but not using\\\}; \\
 \end{sf}
 \\
+
+\section{Events} \label{sec:events}
+
+In Sartoris version 2.0, the following event syscalls where introduced:
+
+\begin{enumerate}
+\item[] \textsf{evt\_set\_listener}
+\item[] \textsf{evt\_wait}
+\item[] \textsf{evt\_disable}
+\end{enumerate}
+
+Using the first syscall \textsf{evt\_set\_listener}, a privilege level 1 service on the OS on top, can let sartoris know events will be enabled, providing a thread and interrupt and a port which will be used for the event subsystem as follows:
+
+When one of the currently defined events is triggered for a thread sartoris will send a message to the port specified when \textsf{evt\_set\_listener} whas invoked. If the port is full, the specified interrupt will be raised and after it was raised it'll attempt to put the message again. If the second time also fails, sartoris will ignore the event (the service should free the port when the interrupt is raised).
+
+I
+There are four kinds of events defined on sartoris:
+
+\begin{enumerate}
+\item[] \textsf{SARTORIS\_EVT\_MSG} 
+\item[] \textsf{SARTORIS\_EVT\_PORT\_CLOSED}
+\item[] \textsf{SARTORIS\_EVT\_INT}
+\item[] \textsf{SARTORIS\_EVT\_INTS}
+\end{enumerate}
 
 \textbf{kernel internals:} In current implementations, the microkernel has its own set of page tables to access the low memory area where its own code, data structures, and mappings per thread reside, that is injected into every task's page directory upon insertion. The page mangling functions described above take the appropiate measures to prevent user programs from disrupting the microkernel address space. To access user memory, the kernel uses the same page tables as the user processes do. Hence, the presence in memory of user data needed by system calls cannot be guaranteed by the microkernel. This is specially delicate when the microkernel must access a lock in order to perform the system call. Usually, critical sections are implemented in single processor kernels by disabling the interrupts. However, a page fault may well occur with interruptions disabled, thus disrupting the locking mechanism. The solution to this problem is twofold: for small structures received from user space, the structure is copied to the kernel stack before any locking is performed, and therefore page faults, if present, can be resolved without harm. For larger memory access (for example, in the implementations of the functions \textsf{read\_mem} and \textsf{write\_mem}), each time the microkernel must access a new page from user space, the presence of the relevant page in memory is checked and, if missing, a page fault is issued by the microkernel (not by the processor) after releasing any pertinent locks and saving the necessary information to allow the system call to continue normally and securely after the page fault has been resolved.
 
