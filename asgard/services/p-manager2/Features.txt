@@ -18,8 +18,9 @@ Internals:
 - Non-Fixed Malloc              *
 - Signaled Interrupts           *
 - Init fs2 loading              * 
-- Dynamic loading               * (only using ld service for now)
+- Dynamic loading               * (only using ld service for now, but shared libraries are supported!)
 - Debugging interface		    		*
+- Unix like signals 						* (supporting execution on a different stack)
 
 Protocols:
 

@@ -664,7 +664,7 @@ sighandler_t signal(int id, sighandler_t handler)
     if(id < 0 || id > MAX_HNDL || handler == NULL || handler == SIG_ERR) return SIG_ERR;
 
     // if the signal has not yet been set, set it
-    if(id > 32)
+    if(id > MAX_EXCEPTIONS)
     {
         int sid = SIGNALS_HANDLER2IDX(id);
 
@@ -739,7 +739,7 @@ int raise(int id)
 {
     if(id >= 0 && id < MAX_HNDL && handlers[id])
     {
-        if(id > 32)
+        if(id > MAX_EXCEPTIONS)
         {
             send_event(get_current_task(), signals[SIGNALS_HANDLER2IDX(id)]->event_type, signals[SIGNALS_HANDLER2IDX(id)]->param, 0);
             reschedule();   // this will guarrantee if the signal is on the same thread, 
