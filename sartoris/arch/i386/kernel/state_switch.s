@@ -43,7 +43,7 @@ arch_switch_thread:
 	mov ecx, [curr_state]					;; now ecx contains the state of the running thread
 
     ;; if we are on a soft interrupt, this means we interrupted the 
-    ;; soft int (with a run_thread or an interrupt) and ge got here.
+    ;; soft int (with a run_thread or an interrupt) and we got here.
     ;; If that's the case, we must preserve our original thread 
     ;; C convension registers (ebp, esi, edi, ebx, esp)
 	mov eax, [ecx + thr_state.sflags]

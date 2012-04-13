@@ -425,10 +425,16 @@ int get_msgs(int port, int *msgs, int *ids, int maxlen)
 
     #ifdef _METRICS_
                     if(res == SUCCESS) 
-                    metrics.messages--;
+                        metrics.messages--;
     #endif              
                     result = i;
 		        }
+                else
+                {
+                    set_error(SERR_PORT_DISABLED);
+                    result = 0;
+                    break;
+                }
 
                 mk_leave(x); /* exit critical block */    
             }

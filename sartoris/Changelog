@@ -34,7 +34,7 @@
       every ttrace function except for ttrace_end will fail.
     - Added two new messaging functions in order to check multiple port counts and receive multiple messages
       from one port at once (to avoid too many privilege switches).
-    - Added three system calls to support a new event subsystem. Currently there is are two supported events:
+    - Added three system calls to support a new event subsystem. Currently there are two supported events:
       one will send a message to a port when a task receives a message, the other one will send a message to the port
       when an interrupt is raised. This could be usefull for schedulers, in order to put a task to sleep 
       (if the task asks for it) until a message arrives to one of it's first 32 ports or a specific int is raised.
