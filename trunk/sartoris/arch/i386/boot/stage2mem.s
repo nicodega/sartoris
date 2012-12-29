@@ -170,6 +170,13 @@ get_mem_size:
 	
 getmmap_loop:
 	call get_mmap
+	;; add start to length to get the end
+	mov eax, dword [es:di+4]
+	add [es:di+12], eax
+	cmp [es:di+12], eax
+	jae getmmap_nofix
+	dec dword [es:di+12]
+getmmap_nofix:
 	cmp ebx, 0
 	je getmmap_finished
 	add edi, [es:di]		;; increment buffer possition
