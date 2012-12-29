@@ -1,7 +1,7 @@
 # [empty line]
 # imagename (no extension)
 # flags (lowmem, none, disabled) can be comma separated 
-# type (hdd, fs, normal) exclusive
+# type (hdd, fs, dynlink, normal) exclusive
 # task id (if -1 it will be ignored and assigned dinamically)
 # main thread id (if -1 it will be ignored and assigned dinamically)
 
@@ -47,7 +47,7 @@ normal
 
 ld
 none
-normal
+dynlink
 9
 
 pci
