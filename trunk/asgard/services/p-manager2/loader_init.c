@@ -129,7 +129,6 @@ ADDR create_service(UINT16 task, UINT16 thread, INT32 invoke_level, UINT32 size,
 	char *path = NULL;
 	struct vmm_page_table *ptbl = NULL;
 	struct thread mk_thread;
-    BOOL isld = FALSE;
     
 	while(image_name[psize] != '\0'){ psize++; }
 

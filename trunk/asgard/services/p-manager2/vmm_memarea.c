@@ -205,7 +205,7 @@ int ma_insert(memareas *t, ma_node *n)
 			parent->link[1] = n;
         
         // fix the tree
-	    ma_fix_insert(t, n);
+	    ma_insert_rebalance(t, n);
 	}
     
     if(n->link[0] && n->link[1])
@@ -242,9 +242,9 @@ void ma_insert_rebalance(memareas *t, ma_node *n)
         else 
         {
             if ( is_red(r->link[dir]->link[dir]) )
-                r = rb_single_rotation( r, !dir );
+                r = ma_single_rotation( r, !dir );
             else if ( is_red( r->link[dir]->link[!dir] ) )
-                r = rb_double_rotation( r, !dir );
+                r = ma_double_rotation( r, !dir );
         }
                 
         p = r;
@@ -264,7 +264,7 @@ void ma_insert_rebalance(memareas *t, ma_node *n)
 }
 
 // this function performs a rotation on the specified direction (0 left, 1 right)
-ma_node *rb_single_rotation( ma_node *n, int dir )
+ma_node *ma_single_rotation( ma_node *n, int dir )
 {
     ma_node *save = n->link[!dir];
 
@@ -298,12 +298,12 @@ ma_node *rb_single_rotation( ma_node *n, int dir )
 // this function will perform first a rotation on the oposite direction
 // on the node child on that direction and then on the specified
 // direction on the node
-ma_node *rb_double_rotation(ma_node *n, int dir )
+ma_node *ma_double_rotation(ma_node *n, int dir )
 {
-    n->link[!dir] = rb_single_rotation(n->link[!dir], !dir );
+    n->link[!dir] = ma_single_rotation(n->link[!dir], !dir );
     if(n->link[!dir])
         n->link[!dir]->parent = n;
-    return rb_single_rotation(n, dir );
+    return ma_single_rotation(n, dir );
 }
 
 // this implements a top-down Red Black t deletion.
