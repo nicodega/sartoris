@@ -52,9 +52,9 @@ BOOL avaliablePage(struct multiboot_info *multiboot, ADDR physical)
 
 		while(size != multiboot->mmap_length)
 		{
-			if(mbe->start <= phy && mbe->end > phy && mbe->type != 1)
+			if(mbe->start <= phy && mbe->end > phy && mbe->type != MULTIBOOT_MMAP_AVAILABLE)
 				return FALSE;
-
+		
 			size += mbe->size;
 			mbe = (struct mmap_entry*)( (UINT32)mbe + mbe->size);
 		}
@@ -225,35 +225,7 @@ INT32 vmm_init(struct multiboot_info *multiboot, UINT32 ignore_start, UINT32 ign
     UINT32 size = 0, pgs;
 	struct mmap_entry *mbe = NULL;
 	UINT32 phy;
-
-	/* If there is a memory map present, go through it */
-	if((vmm.multiboot->flags & MB_INFO_MMAP) && vmm.multiboot->mmap_length > 0)
-	{
-		mbe = (struct mmap_entry*)multiboot->mmap_addr;
-		size = 0;
-        
-		while(size != multiboot->mmap_length)
-		{
-            phy = PHYSICAL2LINEAR(mbe->start);
-            pgs = ((UINT32)(mbe->end - mbe->start) >> 12);
-
-            if(((UINT32)(mbe->end - mbe->start)) & 0x00000FFF)
-                pgs++;
-            pman_print_dbg("VMM: IO page %x (phy %x - end %x)\n", (ADDR)phy, (UINT32)mbe->start, (UINT32)mbe->end);
-
-            if((UINT32)mbe->start > FIRST_PAGE(PMAN_POOL_PHYS)
-                && mbe->type != 1)
-                pya_put_pages(vmm_addr_stack((ADDR)phy), (ADDR)phy, pgs, PHY_IO);
-            else if(mbe->type != 1)
-                pman_print_dbg("VMM: Page is too low on phy mem.\n");
-            else
-                pman_print_dbg("VMM: Is free mem area.\n");
-            
-			size += mbe->size;
-			mbe = (struct mmap_entry*)( (UINT32)mbe + mbe->size);
-		}
-	}
-
+	
 	pman_print("VMM: Init Finished");
 
 	return 1;
@@ -327,7 +299,8 @@ void calc_mem(struct multiboot_info *mbinf)
 
 		while(size != mbinf->mmap_length)
 		{
-			if(mbe->end > mmap_mem_size)
+			if(mbe->end > mmap_mem_size
+				&& mbe->type != MULTIBOOT_MMAP_RESERVED && !(mbe->type >= MULTIBOOT_MMAP_BAD_MEMORY))
 				mmap_mem_size = mbe->end;
 			size += mbe->size;
 			mbe =  (struct mmap_entry *)((UINT32)mbe + mbe->size);	
