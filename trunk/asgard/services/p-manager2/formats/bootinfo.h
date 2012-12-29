@@ -116,4 +116,8 @@ struct mmap_entry
 	unsigned long type;
 };
 
-#define MULTIBOOT_MMAP_AVAILABLE 1
+#define MULTIBOOT_MMAP_AVAILABLE  1
+#define MULTIBOOT_MMAP_RESERVED   2
+#define MULTIBOOT_MMAP_ACPI_RECL  3
+#define MULTIBOOT_MMAP_ACPI_NVS   4
+#define MULTIBOOT_MMAP_BAD_MEMORY 5
