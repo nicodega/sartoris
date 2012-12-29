@@ -541,7 +541,8 @@ void _start()
 					// cache device info again, just in case it has been removed
 					dinf = cache_device_info(deviceid, logic_deviceid, dinf);
 
-					dinf->hits++; // hit logic device
+                    if(dinf->hits < 0x7FFFFFFF)
+					    dinf->hits++; // hit logic device
 
 					attempt_start(dinf, get_tail_position(&dinf->waiting), deviceid, logic_deviceid);
 

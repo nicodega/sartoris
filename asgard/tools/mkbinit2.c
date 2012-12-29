@@ -127,7 +127,7 @@ int main(int argc, char** args)
 		headers[i].image_size = fileattr.st_size;
 		headers[i].image_pos = offset;
 
-		printf("Service image file %s (%s) : (%d bytes), pos: %d %s%s%s%s\n", 
+		printf("Service image file %s (%s) : (%d bytes), pos: %d %s%s%s%s%s\n", 
 			files[i],
 			headers[i].img_name, 
 			headers[i].image_size,
@@ -135,6 +135,7 @@ int main(int argc, char** args)
 			((headers[i].flags & IFS2SRV_FLAG_LOWMEM)? "|lowmem" : ""),
 			((headers[i].pman_type & IFS2SRV_PMTYPE_MAINFS)? "|mainfs" : ""),
 			((headers[i].pman_type & IFS2SRV_PMTYPE_HDD)? "|hdd" : ""),
+			((headers[i].pman_type & IFS2SRV_PMTYPE_DYNLINK)? "|dynlink" : ""),
 			((headers[i].flags & IFS2SRV_FLAG_IGNORE)? "|DISABLED" : "")
 			);
 
@@ -229,7 +230,7 @@ void build_flags_tbl()
 					}
 					break;
 				case 2:
-					/* type (hdd, fs, normal) exclusive */
+					/* type (hdd, fs, dynlink, normal) exclusive */
 					if(strstr(rbuff,"fs"))
 					{
 						hflags[i].pman_type = IFS2SRV_PMTYPE_MAINFS;
@@ -237,6 +238,10 @@ void build_flags_tbl()
 					else if(strstr(rbuff,"hdd"))
 					{
 						hflags[i].pman_type = IFS2SRV_PMTYPE_HDD;
+					}
+                    else if(strstr(rbuff,"dynlink"))
+					{
+						hflags[i].pman_type = IFS2SRV_PMTYPE_DYNLINK;
 					}
 					else
 					{

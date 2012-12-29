@@ -42,7 +42,7 @@ extern UINT16 atac_service;
 UINT32 curr_cursor;
 struct ifs2srv_header *curr_header;
 
-ADDR create_service(UINT16 task, UINT16 thread, INT32 invoke_level, UINT32 size, BOOL low_mem, BOOL load_all, char *image_name);
+ADDR create_service(UINT16 task, UINT16 thread, INT32 invoke_level, UINT32 size, BOOL low_mem, BOOL load_all, BOOL isld, char *image_name);
 UINT32 put_pages(struct pm_task *task, BOOL use_fsize, BOOL low_mem, BOOL lib);
 INT32 pminit_elf_open(int imgId);
 INT32 pminit_elf_seek(struct fsio_event_source *iosrc, UINT32 offset);
@@ -58,7 +58,7 @@ void loader_init(ADDR init_image_laddress)
 	UINT32 imsg[4];
 	UINT32 i = 0;
 	UINT16 task, thread;
-	BOOL msg, lowmem;
+	BOOL msg, lowmem, isLD;
 	iheader = (struct ifs2_header *)init_image_laddress;
 
     ld_task = -1;
@@ -76,6 +76,7 @@ void loader_init(ADDR init_image_laddress)
 		
 		msg = 0;
 		lowmem = 0;
+        isLD = 0;
 		
 		if(!(curr_header->flags & IFS2SRV_FLAG_IGNORE))
 		{
@@ -104,10 +105,15 @@ void loader_init(ADDR init_image_laddress)
 				atac_service = task;
 				pman_print(" *Identified HDD (ATAC) Service");
 			}
+            if(curr_header->pman_type & IFS2SRV_PMTYPE_DYNLINK)
+			{
+				ld_task = task;
+				pman_print(" *Identified DYNAMIC LINKER (LD) Service");
+			}
 		
 			pman_print("Loading service %s task: %x thread: %x , header thr %x ", curr_header->img_name, task, thread, curr_header->main_thread);
 
-			addr = (UINT32)create_service(task, thread, 0, PMAN_TASK_SIZE, lowmem, TRUE, curr_header->img_name);		
+			addr = (UINT32)create_service(task, thread, 0, PMAN_TASK_SIZE, lowmem, TRUE, isLD, curr_header->img_name);		
 		}
 	}
 }
@@ -115,7 +121,7 @@ void loader_init(ADDR init_image_laddress)
 // slot_size MUST be a 4k multiple
 // Creates a system service, based on the initfs image.
 // Returns address of first page assigned to the task.
-ADDR create_service(UINT16 task, UINT16 thread, INT32 invoke_level, UINT32 size, BOOL low_mem, BOOL load_all, char *image_name)
+ADDR create_service(UINT16 task, UINT16 thread, INT32 invoke_level, UINT32 size, BOOL low_mem, BOOL load_all, BOOL isld, char *image_name)
 {
 	struct pm_task *ptask = NULL;
 	struct pm_thread *pthread = NULL;
@@ -125,12 +131,6 @@ ADDR create_service(UINT16 task, UINT16 thread, INT32 invoke_level, UINT32 size,
 	struct thread mk_thread;
     BOOL isld = FALSE;
     
-    if(strcmp(image_name,"ld"))
-    {
-        ld_task = task;
-        isld = TRUE;
-    }
-
 	while(image_name[psize] != '\0'){ psize++; }
 
 	path = kmalloc(psize);
