@@ -70,7 +70,7 @@ struct ifs2srv_header
 #define IFS2SRV_PMTYPE_NORMAL     0		// nothing to care
 #define IFS2SRV_PMTYPE_MAINFS     1		// this is the main FS service (or fs hub whatever)
 #define IFS2SRV_PMTYPE_HDD        2		// main HDD controller (or controller hub, whatever)
-#define IFS2SRV_PMTYPE_DYNLINK    3		// OS dynamic linker
+#define IFS2SRV_PMTYPE_DYNLINK    4		// OS dynamic linker
 
 
 #endif

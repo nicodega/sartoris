@@ -118,6 +118,7 @@ void io_begin_init()
     }
     else
     {
+		pman_print_dbg("ATAC NULL\n");
         fsinitfailed = TRUE;
         init_io_stage = IO_STAGE_FINISHED;
     }
@@ -231,7 +232,6 @@ BOOL io_initialized()
 				switch(init_io_stage)
 				{
 					case IO_STAGE_FINDDEV:
-						
 						/* Initialize ofs with the logic device found */
 						io_mount_root();
 						break;

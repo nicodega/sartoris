@@ -250,7 +250,7 @@ BOOL vmm_handle_page_fault(UINT16 *thr_id, BOOL internal)
         // ok it's above max addr.. is it a stack?
 	    if((UINT32)pf.linear - SARTORIS_PROCBASE_LINEAR >= PMAN_MAPPING_BASE)
 	    {
-            pman_print_dbg("PF: to high %x\n", pf.linear);
+            pman_print_dbg("PF: too high %x, task: %i thread: %i\n", pf.linear, thread->task_id, thread->id);
 		    fatal_exception(thread->task_id, MAXADDR_ERROR);
 		    return TRUE;
 	    }

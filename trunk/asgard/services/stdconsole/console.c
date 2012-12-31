@@ -55,7 +55,7 @@ void console(void)
     open_port(CSL_STDCHARDEV_PORT, -1, UNRESTRICTED);
 
     /* initialization code */
-    __asm__ ("sti" : : );
+    __asm__ __volatile__ ("sti" : : );
 
     // register with directory as tty
     reg_cmd.command = DIRECTORY_REGISTER_SERVICE;
@@ -637,12 +637,12 @@ void get_keystrokes(void)
         // process signals
         signal(c, mask);
 
-        asm ( "cli" : : );
+        __asm__ __volatile__ ( "cli" : : );
 
         next_read = (next_read+2) % KBD_BUF_SIZE;
         full_buf=0;
 
-        asm ( "sti" : : );
+        __asm__ __volatile__ ( "sti" : : );
     }
 }
 

@@ -28,6 +28,7 @@
 #include "formats/ia32paging.h"
 #include "rb.h"
 #include "vmm_memarea.h"
+#include <sartoris/syscall.h>
 
 #define VMM_INITIAL_AGE 4
 

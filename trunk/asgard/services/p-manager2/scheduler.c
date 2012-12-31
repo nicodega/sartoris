@@ -700,7 +700,6 @@ void idle_thread()
     for(;;)
     {
         idle_cpu();
-        pman_print_dbg("back from idle\n");
     }
 }
 

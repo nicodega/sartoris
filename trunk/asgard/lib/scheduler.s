@@ -22,7 +22,7 @@ global reschedule
 reschedule:
 	push ebp
 	mov ebp, esp
-	push dword 1			; SCHED_THR
+	mov eax, dword 1				; SCHED_THR
 	call RUN_THREAD : 0x00000000	; RUN_THREAD SYSCALL
 	pop ebp
 	ret
