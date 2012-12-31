@@ -107,6 +107,7 @@ void loader_init(ADDR init_image_laddress)
 			}
             if(curr_header->pman_type & IFS2SRV_PMTYPE_DYNLINK)
 			{
+				isLD = 1;
 				ld_task = task;
 				pman_print(" *Identified DYNAMIC LINKER (LD) Service");
 			}
