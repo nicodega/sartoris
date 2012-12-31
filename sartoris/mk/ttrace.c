@@ -13,6 +13,7 @@
 #include "lib/indexing.h"
 #include "sartoris/error.h"
 #include <sartoris/critical-section.h>
+#include <sartoris/syscall.h>
 
 /*
 Thread tracing system calls.
@@ -21,7 +22,7 @@ be passed as a void pointer.
 */
 
 // Begin tracing the given thread, from the specified task.
-int ttrace_begin(int thr_id, int task_id)
+int ARCH_FUNC_ATT2 ttrace_begin(int thr_id, int task_id)
 {
     struct thread *thread;
     struct task *task;
@@ -73,7 +74,7 @@ int ttrace_begin(int thr_id, int task_id)
 End thread tracing from the given task. If the task_id is 
 not the one performing the trace and it's not -1, this function will fail.
 */
-int ttrace_end(int thr_id, int task_id)
+int ARCH_FUNC_ATT2 ttrace_end(int thr_id, int task_id)
 {
     struct thread *thread;
     int ret = FAILURE;
@@ -110,7 +111,7 @@ int ttrace_end(int thr_id, int task_id)
 /*
 Read/Write a register from the thread state, or all general registers.
 */
-int ttrace_reg(int thr_id, int reg, void *value, int set)
+int ARCH_FUNC_ATT4 ttrace_reg(int thr_id, int reg, void *value, int set)
 {
     struct thread *thread;
     int ret = FAILURE;
@@ -178,7 +179,7 @@ int ttrace_reg(int thr_id, int reg, void *value, int set)
 /*
 Perform a memory read on the specified thread task.
 */
-int ttrace_mem_read(int thr_id, void *src, void *dst, int size)
+int ARCH_FUNC_ATT4 ttrace_mem_read(int thr_id, void *src, void *dst, int size)
 {
     struct thread *thread;
     int ret = FAILURE;
@@ -262,7 +263,7 @@ int ttrace_mem_read(int thr_id, void *src, void *dst, int size)
 /*
 Perform a memory read on the specified thread task.
 */
-int ttrace_mem_write(int thr_id, void *src, void *dst, int size)
+int ARCH_FUNC_ATT4 ttrace_mem_write(int thr_id, void *src, void *dst, int size)
 {
     struct thread *thread;
     int ret = FAILURE;

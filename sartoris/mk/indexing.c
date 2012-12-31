@@ -4,6 +4,7 @@
 #include "sartoris/kernel-data.h"
 #include "lib/indexing.h"
 #include "lib/containers.h"
+#include "lib/dynmem.h"
 #include "sartoris/metrics.h"
 
 struct index_dir idx_dir;

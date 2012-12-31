@@ -26,7 +26,7 @@
 /* message subsystem implementation */
 
 /* these are the proper system calls: */
-int open_port(int port, int priv, enum usage_mode mode) 
+int ARCH_FUNC_ATT3 open_port(int port, int priv, enum usage_mode mode) 
 {
     int i;
     int x, result;
@@ -83,7 +83,7 @@ int open_port(int port, int priv, enum usage_mode mode)
     return result;
 }
 
-int close_port(int port) 
+int ARCH_FUNC_ATT1 close_port(int port) 
 {
     int p, result, x;
 	struct task *task;
@@ -128,7 +128,7 @@ int close_port(int port)
     return result;
 }
 
-int set_port_mode(int port, int priv, enum usage_mode mode) 
+int ARCH_FUNC_ATT3 set_port_mode(int port, int priv, enum usage_mode mode) 
 {
     int p, x, result;
 	struct task *task;
@@ -163,7 +163,7 @@ int set_port_mode(int port, int priv, enum usage_mode mode)
     return result;
 }
 
-int set_port_perm(int port, struct permissions *perms) 
+int ARCH_FUNC_ATT2 set_port_perm(int port, struct permissions *perms) 
 {
 	int x, result;
 	struct task *task;
@@ -202,7 +202,7 @@ int set_port_perm(int port, struct permissions *perms)
 	return result;
 }
 
-int send_msg(int dest_task_id, int port, void *msg) 
+int ARCH_FUNC_ATT3 send_msg(int dest_task_id, int port, void *msg) 
 {
     struct port *p = NULL;
     int x, result;
@@ -308,7 +308,7 @@ int send_msg(int dest_task_id, int port, void *msg)
     return result;
 }
 
-int get_msg(int port, void *msg, int *id) 
+int ARCH_FUNC_ATT3 get_msg(int port, void *msg, int *id) 
 {
     struct port *p;
 	struct task *task;
@@ -358,7 +358,7 @@ int get_msg(int port, void *msg, int *id)
     return result;
 }
 
-int get_msg_count(int port) 
+int ARCH_FUNC_ATT1 get_msg_count(int port) 
 {
 	int x, res;
 	struct task *task;
@@ -386,7 +386,7 @@ int get_msg_count(int port)
 This function will place on msgs as many as maxlen messages, if there are any on the specificed port.
 It will return how many messages where read onto msgs.
 */
-int get_msgs(int port, int *msgs, int *ids, int maxlen) 
+int ARCH_FUNC_ATT4 get_msgs(int port, int *msgs, int *ids, int maxlen) 
 {
     struct port *p;
 	struct task *task = NULL;
@@ -453,7 +453,7 @@ This function will return a value >0 if there are messages on any of the ports s
 set the counts on the specified array.
 It will return a negative number if an error occured.
 */
-int get_msg_counts(int *ports, int *counts, int len) 
+int ARCH_FUNC_ATT3 get_msg_counts(int *ports, int *counts, int len) 
 {
 	int x, res = 0, i, port;
 	struct task *task;

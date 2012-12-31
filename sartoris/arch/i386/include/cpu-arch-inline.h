@@ -57,7 +57,8 @@ static inline void *arch_get_page_fault(void)
 
 #define HAVE_INL_ISSUE_PAGE_FAULT
 
-extern int_14;
+extern int int_14;
+
 static inline void arch_issue_page_fault(void) 
 {
     // int$14 won't push the error code!

@@ -4,6 +4,7 @@
 #include <lib/indexing.h>
 #include <sartoris/critical-section.h>
 #include "sartoris/error.h"
+#include <sartoris/syscall.h>
 
 #ifdef _METRICS_
 
@@ -16,7 +17,7 @@ void initialize_metrics()
 	metrics.ports = 0;
 }
 
-int get_metrics(struct sartoris_metrics *m)
+int ARCH_FUNC_ATT1 get_metrics(struct sartoris_metrics *m)
 {
 	if(VALIDATE_PTR(m)) 
 	{

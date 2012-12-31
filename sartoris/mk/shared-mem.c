@@ -21,11 +21,12 @@
 #include "lib/indexing.h"
 #include <sartoris/critical-section.h>
 #include "sartoris/error.h"
+#include <sartoris/syscall.h>
 
 /* shared memory subsystem implementation */
 
 /* these are the proper system calls: */
-int share_mem(int target_task, int addr, int size, int rw) 
+int ARCH_FUNC_ATT4 share_mem(int target_task, void *addr, int size, int perms) 
 {
     int x, result;
     
@@ -39,7 +40,7 @@ int share_mem(int target_task, int addr, int size, int rw)
 		{
 			if (VALIDATE_PTR(addr) && VALIDATE_PTR(addr + size - 1)) 
 			{
-				result = get_new_smo(curr_task, target_task, addr, size, rw);
+				result = get_new_smo(curr_task, target_task, (int)addr, size, perms);
 
 				/* Atomicity might have been broken, test target task again */
 				if(GET_PTR(target_task,tsk)->state != ALIVE)
@@ -84,7 +85,7 @@ int share_mem(int target_task, int addr, int size, int rw)
     return result;
 }
 
-int claim_mem(int smo_id) 
+int ARCH_FUNC_ATT1 claim_mem(int smo_id) 
 {
     int result;
  
@@ -112,7 +113,7 @@ int claim_mem(int smo_id)
     return result;
 }
 
-int read_mem(int smo_id, int off, int size, int *dest) 
+int ARCH_FUNC_ATT4 read_mem(int smo_id, int off, int size, void *dest) 
 {
     struct smo *my_smo;
     char *src;
@@ -197,7 +198,7 @@ int read_mem(int smo_id, int off, int size, int *dest)
     return result;
 }
 
-int write_mem(int smo_id, int off, int size, int *src) 
+int ARCH_FUNC_ATT4 write_mem(int smo_id, int off, int size, void *src) 
 {
     struct smo *my_smo;
     char *dest;
@@ -279,7 +280,7 @@ int write_mem(int smo_id, int off, int size, int *src)
     return result;
 }
 
-int pass_mem(int smo_id, int target_task) 
+int ARCH_FUNC_ATT2 pass_mem(int smo_id, int target_task) 
 {
     struct smo *smo;
     int x, result;
@@ -318,7 +319,7 @@ int pass_mem(int smo_id, int target_task)
     return result;
 }
 
-int mem_size(int smo_id) 
+int ARCH_FUNC_ATT1 mem_size(int smo_id) 
 {
 	struct smo *smo;
 	int result;

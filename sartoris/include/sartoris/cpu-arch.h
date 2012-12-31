@@ -36,11 +36,22 @@ int arch_destroy_int_handler(int number);
 int arch_page_in(int task, void *linear, void *physical, int level, int attrib);
 int arch_page_out(int task, void *linear, int level);
 int arch_kernel_pf(void *linear);
+int arch_grant_page_mk(void *physical);
+
+int arch_ttrace_begin(int thr_id);
+void arch_ttrace_end(int thr_id);
+int arch_ttrace_reg_size(int reg);
+int arch_ttrace_set_reg(int thr_id, int reg, void *value);
+int arch_ttrace_get_reg(int thr_id, int reg, void *value);
+int arch_ttrace_get_regs(int thr_id, void *ptr_regs);
+int arch_ttrace_set_regs(int thr_id, void *ptr_regs);
 
 void arch_mem_cpy_words(int *src, int *dst, unsigned int len);
 void arch_mem_cpy_bytes(char *src, char *dst, unsigned int len);
 
 int arch_test_and_set(int *x, int value);
+
+void arch_caps_init();
 
 #ifdef PAGING
 
