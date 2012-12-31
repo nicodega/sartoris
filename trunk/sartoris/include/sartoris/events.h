@@ -2,6 +2,8 @@
 #ifndef EVENTS_H
 #define EVENTS_H
 
+#include <sartoris/target/reg-calls.h>
+
 extern int evt_task;
 extern int evt_thread;
 extern int evt_interrupt;
