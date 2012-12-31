@@ -124,14 +124,15 @@ void int_init()
 	hdl.stack = (ADDR)STACK_ADDR(PMAN_EVTHNDL_STACK_ADDR);
 
 	if(create_thread(SART_EVT_THR, &hdl))
-		pman_print_and_stop("INT: FAILED To create Interrupt handler Thread");
+		pman_print_and_stop("INT: FAILED To create Interrupt handler Thread.\n");
 
     /* Open the port for events */
-    open_port(SARTORIS_EVENTS_PORT, 0, PRIV_LEVEL_ONLY);
+    if(open_port(SARTORIS_EVENTS_PORT, 0, PRIV_LEVEL_ONLY) == FAILURE)
+		pman_print_dbg("Could not open port for event listener.\n");
 
     /* Tell sartoris to generate events */
     if(evt_set_listener(SART_EVT_THR, SARTORIS_EVENTS_PORT, SART_EVENTS_INT) == FAILURE)
-        pman_print_dbg("Could not initialize sartoris event listener.");
+        pman_print_dbg("Could not initialize sartoris event listener.\n");
 
     pmthr = thr_create(SART_EVT_THR, NULL);
 	pmthr->task_id = PMAN_TASK;

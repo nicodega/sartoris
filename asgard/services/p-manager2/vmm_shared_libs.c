@@ -18,6 +18,7 @@
 */
 
 #include <sartoris/kernel.h>
+#include <sartoris/syscall.h>
 #include "vm.h"
 #include "types.h"
 #include "task_thread.h"

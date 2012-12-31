@@ -80,7 +80,7 @@ void do_mouse()
     {
         if(mouse_enabled[cur_screen])
         {
-            asm ( "cli" : : );
+            __asm__ __volatile__ ( "cli" : : );
         
             mouse_changed = 0; // reset it
             char cmouse_int_handler = mouse_int_handler;
@@ -89,7 +89,7 @@ void do_mouse()
             char cstate = state;
             char cestate = estate;
         
-            asm ( "sti" : : );
+            __asm__ __volatile__ ( "sti" : : );
         
             if(cstate & 0xC0)
                 return;
@@ -163,9 +163,9 @@ void do_mouse()
         }
         else
         {
-            asm ( "cli" : : );        
+            __asm__ __volatile__ ( "cli" : : );        
             mouse_changed = 0; // reset it
-            asm ( "sti" : : );
+            __asm__ __volatile__ ( "sti" : : );
         }
     }
 }

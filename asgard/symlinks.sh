@@ -20,13 +20,13 @@ if [ ! -s sartoris ]; then
     ln -s ../../sartoris/include/sartoris sartoris
 fi
 
-if [ ! -s sartoris-i386 ]; then
-    echo "there is no include/sartoris-i386! creating link to ../sartoris/arch/i386/include"
-    ln -s ../../sartoris/arch/i386/include sartoris-i386
-fi
-
 if [ ! -s os ]; then
     echo "there is no include/os! creating link to include/asgard"
     ln -s asgard os
+fi
+
+if [ ! -s sartoris-target ]; then
+    echo "there is no include/sartoris-target! creating link to ../sartoris/arch/target/include"
+    ln -s ../../sartoris/arch/target/include sartoris-i386
 fi
 
