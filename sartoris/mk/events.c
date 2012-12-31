@@ -327,7 +327,7 @@ int ARCH_FUNC_ATT3 evt_disable(int id, int evt, int evt_param)
                                 {
                                     thr = GET_PTR(int_handlers[iid].thr_id,thr);
                                     thr->evts = 0;
-                                    bprintf("-> evt_wait: int %i thr: %i events disabled.\n", iid, int_handlers[iid].thr_id);
+                                    //bprintf("-> evt_wait: int %i thr: %i events disabled.\n", iid, int_handlers[iid].thr_id);
                                 }
                             }
                             i++;
