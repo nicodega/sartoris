@@ -115,7 +115,7 @@ int arch_destroy_int_handler(int number)
 	return 0;
 }
 
-void init_interrupts() 
+void arch_init_interrupts() 
 {
 	int i;
 	unsigned int l_desc[2];

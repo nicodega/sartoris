@@ -173,7 +173,7 @@ extern stack_unwind_syscall
 %macro syscall_def 2
     push %1
     call stack_winding_syscall
-    ;; stack_winding_syscall will leave how many bytes it used from the stack (not counting out push)
+    ;; stack_winding_syscall will return in eax how many bytes it used from the stack (not counting out push)
     add eax, 4      ;; count our push
 	mov ecx, %2
 	mov edx, %1
@@ -183,15 +183,130 @@ extern stack_unwind_syscall
 	retf (%1*4)
 %endmacro
 
+; remeber to change hook_syscall params -=3
+%macro fast4_syscall_def 1
+xchg bx,bx
+	push ecx
+	push edx
+	push eax
+	push dword 3
+	call stack_winding_syscall		   
+	push ebp
+	mov ebp, esp		 
+	add ebp, eax
+    push ds				; switch to kernel space
+	push es
+	mov eax, 0x10
+	mov ds, eax
+	mov es, eax 
+	mov eax, 36			; eip, cs far call, reg params, count, ebp, segments
+	push dword [ebp+eax]
+	add ebp, 8          ; add param count, ebp pushes
+	mov ecx, dword [ebp+8]
+	mov edx, dword [ebp+4]
+	mov eax, dword [ebp]	
+	call %1			    ; make call	
+	pop ecx				; remove fourth param
+	pop es				; back to userland
+	pop ds
+    pop ebp		
+    call stack_unwind_syscall
+	pop ecx
+	shl ecx, 2
+	add esp, ecx		; free stack space
+	retf
+%endmacro
+
+%macro reg3_syscall_def 1
+	push ecx
+	push edx
+	push eax
+	push dword 3
+	call stack_winding_syscall		   
+	push ebp
+	mov ebp, esp		 
+	add ebp, eax
+    push ds				; switch to kernel space
+	push es
+	mov eax, 0x10
+	mov ds, eax
+	mov es, eax    
+	add ebp, 8          ; add param count, ebp pushes
+	mov ecx, dword [ebp+8]
+	mov edx, dword [ebp+4]
+	mov eax, dword [ebp]	
+	call %1			    ; make call	
+	pop es				; back to userland
+	pop ds
+    pop ebp		
+    call stack_unwind_syscall
+	pop ecx
+	shl ecx, 2
+	add esp, ecx		; free stack space
+	retf
+%endmacro
+
+%macro reg2_syscall_def 1
+	push edx
+	push eax
+	push dword 2
+	call stack_winding_syscall		   
+	push ebp
+	mov ebp, esp		 
+	add ebp, eax
+    push ds				; switch to kernel space
+	push es
+	mov eax, 0x10
+	mov ds, eax
+	mov es, eax    
+	add ebp, 8          ; add param count, ebp pushes
+	mov edx, dword [ebp+4]
+	mov eax, dword [ebp]	
+	call %1			    ; make call	
+	pop es				; back to userland
+	pop ds
+    pop ebp		
+    call stack_unwind_syscall
+	pop ecx
+	shl ecx, 2
+	add esp, ecx		; free stack space
+	retf
+%endmacro
+
+%macro reg1_syscall_def 1
+	push eax
+	push dword 1
+	call stack_winding_syscall		   
+	push ebp
+	mov ebp, esp	 
+	add ebp, eax
+    push ds				; switch to kernel space
+	push es
+	mov eax, 0x10
+	mov ds, eax
+	mov es, eax    
+	add ebp, 8          ; add param count, ebp pushes
+	mov eax, dword [ebp]
+	call %1			    ; make call	
+	pop es				; back to userland
+	pop ds
+    pop ebp		
+    call stack_unwind_syscall
+	pop ecx
+	shl ecx, 2
+	add esp, ecx		; free stack space
+	retf
+%endmacro
+
 ;; tasking
 create_task_c:
-	syscall_def 2, create_task
+	reg2_syscall_def create_task
 	
 init_task_c:
-	syscall_def 3, init_task
+	reg3_syscall_def init_task
 
 destroy_task_c:
-	syscall_def 1, destroy_task
+	reg1_syscall_def destroy_task
 
 get_current_task_c:
 	syscall_def_np get_current_task
@@ -199,16 +314,16 @@ get_current_task_c:
 	;; threading
 	
 create_thread_c:
-	syscall_def 2, create_thread
+	reg2_syscall_def create_thread
 
 destroy_thread_c:
-	syscall_def 1, destroy_thread
+	reg1_syscall_def destroy_thread
 
 set_thread_run_perms_c:
-	syscall_def 2, set_thread_run_perms
+	reg2_syscall_def set_thread_run_perms
 
 set_thread_run_mode_c:
-	syscall_def 3, set_thread_run_mode
+	reg3_syscall_def set_thread_run_mode
 
 get_current_thread_c:
 	syscall_def_np get_current_thread
@@ -219,16 +334,16 @@ page_in_c:
 	syscall_def 5, page_in
 
 page_out_c:
-	syscall_def 3, page_out
+	reg3_syscall_def page_out
 
 flush_tlb_c:
 	syscall_def_np flush_tlb
 
 get_page_fault_c:
-	syscall_def 1, get_page_fault
+	reg1_syscall_def get_page_fault
 			
 grant_page_mk_c:
-	syscall_def 1, grant_page_mk
+	reg1_syscall_def grant_page_mk
 	
 	;; interrupt handling
 
@@ -236,7 +351,7 @@ create_int_handler_c:
 	syscall_def 4, create_int_handler
 
 destroy_int_handler_c:
-	syscall_def 2, destroy_int_handler
+	reg2_syscall_def destroy_int_handler
 
 	;; I will inline ret_from_int, because it is called
 	;; so bloody often.
@@ -258,7 +373,7 @@ ret_from_int_c:
 	retf 0
 
 get_last_int_c:	
-	syscall_def 1, get_last_int
+	reg1_syscall_def get_last_int
 
 get_last_int_addr_c:
 	syscall_def_np get_last_int_addr
@@ -266,31 +381,31 @@ get_last_int_addr_c:
 	;; messaging
 	
 close_port_c:
-	syscall_def 1, close_port
+	reg1_syscall_def close_port
 	
 open_port_c:
-	syscall_def 3, open_port
+	reg3_syscall_def open_port
 	
 set_port_perm_c:
-	syscall_def 2, set_port_perm
+	reg2_syscall_def set_port_perm
 
 set_port_mode_c:
-	syscall_def 3, set_port_mode
+	reg3_syscall_def set_port_mode
 			
 send_msg_c:
-	syscall_def 3, send_msg
+	reg3_syscall_def send_msg
 
 get_msg_c:
-	syscall_def 3, get_msg
+	reg3_syscall_def get_msg
 
 get_msg_count_c:
-	syscall_def 1, get_msg_count
+	reg1_syscall_def get_msg_count
 
 get_msgs_c:
 	syscall_def 4, get_msgs
 
 get_msg_counts_c:
-	syscall_def 3, get_msg_counts
+	reg3_syscall_def get_msg_counts
 
 	;; memory sharing
 	
@@ -298,7 +413,7 @@ share_mem_c:
 	syscall_def 4, share_mem
 
 claim_mem_c:
-	syscall_def 1, claim_mem
+	reg1_syscall_def claim_mem
 
 read_mem_c:
 	syscall_def 4, read_mem
@@ -307,23 +422,23 @@ write_mem_c:
 	syscall_def 4, write_mem
 
 pass_mem_c:
-	syscall_def 2, pass_mem
+	reg2_syscall_def pass_mem
 
 mem_size_c:
-	syscall_def 1, mem_size
+	reg1_syscall_def mem_size
 
 run_thread_c:
-	syscall_def 1, run_thread
+	reg1_syscall_def run_thread
 
 run_thread_int_c:
-	syscall_def 3, run_thread
+	reg3_syscall_def run_thread_int
 
 idle_cpu_c:
 	syscall_def_np idle_cpu
 	
 ;; int stack manipulation
 push_int_c:
-	syscall_def 1, push_int
+	reg1_syscall_def push_int
 
 pop_int_c:
 	syscall_def_np pop_int
@@ -340,10 +455,10 @@ last_error_c:
 ;; tracing
 
 ttrace_begin_c:
-    syscall_def 2, ttrace_begin
+    reg2_syscall_def ttrace_begin
 
 ttrace_end_c:
-    syscall_def 2, ttrace_end
+    reg2_syscall_def ttrace_end
 
 ttrace_reg_c:
     syscall_def 4, ttrace_reg
@@ -355,19 +470,19 @@ ttrace_mem_write_c:
     syscall_def 4, ttrace_mem_write
 
 evt_set_listener_c:
-    syscall_def 3, evt_set_listener
+    reg3_syscall_def evt_set_listener
 
 evt_wait_c:
-    syscall_def 3, evt_wait
+    reg3_syscall_def evt_wait
 
 evt_disable_c:
-    syscall_def 3, evt_disable
+    reg3_syscall_def evt_disable
 
 ;; metrics
 			
 %ifdef _METRICS_
 get_metrics_c:
-	syscall_def 1, get_metrics
+	reg1_syscall_def get_metrics
 %endif	
 		
 do_syscall:

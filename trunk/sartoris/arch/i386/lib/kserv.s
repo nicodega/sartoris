@@ -2,6 +2,9 @@ bits 32
 
 %include "../include/gdt-syscalls.h"
 			
+;; On the Intel 386, the `regparm' attribute causes the compiler to
+;; pass up to NUMBER integer arguments in registers EAX, EDX, and ECX
+
 %macro pass_arguments 1
 	mov ecx, %1
 %%next:
@@ -78,7 +81,6 @@ global get_metrics
 create_task:
 	push ebp
 	mov ebp, esp
-	pass_arguments 2
 	call CREATE_TASK : 0x00000000
 	pop ebp
 	ret
@@ -86,7 +88,6 @@ create_task:
 init_task:
 	push ebp
 	mov ebp, esp
-	pass_arguments 3
 	call INIT_TASK : 0x00000000
 	pop ebp
 	ret
@@ -94,7 +95,6 @@ init_task:
 destroy_task:
 	push ebp
 	mov ebp, esp
-	pass_arguments 1
 	call DESTROY_TASK : 0x00000000
 	pop ebp
 	ret
@@ -109,7 +109,6 @@ get_current_task:
 create_thread:
 	push ebp
 	mov ebp, esp
-	pass_arguments 2
 	call CREATE_THREAD : 0x00000000
 	pop ebp
 	ret
@@ -117,7 +116,6 @@ create_thread:
 destroy_thread:
 	push ebp
 	mov ebp, esp
-	pass_arguments 1
 	call DESTROY_THREAD : 0x00000000
 	pop ebp
 	ret
@@ -125,7 +123,6 @@ destroy_thread:
 set_thread_run_perms:	
 	push ebp
 	mov ebp, esp
-	pass_arguments 2
 	call SET_THREAD_RUN_PERMS : 0x00000000
 	pop ebp
 	ret
@@ -133,7 +130,6 @@ set_thread_run_perms:
 set_thread_run_mode:	
 	push ebp
 	mov ebp, esp
-	pass_arguments 3
 	call SET_THREAD_RUN_MODE : 0x00000000
 	pop ebp
 	ret
@@ -141,7 +137,6 @@ set_thread_run_mode:
 run_thread:
 	push ebp
 	mov ebp, esp
-	pass_arguments 1
 	call RUN_THREAD : 0x00000000
 	pop ebp
 	ret
@@ -149,7 +144,6 @@ run_thread:
 run_thread_int:
 	push ebp
 	mov ebp, esp
-	pass_arguments 3
 	call RUN_THREAD_INT : 0x00000000
 	pop ebp
 	ret
@@ -179,7 +173,6 @@ page_in:
 page_out:
 	push ebp
 	mov ebp, esp
-	pass_arguments 3
 	call PAGE_OUT : 0x00000000
 	pop ebp
 	ret
@@ -194,7 +187,6 @@ flush_tlb:
 get_page_fault:
 	push ebp
 	mov ebp, esp
-	pass_arguments 1
 	call GET_PAGE_FAULT : 0x00000000
 	pop ebp
 	ret
@@ -211,7 +203,6 @@ create_int_handler:
 destroy_int_handler:
 	push ebp
 	mov ebp, esp
-	pass_arguments 2
 	call DESTROY_INT_HANDLER : 0x00000000
 	pop ebp
 	ret
@@ -226,7 +217,6 @@ ret_from_int:
 get_last_int:
 	push ebp
 	mov ebp, esp
-    pass_arguments 1
 	call GET_LAST_INT : 0x00000000
 	pop ebp
 	ret
@@ -241,7 +231,6 @@ get_last_int_addr:
 open_port:
 	push ebp
 	mov ebp, esp
-	pass_arguments 3
 	call OPEN_PORT : 0x00000000
 	pop ebp
 	ret
@@ -249,7 +238,6 @@ open_port:
 close_port:
 	push ebp
 	mov ebp, esp
-	pass_arguments 1
 	call CLOSE_PORT : 0x00000000
 	pop ebp
 	ret
@@ -257,7 +245,6 @@ close_port:
 set_port_perm:
 	push ebp
 	mov ebp, esp
-	pass_arguments 2
 	call SET_PORT_PERM : 0x00000000
 	pop ebp
 	ret
@@ -265,7 +252,6 @@ set_port_perm:
 set_port_mode:
 	push ebp
 	mov ebp, esp
-	pass_arguments 3
 	call SET_PORT_MODE : 0x00000000
 	pop ebp
 	ret
@@ -273,7 +259,6 @@ set_port_mode:
 send_msg:
 	push ebp
 	mov ebp, esp
-	pass_arguments 3
 	call SEND_MSG : 0x00000000
 	pop ebp
 	ret
@@ -281,7 +266,6 @@ send_msg:
 get_msg:
 	push ebp
 	mov ebp, esp
-	pass_arguments 3
 	call GET_MSG : 0x00000000
 	pop ebp
 	ret
@@ -289,7 +273,6 @@ get_msg:
 get_msg_count:
 	push ebp
 	mov ebp, esp
-	pass_arguments 1
 	call GET_MSG_COUNT : 0x00000000
 	pop ebp
 	ret
@@ -305,7 +288,6 @@ get_msgs:
 get_msg_counts:
 	push ebp
 	mov ebp, esp
-	pass_arguments 3
 	call GET_MSG_COUNTS : 0x00000000
 	pop ebp
 	ret
@@ -321,7 +303,6 @@ share_mem:
 claim_mem:
 	push ebp
 	mov ebp, esp
-	pass_arguments 1
 	call CLAIM_MEM : 0x00000000
 	pop ebp
 	ret
@@ -345,7 +326,6 @@ write_mem:
 pass_mem:
 	push ebp
 	mov ebp, esp
-	pass_arguments 2
 	call PASS_MEM :	 0x00000000
 	pop ebp
 	ret
@@ -353,7 +333,6 @@ pass_mem:
 mem_size:
 	push ebp		
 	mov ebp, esp
-	pass_arguments 1
 	call MEM_SIZE : 0x00000000
 	pop ebp
 	ret
@@ -368,7 +347,6 @@ pop_int:
 push_int:
 	push ebp
 	mov ebp, esp
-	pass_arguments 1
 	call POP_INT : 0x00000000
 	pop ebp
 	ret
@@ -383,7 +361,6 @@ resume_int:
 grant_page_mk:
 	push ebp
 	mov ebp, esp
-	pass_arguments 1
 	call GRANT_PAGE_MK : 0x00000000
 	pop ebp
 	ret
@@ -399,7 +376,6 @@ last_error:
 ttrace_begin:
 	push ebp
 	mov ebp, esp
-	pass_arguments 2
 	call TTRACE_BEGIN : 0x00000000
 	pop ebp
 	ret
@@ -407,7 +383,6 @@ ttrace_begin:
 ttrace_end:
     push ebp
 	mov ebp, esp
-	pass_arguments 2
 	call TTRACE_END : 0x00000000
 	pop ebp
 	ret
@@ -439,7 +414,6 @@ ttrace_mem_write:
 evt_set_listener:
 	push ebp
 	mov ebp, esp
-	pass_arguments 3
 	call EVT_SET_LISTENER : 0x00000000
 	pop ebp
 	ret	
@@ -447,7 +421,6 @@ evt_set_listener:
 evt_wait:
 	push ebp
 	mov ebp, esp
-	pass_arguments 3
 	call EVT_WAIT : 0x00000000
 	pop ebp
 	ret
@@ -455,7 +428,6 @@ evt_wait:
 evt_disable:
 	push ebp
 	mov ebp, esp
-	pass_arguments 3
 	call EVT_DISABLE : 0x00000000
 	pop ebp
 	ret

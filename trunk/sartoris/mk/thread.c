@@ -21,9 +21,10 @@
 #include "sartoris/error.h"
 #include "sartoris/events.h"
 #include "sartoris/permissions.h"
+#include <sartoris/syscall.h>
 
 /* used on destroy thread */
-int destroy_int_handler(int number, int thread);
+int ARCH_FUNC_ATT2 destroy_int_handler(int number, int thread);
 
 /* We need need this for gcc to compile */
 void *memcpy( void *to, const void *from, int count )
@@ -38,7 +39,7 @@ void *memcpy( void *to, const void *from, int count )
 }
 
 /* multi-threding implementation */
-int create_thread(int id, struct thread *thr) 
+int ARCH_FUNC_ATT2 create_thread(int id, struct thread *thr) 
 {
 	struct thread cached_thr, *thread;
 	struct task *task;
@@ -140,7 +141,7 @@ int create_thread(int id, struct thread *thr)
 	return result;
 }
 
-int destroy_thread(int id) 
+int ARCH_FUNC_ATT1 destroy_thread(int id) 
 {
 	int i, x;
 	int result;
@@ -198,7 +199,7 @@ int destroy_thread(int id)
 	return result;
 }
 
-int run_thread(int id) 
+int ARCH_FUNC_ATT1 run_thread(int id) 
 {
 	int x, res, hint;
 	int prev_curr_thread;
@@ -221,7 +222,7 @@ int run_thread(int id)
     
     if(handling_int[id] != MAX_IRQ)
     {        
-        bprintf("SARTORIS: Attempt to run a thread handling an int.\n");
+        bprintf("SARTORIS: Attempt to run a thread handling an int. thr: %i ctask: %i cthr: %i\n", id, curr_task, curr_thread);
     }
 
     if (0 <= id && id < MAX_THR && TST_PTR(id,thr) && handling_int[id] == MAX_IRQ)
@@ -315,7 +316,7 @@ int run_thread(int id)
 Software interrupt. This allows runing a thread within a given stack starting at a specific eip.
 If stack is null current thread stack will be used.
 */
-int run_thread_int(int id, void *eip, void *stack)
+int ARCH_FUNC_ATT3 run_thread_int(int id, void *eip, void *stack)
 {
 	int x, res;
 	int prev_curr_thread;
@@ -404,7 +405,7 @@ int run_thread_int(int id, void *eip, void *stack)
 	return result;
 }
 
-int set_thread_run_perms(int thr_id, struct permissions *perms)
+int ARCH_FUNC_ATT2 set_thread_run_perms(int thr_id, struct permissions *perms)
 {
     struct thread *thread;
     struct permissions prm;
@@ -460,7 +461,7 @@ int set_thread_run_perms(int thr_id, struct permissions *perms)
 	return result;
 }
 
-int set_thread_run_mode(int thr_id, int priv, enum usage_mode mode) 
+int ARCH_FUNC_ATT3 set_thread_run_mode(int thr_id, int priv, enum usage_mode mode) 
 {
 	int x, result;
 	struct thread *thread;
@@ -503,13 +504,13 @@ int set_thread_run_mode(int thr_id, int priv, enum usage_mode mode)
 	return result;
 }
 
-int get_current_thread(void) 
+int ARCH_FUNC_ATT0 get_current_thread() 
 {
     set_error(SERR_OK);
     return curr_thread;
 }
 
-void idle_cpu()
+void ARCH_FUNC_ATT0 idle_cpu()
 {
     arch_idle_cpu();
 }

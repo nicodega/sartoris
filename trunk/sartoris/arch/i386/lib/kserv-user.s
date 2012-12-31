@@ -53,7 +53,6 @@ get_current_task:
 set_thread_run_mode:	
 	push ebp
 	mov ebp, esp
-	pass_arguments 3
 	call SET_THREAD_RUN_MODE : 0x00000000
 	pop ebp
 	ret
@@ -61,7 +60,6 @@ set_thread_run_mode:
 run_thread:
 	push ebp
 	mov ebp, esp
-	pass_arguments 1
 	call RUN_THREAD : 0x00000000
 	pop ebp
 	ret
@@ -76,7 +74,6 @@ get_current_thread:
 open_port:
 	push ebp
 	mov ebp, esp
-	pass_arguments 3
 	call OPEN_PORT : 0x00000000
 	pop ebp
 	ret
@@ -84,7 +81,6 @@ open_port:
 close_port:
 	push ebp
 	mov ebp, esp
-	pass_arguments 1
 	call CLOSE_PORT : 0x00000000
 	pop ebp
 	ret
@@ -92,7 +88,6 @@ close_port:
 set_port_perm:
 	push ebp
 	mov ebp, esp
-	pass_arguments 2
 	call SET_PORT_PERM : 0x00000000
 	pop ebp
 	ret
@@ -100,7 +95,6 @@ set_port_perm:
 set_port_mode:
 	push ebp
 	mov ebp, esp
-	pass_arguments 3
 	call SET_PORT_MODE : 0x00000000
 	pop ebp
 	ret
@@ -108,7 +102,6 @@ set_port_mode:
 send_msg:
 	push ebp
 	mov ebp, esp
-	pass_arguments 3
 	call SEND_MSG : 0x00000000
 	pop ebp
 	ret
@@ -116,7 +109,6 @@ send_msg:
 get_msg:
 	push ebp
 	mov ebp, esp
-	pass_arguments 3
 	call GET_MSG : 0x00000000
 	pop ebp
 	ret
@@ -124,7 +116,6 @@ get_msg:
 get_msg_count:
 	push ebp
 	mov ebp, esp
-	pass_arguments 1
 	call GET_MSG_COUNT : 0x00000000
 	pop ebp
 	ret
@@ -140,7 +131,6 @@ get_msgs:
 get_msg_counts:
 	push ebp
 	mov ebp, esp
-	pass_arguments 3
 	call GET_MSG_COUNTS : 0x00000000
 	pop ebp
 	ret
@@ -156,7 +146,6 @@ share_mem:
 claim_mem:
 	push ebp
 	mov ebp, esp
-	pass_arguments 1
 	call CLAIM_MEM : 0x00000000
 	pop ebp
 	ret
@@ -180,7 +169,6 @@ write_mem:
 pass_mem:
 	push ebp
 	mov ebp, esp
-	pass_arguments 2
 	call PASS_MEM :	 0x00000000
 	pop ebp
 	ret
@@ -188,7 +176,6 @@ pass_mem:
 mem_size:
 	push ebp		
 	mov ebp, esp
-	pass_arguments 1
 	call MEM_SIZE : 0x00000000
 	pop ebp
 	ret

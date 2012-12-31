@@ -18,9 +18,10 @@
 #include <sartoris/critical-section.h>
 #include "sartoris/kernel-data.h"
 #include "sartoris/error.h"
+#include <sartoris/syscall.h>
 
 /* paging implementation */
-int grant_page_mk(void *physical)
+int ARCH_FUNC_ATT1 grant_page_mk(void *physical)
 {
 	int ret = FAILURE;
 #ifdef PAGING
@@ -62,7 +63,7 @@ int grant_page_mk(void *physical)
 	return ret;
 }
 
-int page_in(int task, void *linear, void *physical, int level, int attrib) 
+int ARCH_FUNC_ATT5 page_in(int task, void *linear, void *physical, int level, int attrib) 
 {
 #ifndef PAGING
     set_error(SERR_NO_PAGING);
@@ -105,7 +106,7 @@ int page_in(int task, void *linear, void *physical, int level, int attrib)
 #endif
 }
 
-int page_out(int task, void *linear, int level) {
+int ARCH_FUNC_ATT3 page_out(int task, void *linear, int level) {
 #ifndef PAGING
     set_error(SERR_NO_PAGING);
     return FAILURE;
@@ -147,7 +148,7 @@ int page_out(int task, void *linear, int level) {
 #endif
 }
 
-int flush_tlb() {
+int ARCH_FUNC_ATT0 flush_tlb() {
 #ifdef PAGING
     set_error(SERR_OK);
     return arch_flush_tlb();
@@ -157,7 +158,7 @@ int flush_tlb() {
 #endif
 }
 
-int get_page_fault(struct page_fault *pf) 
+int ARCH_FUNC_ATT1 get_page_fault(struct page_fault *pf) 
 {
 	int result;
 	int x;

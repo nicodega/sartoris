@@ -26,7 +26,9 @@
 #include "lib/shared-mem.h"
 #include "lib/bitops.h"
 #include "lib/salloc.h"
+#include "lib/dynmem.h"
 #include <sartoris/critical-section.h>
+#include <sartoris/syscall.h>
 
 #ifdef _METRICS_
 #include "sartoris/metrics.h"

@@ -41,7 +41,7 @@ Message event:
 If the port is full the interrupt will be raised twice. If the port is still full after the second interrupt, the event will be ignored.
 */
 
-int evt_set_listener(int thread, int port, int interrupt)
+int ARCH_FUNC_ATT3 evt_set_listener(int thread, int port, int interrupt)
 {
     // check the thread belongs to the current task.
     // check the int is not an IRQ and is not mapped already
@@ -120,7 +120,7 @@ int evt_set_listener(int thread, int port, int interrupt)
     return result;
 }
 
-int evt_wait(int id, int evt, int evt_param)
+int ARCH_FUNC_ATT3 evt_wait(int id, int evt, int evt_param)
 {
     int result = FAILURE, x, i;
     struct task *tsk = NULL;
@@ -263,7 +263,7 @@ int evt_wait(int id, int evt, int evt_param)
     return result;
 }
 
-int evt_disable(int id, int evt, int evt_param)
+int ARCH_FUNC_ATT3 evt_disable(int id, int evt, int evt_param)
 {
     int result = FAILURE, x;
     struct task *tsk = NULL;
@@ -360,7 +360,7 @@ Internal function, assumes the object represented by id is alive
 and we are on an atomic block.
 IMPORTANT: This function might brake atomicity.
 */
-void evt_raise(int id, int evt, int evt_param)
+void ARCH_FUNC_ATT3 evt_raise(int id, int evt, int evt_param)
 {
     struct evt_msg msg;
     struct task *tsk = NULL;

@@ -23,7 +23,6 @@ struct sartoris_metrics
 };
 
 void initialize_metrics();
-int get_metrics(struct sartoris_metrics *m);
 
 extern struct sartoris_metrics metrics;
 #endif

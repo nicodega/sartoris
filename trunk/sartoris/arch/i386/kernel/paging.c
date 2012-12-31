@@ -15,6 +15,7 @@
 #include "lib/indexing.h"
 #include "lib/containers.h"
 #include "sartoris/critical-section.h"
+#include "sartoris/syscall.h"
 
 #include "sartoris/scr-print.h"
 
@@ -110,7 +111,7 @@ void init_paging()
 	/* Last 64Kb will be mapped to bootinfo structure left by the loader */
 	for (i=0; i < INIT_PAGES - BOOTINFO_PAGES; i++)
 	{		
-		if(page_in(INIT_TASK_NUM, linear, physical, 2, PGATT_WRITE_ENA) == FAILURE)
+		if(page_in(INIT_TASK_NUM, (void*)linear, (void*)physical, 2, PGATT_WRITE_ENA) == FAILURE)
 		{
 			k_scr_print("Paging.c: Failed mapping Init image",0x7);
 			for(;;);
@@ -125,7 +126,7 @@ void init_paging()
 	/* Map bootinfo */
 	for (i=0; i < BOOTINFO_PAGES; i++) 
 	{		
-		if(page_in(INIT_TASK_NUM, linear, physical, 2, PGATT_WRITE_ENA) == FAILURE)
+		if(page_in(INIT_TASK_NUM, (void*)linear, (void*)physical, 2, PGATT_WRITE_ENA) == FAILURE)
 		{
 			k_scr_print("Paging.c: Failed mapping BootInfo and MMAP",0x7);
 			for(;;);

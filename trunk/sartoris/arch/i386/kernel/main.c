@@ -16,7 +16,7 @@
 #include "descriptor.h"
 #include "paging.h"
 #include "caps.h"
-
+#include <sartoris/syscall.h>
 #include "sartoris/scr-print.h"
 
 /* init_cpu initializes de system gdt (desc 0-3 are system desc: [dummy, 
@@ -25,6 +25,8 @@
 
 void create_init_task(void);
 void create_syscall_gates(void);
+void arch_init_global_tss();
+void arch_init_interrupts();
 
 void arch_init_cpu(void) 
 {	
@@ -41,7 +43,7 @@ void arch_init_cpu(void)
 	arch_caps_init();
 	
 	/* idt initialization                                 */
-	init_interrupts();
+	arch_init_interrupts();
 
 	/* Initialize global tss                              */
 	arch_init_global_tss();
@@ -156,7 +158,7 @@ void create_init_task()
 	thr.invoke_level = 1;
 	thr.ep = 0x00000000;
 	thr.stack = (void*)(INIT_SIZE - BOOTINFO_SIZE - 0x4); // remember bootinfo is mapped at the end of INIT image
-
+		
 	if (create_task(INIT_TASK_NUM, &tsk) < 0) 
 	{
 		k_scr_print("INIT TASK CREATION FAILED\n", 0x4);

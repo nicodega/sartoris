@@ -18,12 +18,13 @@
 #include "sartoris/kernel-data.h"
 #include "sartoris/error.h"
 #include "sartoris/syscall.h"
+#include "sartoris/events.h"
 
 /* interrupt management implementation */
 extern unsigned int exc_error_code; // it's defined on arch interrupt.c
 extern void *exc_int_addr;   // it's defined on arch interrupt.c
 
-int create_int_handler(int number, int thread_id, int nesting, int priority) 
+int ARCH_FUNC_ATT4 create_int_handler(int number, int thread_id, int nesting, int priority) 
 {
     int x;
     int result;	
@@ -69,7 +70,7 @@ int create_int_handler(int number, int thread_id, int nesting, int priority)
     return result;
 }
 
-int destroy_int_handler(int number, int thread) 
+int ARCH_FUNC_ATT2 destroy_int_handler(int number, int thread) 
 {
     int x;
     int result;
@@ -243,7 +244,7 @@ void handle_int(int number)
     }
 }
 
-int ret_from_int(void) 
+int ARCH_FUNC_ATT0 ret_from_int() 
 {
     int x;
     int result;
@@ -257,7 +258,7 @@ int ret_from_int(void)
     if(arch_is_soft_int() || handling_int[curr_thread] == MAX_IRQ)
     {
         mk_leave(x);
-        return;
+        return SUCCESS;
     }
 
     if (int_stack_count > 0 && handling_int[curr_thread] == int_stack_first) 
@@ -307,7 +308,7 @@ int ret_from_int(void)
     return result;
 }
 
-int get_last_int(unsigned int *error_code) 
+int ARCH_FUNC_ATT1 get_last_int(unsigned int *error_code) 
 {
     if(error_code != NULL && VALIDATE_PTR(error_code))
          *((unsigned int*)MAKE_KRN_PTR(error_code)) = exc_error_code;
@@ -315,7 +316,7 @@ int get_last_int(unsigned int *error_code)
     return last_int;
 }
 
-void *get_last_int_addr() 
+void * ARCH_FUNC_ATT0 get_last_int_addr() 
 {
     set_error(SERR_OK);
     return exc_int_addr;
@@ -323,7 +324,7 @@ void *get_last_int_addr()
 
 /* remove a nested int from the stack, but keep it active.
 NOTE: This function should be called only from a non nesting interrupt. */
-int pop_int()
+int ARCH_FUNC_ATT0 pop_int()
 {
 	int x;
 	int result;
@@ -367,7 +368,7 @@ int pop_int()
 /* Insert a nested int on the stack.
 NOTE: This function should be called only from a non nesting interrupt for an already
 poped interrupt. */
-int push_int(int number)
+int ARCH_FUNC_ATT1 push_int(int number)
 {
 	int x, h, hint;
 	int result;
@@ -455,7 +456,7 @@ int push_int(int number)
 /* This will continue execution for the first interrupt on the int stack
 or the stack_first_thread if there was no int.
 NOTE: This function should be called only from a non nesting interrupt. */ 
-int resume_int() 
+int ARCH_FUNC_ATT0 resume_int() 
 {         
     int x, hint;         
     int result;         

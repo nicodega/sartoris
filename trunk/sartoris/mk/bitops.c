@@ -10,9 +10,6 @@
 
 #include "lib/bitops.h"
 
-/* these functions assume the params are valid */
-#define UNIT (sizeof(unsigned int) * 8-1)
-
 /*
 Get the bit at position "pos" on the bitmap.
 */
@@ -33,18 +30,15 @@ void setbit(unsigned int *array, int pos, int value)
 }
 
 /*
-Get the array position of the bit.
-*/
-inline int getbit_pos(int pos) 
-{
-    return pos / UNIT;
-}
-
-/*
 Set the value of the bit at "pos" but considering 
 we only have the array starting at offset available.
 */
 int getbit_off(unsigned int *array, int offset, int pos) 
 {
     return (array[pos / UNIT - offset] >> (UNIT - pos % UNIT)) & 1;
+}
+
+inline int getbit_pos(int pos) 
+{
+    return pos / UNIT;
 }

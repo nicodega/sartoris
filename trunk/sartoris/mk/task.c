@@ -19,10 +19,15 @@
 #include "sartoris/error.h"
 #include "sartoris/kernel-data.h"
 #include <sartoris/critical-section.h>
+#include <sartoris/syscall.h>
+
+#ifndef ARCH_FUNC_ATT2
+asd
+#endif 
 
 int counter = 0;
 /* multi-tasking implementation */
-int create_task(int id, struct task *tsk) 
+int ARCH_FUNC_ATT2 create_task(int id, struct task *tsk) 
 {
 	void *cached_mem_adr;
 	unsigned int cached_size, i;
@@ -138,11 +143,11 @@ int create_task(int id, struct task *tsk)
 	return result;
 }
 
-int init_task(int task, int *start, unsigned int size)
+int ARCH_FUNC_ATT3 init_task(int task, int *start, unsigned int size)
 {
 	struct task *stask = NULL;
 	int x = mk_enter(), result = FAILURE;
-	    
+	
 	/*
 	NEW: We MUST check task is created and alive.
 	*/
@@ -223,7 +228,7 @@ int init_task(int task, int *start, unsigned int size)
 	return result;
 }
 
-int destroy_task(int id) 
+int ARCH_FUNC_ATT1 destroy_task(int id) 
 { 
 	struct task *tsk;
 	int x;
@@ -280,7 +285,7 @@ int destroy_task(int id)
 	return result;
 }
 
-int get_current_task(void) 
+int ARCH_FUNC_ATT0 get_current_task() 
 {
     set_error(SERR_OK);
 	return curr_task;
