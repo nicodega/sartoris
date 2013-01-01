@@ -119,7 +119,6 @@ void loader_init(ADDR init_image_laddress)
 	}
 }
 
-// slot_size MUST be a 4k multiple
 // Creates a system service, based on the initfs image.
 // Returns address of first page assigned to the task.
 ADDR create_service(UINT16 task, UINT16 thread, INT32 invoke_level, UINT32 size, BOOL low_mem, BOOL load_all, BOOL isld, char *image_name)
