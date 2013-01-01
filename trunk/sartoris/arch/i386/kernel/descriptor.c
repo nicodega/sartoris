@@ -127,8 +127,11 @@ int init_tss_desc()
 
 void hook_syscall(int num, int dpl, void *ep, unsigned int nparams) 
 {
-	if(nparams <= 3)
+	if(nparams < 3)
 		nparams = 0;
+	else 
+		nparams -= 3; // first three params on this architecture are sent on eax, edx, ecx
+	
 	gdt[GDT_SYSCALL+num].dword0 = (KRN_CODE << 16) | (((unsigned int)ep) & 0xffff);
 	gdt[GDT_SYSCALL+num].dword1 = (((unsigned int)ep) & 0xffff0000) | 0x8c00 | (nparams & 0x1f) | DESC_DPL(dpl);
 }

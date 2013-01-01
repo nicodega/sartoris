@@ -1,7 +1,4 @@
 bits 32
-
-	;; this is horrible, and will have to be updated.
-	;; consider passing arguments using registers the next time.
 	
 extern create_task
 global create_task_c
@@ -184,8 +181,7 @@ extern stack_unwind_syscall
 %endmacro
 
 ; remeber to change hook_syscall params -=3
-%macro fast4_syscall_def 1
-xchg bx,bx
+%macro fast5_syscall_def 1
 	push ecx
 	push edx
 	push eax
@@ -199,14 +195,15 @@ xchg bx,bx
 	mov eax, 0x10
 	mov ds, eax
 	mov es, eax 
-	mov eax, 36			; eip, cs far call, reg params, count, ebp, segments
-	push dword [ebp+eax]
-	add ebp, 8          ; add param count, ebp pushes
-	mov ecx, dword [ebp+8]
+	mov eax, 28			; eip, cs far call, reg params, count, ebp
+	push dword [ebp+eax+4] ; push param 5 on stack
+	push dword [ebp+eax]   ; push param 4 on stack
+	add ebp, 8          ; add param count, ebp 
+	mov ecx, dword [ebp+8]	; restore reg params pushed
 	mov edx, dword [ebp+4]
 	mov eax, dword [ebp]	
 	call %1			    ; make call	
-	pop ecx				; remove fourth param
+	add esp, 8			; remove params
 	pop es				; back to userland
 	pop ds
     pop ebp		
@@ -214,7 +211,39 @@ xchg bx,bx
 	pop ecx
 	shl ecx, 2
 	add esp, ecx		; free stack space
-	retf
+	retf 8				; remove 2 params on ret
+%endmacro
+
+%macro fast4_syscall_def 1
+	push ecx
+	push edx
+	push eax
+	push dword 3
+	call stack_winding_syscall		   
+	push ebp
+	mov ebp, esp		 
+	add ebp, eax
+    push ds				; switch to kernel space
+	push es
+	mov eax, 0x10
+	mov ds, eax
+	mov es, eax 
+	mov eax, 28			; eip, cs far call, reg params, count, ebp
+	push dword [ebp+eax]   ; push param 4 on stack
+	add ebp, 8          ; add param count, ebp 
+	mov ecx, dword [ebp+8]	; restore reg params pushed
+	mov edx, dword [ebp+4]
+	mov eax, dword [ebp]	
+	call %1			    ; make call	
+	add esp, 4			; remove param
+	pop es				; back to userland
+	pop ds
+    pop ebp		
+    call stack_unwind_syscall
+	pop ecx
+	shl ecx, 2
+	add esp, ecx		; free stack space
+	retf 4				; remove 1 param on ret
 %endmacro
 
 %macro reg3_syscall_def 1
@@ -331,7 +360,7 @@ get_current_thread_c:
 	;; paging
 
 page_in_c:
-	syscall_def 5, page_in
+	fast5_syscall_def page_in
 
 page_out_c:
 	reg3_syscall_def page_out
@@ -348,7 +377,7 @@ grant_page_mk_c:
 	;; interrupt handling
 
 create_int_handler_c:
-	syscall_def 4, create_int_handler
+	fast4_syscall_def create_int_handler
 
 destroy_int_handler_c:
 	reg2_syscall_def destroy_int_handler
@@ -402,7 +431,7 @@ get_msg_count_c:
 	reg1_syscall_def get_msg_count
 
 get_msgs_c:
-	syscall_def 4, get_msgs
+	fast4_syscall_def get_msgs
 
 get_msg_counts_c:
 	reg3_syscall_def get_msg_counts
@@ -410,16 +439,16 @@ get_msg_counts_c:
 	;; memory sharing
 	
 share_mem_c:
-	syscall_def 4, share_mem
+	fast4_syscall_def share_mem
 
 claim_mem_c:
 	reg1_syscall_def claim_mem
 
 read_mem_c:
-	syscall_def 4, read_mem
+	fast4_syscall_def read_mem
 
 write_mem_c:
-	syscall_def 4, write_mem
+	fast4_syscall_def write_mem
 
 pass_mem_c:
 	reg2_syscall_def pass_mem
@@ -461,13 +490,13 @@ ttrace_end_c:
     reg2_syscall_def ttrace_end
 
 ttrace_reg_c:
-    syscall_def 4, ttrace_reg
+    fast4_syscall_def ttrace_reg
 
 ttrace_mem_read_c:
-    syscall_def 4, ttrace_mem_read
+    fast4_syscall_def ttrace_mem_read
 
 ttrace_mem_write_c:
-    syscall_def 4, ttrace_mem_write
+    fast4_syscall_def ttrace_mem_write
 
 evt_set_listener_c:
     reg3_syscall_def evt_set_listener
@@ -484,41 +513,6 @@ evt_disable_c:
 get_metrics_c:
 	reg1_syscall_def get_metrics
 %endif	
-		
-do_syscall:
-    ;; eax has how many bytes we must skip on the stack (because of the winding and param count push)
-	push ebp
-	mov ebp, esp
-
-    push ebx
-	push ds				; switch to kernel space
-	push es
-	mov ebx, 0x10
-	mov ds, ebx
-	mov es, ebx
-    
-    add eax, ebp        ; now eax points to the last parameter
-
-	push esi
-	mov esi, edx		; save parameter count
-	
-pass_argument:
-
-	sub edx, 1
-	push dword [eax+edx*4+16]	; pass edx arguments (16 = eip, eip far call, cs far call)
-	jnz pass_argument
-		
-	call ecx			; make call
-	
-	shl esi, 2
-	add esp, esi		; free stack space
-	
-	pop esi
-	pop es				; back to userland
-	pop ds
-    pop ebx
-	pop ebp
-	ret
 
 do_syscall_no_args:
 	push ds				; switch to kernel space

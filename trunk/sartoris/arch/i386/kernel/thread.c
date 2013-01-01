@@ -15,6 +15,7 @@
 #include "tss.h"
 #include "descriptor.h"
 #include "paging.h"
+#include "reg-calls.h"
 
 
 extern struct tss thr_tss[MAX_THR];  
@@ -45,7 +46,7 @@ int arch_destroy_thread(int id, struct thread* thr)
 	return 0;
 }
 
-int arch_run_thread(int id)
+int ARCH_FUNC_ATT1 arch_run_thread(int id)
 {
 	int tsk_num;
 	unsigned int tsk_sel[2];
@@ -76,7 +77,7 @@ int arch_run_thread(int id)
 }
 
 
-int arch_run_thread_int(int id, void *eip, void *stack)
+int ARCH_FUNC_ATT3 arch_run_thread_int(int id, void *eip, void *stack)
 {
 	int tsk_num;
 	unsigned int tsk_sel[2];

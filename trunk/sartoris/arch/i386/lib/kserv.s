@@ -5,14 +5,6 @@ bits 32
 ;; On the Intel 386, the `regparm' attribute causes the compiler to
 ;; pass up to NUMBER integer arguments in registers EAX, EDX, and ECX
 
-%macro pass_arguments 1
-	mov ecx, %1
-%%next:
-	sub ecx, 1
-	push dword [ebp+4*ecx+8]
-	jnz %%next
-	
-%endmacro
 	
 global init_task
 global create_task
@@ -165,7 +157,8 @@ idle_cpu:
 page_in:
 	push ebp
 	mov ebp, esp
-	pass_arguments 5
+	push dword [ebp+12]
+	push dword [ebp+8]
 	call PAGE_IN : 0x0000000
 	pop ebp
 	ret
@@ -194,7 +187,7 @@ get_page_fault:
 create_int_handler:
 	push ebp
 	mov ebp, esp
-	pass_arguments 4
+	push dword [ebp+8]
 	call CREATE_INT_HANDLER : 0x00000000
 	pop ebp
 	ret
@@ -280,7 +273,7 @@ get_msg_count:
 get_msgs:
 	push ebp
 	mov ebp, esp
-	pass_arguments 4
+	push dword [ebp+8]
 	call GET_MSGS : 0x00000000
 	pop ebp
 	ret
@@ -295,7 +288,7 @@ get_msg_counts:
 share_mem:
 	push ebp
 	mov ebp, esp
-	pass_arguments 4
+	push dword [ebp+8]
 	call SHARE_MEM : 0x00000000
 	pop ebp
 	ret
@@ -310,7 +303,7 @@ claim_mem:
 read_mem:	
 	push ebp
 	mov ebp, esp
-	pass_arguments 4
+	push dword [ebp+8]
 	call READ_MEM : 0x00000000
 	pop ebp
 	ret
@@ -318,7 +311,7 @@ read_mem:
 write_mem:
 	push ebp
 	mov ebp, esp
-	pass_arguments 4
+	push dword [ebp+8]
 	call WRITE_MEM : 0x00000000
 	pop ebp
 	ret
@@ -390,7 +383,7 @@ ttrace_end:
 ttrace_reg:
     push ebp
 	mov ebp, esp
-	pass_arguments 4
+	push dword [ebp+8]
 	call TTRACE_REG : 0x00000000
 	pop ebp
 	ret
@@ -398,7 +391,7 @@ ttrace_reg:
 ttrace_mem_read:
     push ebp
 	mov ebp, esp
-	pass_arguments 4
+	push dword [ebp+8]
 	call TTRACE_MEM_READ : 0x00000000
 	pop ebp
 	ret
@@ -406,7 +399,7 @@ ttrace_mem_read:
 ttrace_mem_write:
 	push ebp
 	mov ebp, esp
-	pass_arguments 4
+	push dword [ebp+8]
 	call TTRACE_MEM_WRITE : 0x00000000
 	pop ebp
 	ret

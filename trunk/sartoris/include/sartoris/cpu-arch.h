@@ -16,6 +16,7 @@
 #define CPUARCH
 
 #include <sartoris/kernel.h>
+#include <reg-calls.h>
 #include <cpu-arch-inline.h>
 #include "lib/containers.h"
 
@@ -26,8 +27,8 @@ int arch_destroy_task(int id);
 
 int arch_create_thread(int id, int priv, struct thread *thr);
 int arch_destroy_thread(int id, struct thread* thr);
-int arch_run_thread(int id);
-int arch_run_thread_int(int id, void *eip, void *stack);
+int ARCH_FUNC_ATT1 arch_run_thread(int id);
+int ARCH_FUNC_ATT3 arch_run_thread_int(int id, void *eip, void *stack);
 int arch_is_soft_int();
 
 int arch_create_int_handler(int number);

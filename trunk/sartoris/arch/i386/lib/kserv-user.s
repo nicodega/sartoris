@@ -123,7 +123,7 @@ get_msg_count:
 get_msgs:
 	push ebp
 	mov ebp, esp
-	pass_arguments 4
+	push dword [ebp+8]
 	call GET_MSGS : 0x00000000
 	pop ebp
 	ret
@@ -138,7 +138,7 @@ get_msg_counts:
 share_mem:
 	push ebp
 	mov ebp, esp
-	pass_arguments 4
+	push dword [ebp+8]
 	call SHARE_MEM : 0x00000000
 	pop ebp
 	ret
@@ -153,7 +153,7 @@ claim_mem:
 read_mem:	
 	push ebp
 	mov ebp, esp
-	pass_arguments 4
+	push dword [ebp+8]
 	call READ_MEM : 0x00000000
 	pop ebp
 	ret
@@ -161,7 +161,7 @@ read_mem:
 write_mem:
 	push ebp
 	mov ebp, esp
-	pass_arguments 4
+	push dword [ebp+8]
 	call WRITE_MEM : 0x00000000
 	pop ebp
 	ret
@@ -190,7 +190,7 @@ last_error:
 ttrace_reg:
     push ebp
 	mov ebp, esp
-	pass_arguments 4
+	push dword [ebp+8]
 	call TTRACE_REG : 0x00000000
 	pop ebp
 	ret
@@ -198,7 +198,7 @@ ttrace_reg:
 ttrace_mem_read:
     push ebp
 	mov ebp, esp
-	pass_arguments 4
+	push dword [ebp+8]
 	call TTRACE_MEM_READ : 0x00000000
 	pop ebp
 	ret
@@ -206,7 +206,7 @@ ttrace_mem_read:
 ttrace_mem_write:
 	push ebp
 	mov ebp, esp
-	pass_arguments 4
+	push dword [ebp+8]
 	call TTRACE_MEM_WRITE : 0x00000000
 	pop ebp
 	ret
