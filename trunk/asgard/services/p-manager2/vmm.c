@@ -71,15 +71,15 @@ INT32 vmm_init(struct multiboot_info *multiboot, UINT32 ignore_start, UINT32 ign
     ignore_e = PHYSICAL2LINEAR(ignore_end);
 	ignored = 0;
 
-	pman_print("Calculating memory...");
+	pman_print_dbg("Calculating memory...");
 
 	calc_mem(multiboot);
 
 	vmm.multiboot = multiboot;
 	
 	pman_print_set_color(10);
-	pman_print("VMM: ignore start %x, end %x ", ignore_start, ignore_end);
-	pman_print("VMM: linear start: %x, size: %i MB, tables: %i , phy start: %x ", vmm.vmm_start, vmm.pool_MB, vmm.vmm_tables, (UINT32)PMAN_POOL_PHYS);
+	pman_print_dbg("VMM: ignore start %x, end %x\n", ignore_start, ignore_end);
+	pman_print_dbg("VMM: linear start: %x, size: %i MB, tables: %i , phy start: %x\n", vmm.vmm_start, vmm.pool_MB, vmm.vmm_tables, (UINT32)PMAN_POOL_PHYS);
 	
 	/* 
 		We need page tables for the process manager, so we can access vmm memory 
@@ -150,7 +150,7 @@ INT32 vmm_init(struct multiboot_info *multiboot, UINT32 ignore_start, UINT32 ign
         taken_start--;
     }
 	    
-	pman_print("VMM: Taken Directory allocated. pages: %i(b16) - %i(a16), size: %x ", taken_got_b16, taken_got_a16, page_count * 0x1000);
+	pman_print_dbg("VMM: Taken Directory allocated. pages: %i(b16) - %i(a16), size: %x\n", taken_got_b16, taken_got_a16, page_count * 0x1000);
 
     /* Initialize physical memory allocator */
     pya_init(&vmm.low_pstack);
@@ -174,7 +174,7 @@ INT32 vmm_init(struct multiboot_info *multiboot, UINT32 ignore_start, UINT32 ign
          	ignored++;
     }
 
-	pman_print("VMM: Loaded low stack, total: %i, ignored: %i, pushed: %i ", lo_page_count, ignored, lo_page_count - ignored);
+	pman_print_dbg("VMM: Loaded low stack, total: %i, ignored: %i, pushed: %i\n", lo_page_count, ignored, lo_page_count - ignored);
 
 	/* Now load high memory pages */
 	page_count = (vmm.vmm_size >> 12) - vmm.vmm_tables - (lo_page_count + taken_got_b16) - taken_got_a16;
@@ -193,7 +193,7 @@ INT32 vmm_init(struct multiboot_info *multiboot, UINT32 ignore_start, UINT32 ign
              ignored++;
     }
 
-	pman_print("VMM: Loaded High Stack, total: %i, ignored: %i, pushed: %i ", page_count, ignored, page_count - ignored);
+	pman_print_dbg("VMM: Loaded High Stack, total: %i, ignored: %i, pushed: %i\n", page_count, ignored, page_count - ignored);
     /* Stacks have been set up, take pages for our taken structure */
 	
 	/* 
@@ -226,7 +226,7 @@ INT32 vmm_init(struct multiboot_info *multiboot, UINT32 ignore_start, UINT32 ign
 	struct mmap_entry *mbe = NULL;
 	UINT32 phy;
 	
-	pman_print("VMM: Init Finished");
+	pman_print_dbg("VMM: Init Finished\n");
 
 	return 1;
 }
