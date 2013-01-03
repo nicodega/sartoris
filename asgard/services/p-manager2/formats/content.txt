@@ -1,1 +1,0 @@
-This folder contains header files for Known structures like ELF and Multiboot.
