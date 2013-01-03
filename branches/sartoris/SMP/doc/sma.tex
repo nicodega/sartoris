@@ -1,0 +1,678 @@
+\documentclass[11pt, letterpaper, twoside, english]{book}
+
+%\topmargin  0.25in
+%\headheight 0.2in
+%\headsep    0.3in
+%\textheight 8.5in
+%\textwidth  6.0in
+%\footskip   0.7in
+
+\setlength{\parskip}{1.5ex}
+
+
+\usepackage[activeacute]{babel}
+\usepackage[dvips]{graphicx}
+\usepackage{amsfonts, amssymb}
+\pagestyle{plain}
+
+\begin{document}
+\frontmatter
+\thispagestyle{empty}
+
+\vspace*{2.5cm}
+\noindent\makebox{\begin{minipage}{\textwidth}{
+\flushright \Huge Sartoris Microkernel Architecture
+
+}
+
+\noindent\rule{\textwidth}{4pt}
+
+\noindent\flushright { \large Design concepts and implementation notes for the x86 platform. }
+
+\end{minipage}
+}
+
+\vspace{10cm}
+\noindent\makebox{\begin{minipage}{\textwidth}{
+\flushright by Santiago Bazerque and Nicol\'as de Galarreta \\[1.5ex]
+for Sartoris version 2.0.0, \today.
+
+}
+\end{minipage}
+}
+
+\newpage
+\thispagestyle{empty}
+\cleardoublepage
+
+\chapter{Abstract}
+
+The Sartoris project aim is to develop a portable policy-free microkernel that provides a simple processor abstraction, yet a powerful enough one to support a full featured operating system. Therefore, boot primitives and system calls to perform crude process creation, (shared) memory management and asynchronous message-passing are the only features directly supported by the kernel. The rest of the functionality of the operating system, including the process-manager, memory-manager, filesystems, device drivers, \ldots{} are to be implemented outside of the kernel.
+
+
+\tableofcontents
+
+\mainmatter
+
+\chapter{Microkernel design}
+
+\section{General considerations}
+Any operating system designed to run modern hardware must overcome the (rather complicated) details of the management of the central processors and their memory management units. In most processor architectures, this implies using specific machine instructions and maintaining a set of data structures in memory from which the hardware can obtain the current state of the system. Furthermore, the handling of interrupt requests and the construction and maintenance of the page tables are themselves nontrivial tasks, increasing the overall complexity of the system.
+
+Therefore, it seems reasonable to encapsulate the routines that interact directly with the processor, and that is what the Sartoris microkernel intends to do. Moreover, in order to provide a suitable abstraction to the operating system, the microkernel does not need to provide many other functions. The system calls provided by Sartoris can be grouped as follows:\footnote{Every processor architecture has unique features that must be handled in the kernel (i.e. performance monitoring hardware). A small number of architecture specific system calls will provide the necessary cpu dependent functions. }
+
+\begin{enumerate}
+\item[]\textbf{Task and thread management.} These system calls cover the creation of processor tasks and threads. Sartoris does not, however, load processes from disk or perform any scheduling of the CPU. These chores are to be performed by services running on top of the microkernel (usually, a process-manager task). Under Sartoris, an interrupt handler is just a special thread that is invoked by the microkernel every time the corresponding interrupt request line is raised. Hence, the scheduling thread may be created by binding an ordinary thread to the timer interrupt. Sartoris also provides a (privileged) way to run a thread starting at a specific pointer and an optional different stack, allowing something similar to a software interrupt on a given thread, guaranteeing when the execution of the thread "`soft interrupt"' finishes, the state of the thread will be the same as it was before it started execution (just as an interrupt).
+\item[]\textbf{Memory management.} This subsystem presents an abstracted view of the paging mechanism of the underlying processor, as well as an implementation of inter-task memory sharing through Sartoris SMOs (shared memory objects), which are chunks of binary data that can be easily accessed from multiple tasks. Again, the microkernel does not perform any paging directly (except in exceptional cases like interprocess communication, where some temporary mappings may be created and later destroyed during the execution of a system call). It just provides support for the easy creation and modification of page tables, (mostly) independently of the processor page table format and peculiarities.
+\item[]\textbf{Message passing.} The kernel provides an asynchronous messaging system, in the form of a set of ports assigned to each task. Each port functions as a mailbox where fixed-sized messages from other tasks are received. These system calls cover the creation, deletion and management of ports.
+\item[]\textbf{Thread Tracing.} This set of system calls provides a way for a task to access a given thread state while it's not running. With these system calls, the tracing task can read/write the thread registers and read/write it's memory. This functionallity could be included on the same group as "`Task and thread management"' but we consider the set of calls different enough to put them in their own group.
+\item[]\textbf{Events.} These system calls provide a way for a single system service (i.e. a service with privilege level 1) to be "`told"' when a message arrives at a given port of a task, or an interrupt is issued on a thread. This could be used by the O.S. on top to implement thread blocking based on messages or interrupts.
+\end{enumerate}
+
+\noindent{}Before each of the subsystems is further described, the main issues considered in the design will be reviewed:
+\begin{enumerate}
+\item[] The microkernel should present a simple yet effective abstraction of the processor to the operating system. The services offered by the microkernel should be clearly defined and easy to understand.
+\item[] In order to obtain effective portability, a suitable interface that encapsulates the architecture-dependent sections of the kernel code has to be defined.
+\item[] Kernel services should be provided in a policy-independent way, whenever this is possible. The design of the operating system should not be over-restricted by the underlying microkernel architecture.
+\item[] The design of the microkernel should allow an efficient implementation of the most common operating system functions, considering the inherent constraints that the microkernel architecture imposes to the system.
+\item[] A secure execution envirnoment must be provided for the operating system.
+\end{enumerate}
+
+\section{Introduction and sources organization}
+A kernel may be defined as the set of functions that it implements. The full Sartoris system call set is declared in the file \textsf{include/sartoris/syscall.h}.
+
+The architecture-independent part of the system calls implementation is contained in the files in the subdirectory \textsf{mk}. These files implement the algorithms and data structures that are independent of the platform the microkernel is being compiled for. The object files obtained from these sources have to be linked with the implementation of the low level functions for the target processor, which should be \textsf{arch/target/kernel/cpu-arch.o}, where \textsf{target} is a symlink to the desired architecture directory. The set of GNU makefiles provided with the sources takes care of the complete compile and link cycle. The low-level interface is described in section \ref{sec:lowlevelinterface}.
+
+\section{Tasks and threads}
+All the processing (even interrupt handling) in a Sartoris based system is done in the context of a task, and a thread within that task. \\
+A task is composed by a virtual address space (defined by a set of page tables) and communication mechanisms (ports and shared memory objects). It is identified uniquely by a number between zero and \textsf{MAX\_TSK}\footnote{A constant defined by the implementation}, which is the parameter \textsf{id} passed to the system call \textsf{create\_task(int id, struct task *tsk)}, \verb|*tsk| points to a structure of the following type (defined on \textsf{include/sartoris/kernel.h}): \\
+\\
+\begin{sf} \noindent struct task \{ \\
+\indent  void *mem\_adr; \\
+\indent  int size; \\
+\indent  int priv\_level; \\
+\}; \\
+\end{sf}
+\\
+\noindent 
+When Paging is disabled, \textsf{mem\_adr} indicates the physical address where this task should be placed in main memory\footnote{The organization of the tasks in physical memory is therefore under absolute control of the operating system.}, but if Paging is enabled, this field will be the desired task Base Address, and it must be greater than \textsf{MIN\_TASK\_OFFSET} defined on \textsf{kernel.h}.
+\textsf{Size} indicates the size (in bytes) of the task being created, and \textsf{priv\_level} indicates its privilege level. This number might be used by the operating system to restrict the ability to send messages to ports and to run specific threads using privilege levels. Zero is the most privileged level, and levels zero and one have a special meaning to the microkernel, because they are the only levels that can access the input$/$output space.\\
+
+In order to initialize the task memory contents (if not done directly by memory mapping using paging) sartoris provides a system call \textsf{int init\_task(int task, int *src, unsigned int size);} which will copy the contents of the current task memory pointed by \textsf{src} with the size specified by \textsf{size} to the task \textsf{task}. If paging is enabled on the microkernel, pages from the task \textsf{mem\_adr} to \textsf{size} must be paged in.\\
+
+It should be noted that System Calls to create and destroy tasks, threads and interrupt handlers are restricted to tasks running in privilege level zero. The system call \textsf{ret\_from\_int} is restricted to levels zero and one.\footnote{Notice that the numerical privilege levels used by the microkerenl are independant of those defined by the underlying processor architecture. For example, threads running with mircrokerenel privlege 0 in the x86 implementation of Sartoris are running with a processor privilege level of 1, since level 0 is being used by the microkernel itself.}
+Tasks are destroyed using the similar function \textsf{destroy\_task}, which receives the address of the task being destroyed.\\
+
+A thread is a processor state associated with a given task. The maximum amount of concurrent threads is determined by the constant \textsf{MAX\_THR}. A task might have zero, one, or more threads. Threads are created using the system call \textsf{create\_thread(int id, struct thread *thr)}. The parameter \textsf{id} is an integer that uniquely identifies each thread, and must not exceed \textsf{MAX\_THR}-1. The structure \textsf{thread} is defined as \\
+\\
+\begin{sf} \noindent struct thread \{ \\
+\indent  int task\_num; \\
+\indent  int invoke\_mode; \\
+\indent  int invoke\_level; \\
+\indent  void *ep; \\
+\indent  void *stack; \\
+\}; \\
+\end{sf}
+\\
+where \textsf{task\_num} is the task that defines the context in which this thread is to be created (which must have been already created), \textsf{ep} is this thread's entry point, \textsf{stack} is the initial stack value, and \textsf{invoke\_mode} is one of the following:
+\begin{enumerate}
+\item[] \textsf{PERM\_REQ}: In this mode, it is necessary (additionally to the privilege level constraints) to have specific authorization (obtained through the function \textsf{set\_thread\_run\_perm}) to run this thread.\footnote{Right now, on implementation for Sartoris 2, this functionallity is supported by providing a user space page with a permissions bitmap.}
+\item[] \textsf{PRIV\_LEVEL\_ONLY}: In this mode only the usual privilege level constraints are applied to the function \textsf{run\_thread} applied to this thread\footnote{see the description of the function \textsf{run\_thread} below}.
+\item[] \textsf{DISABLED}: The thread is disabled, and it can't be invoked by anyone.
+\item[] \textsf{UNRESTRICTED}: Any task can run this thread.
+\end{enumerate}
+The value of the field \textsf{invoke\_level} indicates the numerically higher privilege level that can invoke this thread. 
+
+Threads are destroyed using the \textsf{destroy\_thread} system call\footnote{It may be worth noting that the currently running thread can't destroy itself.}, and may be started (or resumed) by interrupt requests signaled to the processor, software generated interrupts, exceptions, traps and the already mentioned \textsf{run\_thread} system call.
+
+As a non-restrictive policy, the \textsf{run\_thread} system call can be used by threads running at every privilege level, but there are restrictions regarding which threads might be invoked. The target task protection mode must not be \textsf{DISABLED}, the privilege level of the invoking task must be numerically lower or equal than the \textsf{invoke\_level} of the target task, and if the protection mode of the target task is equal to \textsf{PERM\_REQ}, the invoking task must have been authorized by the target task through the function \textsf{set\_thread\_run\_perms}.
+A thread can modify it's \textsf{invoke\_mode} using the \textsf{set\_thread\_run\_mode} system call at any time. 
+       
+\section{Interrupt handlers}
+Interrupt handlers are created using the \textsf{create\_int\_handler} system call. Interrupts are executed by sartoris only if they are not already executing. This means if an interrupt is is being served and it raises again, sartoris will ignore it.\\
+
+Sartoris implements two types of interrupts:
+
+\begin{enumerate}
+\item[]\textsf{Nesting interrupts}: Nesting interrupts are pushed on an internal stack. Upon completion of interrupt service, a \textsf{nesting} interrupt handler \textbf{must} invoke \textsf{ret\_from\_int} system call, to return from the interrupt. When invoked, sartoris will switch to the first thread on the interrupt stack (if any), resuming it's execution.
+\item[]\textsf{Non-Nesting interrupts}: Non nesting interrupts are not pushed onto the interrupt stack. If an interrupt occurs on a non-nesting interrupt, upon completion of the interrupt sartoris won't go back to that interrupt, until it raises again. Because of this interrupts should be disabled when servicing a Non-Nesting interrupt.
+The only way out of a Non-Nesting interrupt is invoking the \textsf{run\_thread} system call.
+\end{enumerate} 
+
+\textbf{IMPORTANT:} When implementing an interrupt handler, it's important to note it cannot just "`ret"', for if it does, a general protection fault will raise. The only way out of an interrupt handler is though either \textsf{ret\_from\_int} or \textsf{run\_thread}.
+       
+Sartoris also implements three system calls for interrupt stack manipulation, namely:
+
+\begin{enumerate}
+\item[]\textsf{pop\_int}: Remove the interrupt at the top of the stack.
+\item[]\textsf{push\_int}: Put the given interrupt at the top of the stack.
+\item[]\textsf{resume\_int}: Resume execution of the interrupt at the top of the stack.
+\end{enumerate}
+
+This system calls might be useful for example when a page fault is to be serviced for an interrupt. The OS on top could pop the interrupt from the top of the stack, and resume execution of the interrupt now present at the top (if any), while it fetches the page. Once the page has been retrieved, it could push the interrupt back on the stack and resume it's execution.
+
+Also important, is the fact that a single thread might handle more than one interrupt. In this case, if a thread is handling an interrupt, and another interrupt handled by it raises, sartoris will not preempt the thread execution, but will prepare the new int for execution immediately after the current one is finished (i.e. the thread invokes \textsf{ret\_from\_int}).
+
+\section{Messaging system}
+The kernel provides an asynchronous inter-task message system through the \textsf{send\_msg}, \textsf{get\_msg} and \textsf{get\_msg\_count} system calls. The messages have a fixed size defined by the implementation, and the kernel guarantees that messages arrive in FIFO order, but each message queue has a maximum capacity which is also implementation-defined. When a message is sent using the function \textsf{int send\_msg(int to\_address, int port, void *msg)}, the contents of the message pointed by \textsf{msg} are copied to the queue for port number \textsf{port} of task \textsf{to\_address}. The receiving of messages is done in an analogous fashion using the function \textsf{int get\_msg(int port, void *msg, int *id)}, which removes the fist message in the supplied \textsf{port}'s queue and copies it's contents to the address \textsf{msg}. The variable \textsf{id} is used to return the id of the sender task. Both functions return 0 on success. 
+The function \textsf{int get\_msg\_count(int port)} returns the amount of messages waiting in the queue of the supplied port.
+Before a port can be usde to receive messages, it must be opened using the \textsf{open\_port} system call, setting it's protection mode (see below) and the numerically higher privilege level that can send messages to this port. When a port is closed using the \textsf{close\_port} system call, the associated message queue is flushed and the port becomes available to be used again. The amount of simultaneous ports a task can open at any given time is defined by the constant \textsf{MAX\_TSK\_OPEN\_PORTS} located in the header file \textsf{/include/sartoris/message.h}. 
+
+Creation and deletion of ports is done with the \textsf{create\_port}, \textsf{delete\_port} and \textsf{delete\_task\_ports} functions. It's important to note that the whole \textsf{msg\_container} has to be initialized with the \textsf{init\_msg} function before using any other function. Messages on ports are managed with the \textsf{empty}, \textsf{enqueue} and \textsf{dequeue} functions. All these functions are implemented in \textsf{mk/message.c}.
+
+In order to provide a secure messaging system, Sartoris defines the following port protection modes:
+\begin{enumerate}
+\item[]\textsf{PERM\_REQ}: When a port's protection mode is set to \textsf{PERM\_REQ}, a task can send messages to this port if it has been authorized through the \textsf{set\_port\_perms} system call, and it's privilege level is numerically lower or equal than the port's privilege level.
+\item[]\textsf{PRIV\_LEVEL\_ONLY}: The privilege level of the task sending the message must be numerically lower or equal than the port's privilege level.
+\item[]\textsf{DISABLED}: If a task wishes to deny access to a port, this is the protection mode it ought to have.
+The protection mode for a port can be modified using the \textsf{set\_port\_mode} system call. Permissions can be granted (or removed) to individual tasks using the \textsf{set\_port\_perm} system call.
+\item[]\textsf{UNRESTRICTED}: Any task can sen a message to this port.
+\end{enumerate} 
+
+There are also a set of messaging functions designed to avoid multiple privilege level changes which allow checking port counts and retreiving more than one message at a time, namely:
+
+\begin{enumerate}
+\item[]\textsf{get\_msgs}: Get up to \textsf{maxlen} messages from the specified port. If the port is closed while this syscall y being executed or there are no messages it'll return \textsf{0}, otherwise it'll return how many messages where read onto the specified array.
+\item[]\textsf{get\_msg\_counts}: This function will place on the \textsf{counts} array, the message count for each port on the \textsf{ports} array. If an error occurs, it'll return a negative number, if not, it'll return a value grater than \textsf{0} when there are messages on any of the specified ports or \textsf{0} if all ports are empty.
+\end{enumerate}
+
+\section{Memory management} \label{sec:memorymanagement}
+
+The address space of each task is, as was mentioned earlier, defined by a set of page tables. Even though the details of the paging subsystem vary from processor to processor (i.e. levels of indirection, exact format of a page table entry, etc.), the microkernel strives to present a simple abstraction of the paging mechanism. Again, paging operations should be directed by a process (or several processes) running on top of the microkernel, and using appropriate system calls to build and destroy the page mappings. The same function, \textsf{int page\_in(int task, void *linear, void *physical, int level, int attrib)}, is used to insert page tables and individual page entries into the page table structure of a task. The parameter \textsf{level} is used to distinguish between the former and the latter. For example, the x86 implementation of Sartoris treats level 0 as page directory, level 1 as page table and level 2 as individual page entry. Of course, this depends upon the levels of indirection implemented by the processor. The parameter \textsf{task} indicates the id of the task whose page tables are to be modified, the \textsf{linear} and \textsf{physical} pointers indicate the mapping whose creation is being requested. Finally, the parameter \textsf{attrib} supports the following attributes:
+
+\begin{enumerate}
+\item[] \textsf{PGATT\_CACHE\_DIS}: the page should be marked as cache-disabled.
+\item[] \textsf{PGATT\_WRITE\_ENA}: the page should be marked as read-write.
+\item[] \textsf{PGATT\_WRITE\_THR}: the page should be marked as write-through (i.e. don't cache writes).
+\end{enumerate}
+
+Which attributes are supported at each level depends upon the platform. Bear in mind that the page levels have to be inserted in the correct order, since the microkernel uses no intermediate structures in the construction of the page tables. For example, if the paging system has a page-directory, page-tables structure (as in the x86 processors), the directory must be inserted first, then the relevant page tables and finally the individual page entries. Destruction of mappings functions symetrically through the system call \textsf{int page\_out(int task, void *linear, int level)}. Removing a page with a given level will disable all pages with a lower level, depending on it (for example, disabling a page with level 1 on the x86 architecture, this will disable all pages on it) all and removing the page with level 0 will disable the entire address space of the task.
+
+The function \textsf{int flush\_tlb(void)} will flush any translation lookaside buffers the processor may have.\\
+
+When a page fault interrupt is raised, the OS on top can retrieve information about the last page fault using the \textsf{int get\_page\_fault(struct page\_fault *pf)} system call.\\
+The page fault structure is defined as follows:\\
+
+\begin{sf} 
+\noindent struct page\_fault \{\\
+\indent int task\_id; \\
+\indent int thread\_id; \\
+\indent void *linear; \\
+\indent int pg\_size; \\
+\indent int flags; \\
+\}; \\
+\end{sf}
+
+Where \textsf{task\_id} and \textsf{thread\_id} contains the id of the task and thread for which the page fault generated, \textsf{linear} and \textsf{pg\_size} contain the linear address where the fault occurred,and the size of the page, and \textsf{flags} contains one of the following values (defined on \textsf{kernel.h}):
+
+\begin{enumerate}
+\item[] \textsf{PF\_FLAG\_NONE}: A normal page fault interrupt (i.e. the thread belongs to the given task and it's not an interrupt from sartoris).
+\item[] \textsf{PF\_FLAG\_FREE}: See section \ref{sec:dynamicmemory}.
+\item[] \textsf{PF\_FLAG\_PG}: See section \ref{sec:dynamicmemory}.
+\item[] \textsf{PF\_FLAG\_EXT}: The page fault was raised because a thread is reading/writing from/to a Shared Memory Object from another task. This flag indicates the given thread, does not belong the task specified on the \textsf{task\_id} field.
+\end{enumerate}
+
+\subsection{Shared Memory} \label{sec:sharedmemory}
+
+The microkernel must supply a mechanism to perform memory sharing. Therefore, each task can access a set of Shared Memory Objects which allow other tasks to access its address space in a controlled way. However, there is no memory aliasing, and access is limited to reading from and writing to the shared sections using system calls that copy memory contents from one task address space to another.
+
+The system call \textsf{int share\_mem(int target\_task, void *addr, int size, int perms)} creates a SMO of size \textsf{size} words\footnote{The actual unit in which size is expressed is defined by the implementation.} at offset \textsf{addr} of the current task's address space, that can be accessed by the task\footnote{What is meant here is that it can be accessed by any thread of the corresponding task.} \textsf{target\_task}. The parameter \textsf{perms} indicates if access is granted for reading (\textsf{READ\_PERM}), writing (\textsf{WRITE\_PERM}), or both. The function returns an id number that identifies the SMO just created, or -1 in case of failure. SMOs can be destroyed using the system call \textsf{int claim\_mem(int smo\_id)} and the target task of an SMO can pass it over to another task using the system call \textsf{int pass\_mem(int smo\_id, int target\_task)}, which changes the target task to the supplied parameter.
+
+The system call \textsf{int read\_mem(int smo\_id, int off, int size, void *dest)} copies the \textsf{size} words at offset \textsf{off} of the SMO identified by \textsf{smo\_id} to the address \textsf{dest}. Conversely, the system call \textsf{int write\_mem(int smo\_id, int off, int size, void *src)} copies \textsf{size} words from address \textsf{src} from the current task's address space to offset \textsf{off} of the SMO identified by \textsf{smo\_id}. Of course, in both cases the current task must be the target task of the SMOs, and have the right permission.
+
+An SMO target task can query the SMO size using the \textsf{mem\_size} system call, which will return the size of the SMO.
+
+All the memory-sharing system calls excepting \textsf{share\_mem} return SUCCESS in case of success and FAILURE otherwise.
+
+\subsection{Dynamic Memory} \label{sec:dynamicmemory}
+
+From version \textsf{2.0.0}, Sartoris implements dynamic memory management. When enabled, memory for the microkernel structures will be partially allocated\footnote{Initially, only a predefined ammount of space will be preallocated for each type of structure.}.\\
+
+When a system call is issued to the microkernel, requesting the creation of a structure on micorkernel memory\footnote{i.e. Sending a message, creating an SMO, creating a Task/Thread or opening a port.} the microkernel will raise a Page Fault interrupt. The OS, will be able to tell if the interrupt was rised because of a sartoris memory need, by invoking \textsf{get\_page\_fault} syscall, and testing the flags member of the structure sent as a parameter for \textsf{PF\_FLAG\_PG}. When servicing a sartoris Dynamic Memory interrupt, the OS on top of Sartoris, *must* issue a \textsf{grant\_page\_mk} syscall, passing the physical address of the page granted to Sartoris. If the physical address is NULL (0), Sartoris will consider no page is available for him, and the system call which generated the need for dynamic memory will fail.\\ 
+Whenever Sartoris considers it will no longer require an allocated page, it will also rise a Page Fault interrupt, although this time the operating system will be sent a \textsf{PF\_FLAG\_FREE} value on the \textsf{flags} field, upon a call to \textsf{get\_page\_fault}. The \textbf{physical address} of the page being freed by the microkernel, will be sent on the member \textsf{linear} of the structure.\\
+
+While servicing a Dynamic Memory page fault (other than \textsf{PF\_FLAG\_FREE}) if the Operating System runs the thread which originated the need for Dynamic Memory allocation, before granting the page to Sartoris, the system call which generated the need for memory will fail (i.e. Sartoris will asume there was no memory available). Also, every call to a syscall which requires Dynamic Memory will fail (while servicing a Dynamic Memory page fault).
+
+\section{Tracing and Debugging} \label{sec:tracing}
+
+Sartoris provides a set of system calls for thread tracing/debugging all of which begin with \textsf{ttrace\_}. This system calls allow a task to inspect and modify the traced thread registers (including it\'s stack and execution pointer).\\
+
+In order to trace a thread (tracing incurrs a penalty on each system call invoked from the traced thread or each state switch the thread has to/from it), a task (with privilege 0) must invoke the \textsf{int ttrace\_begin(int thr\_id, int task\_id)} system call, where \textsf{thr\_id} must contain the id of the thread to trace, and \textsf{task\_id} must contain the task which will trace that thread. In order to disable tracing on the thread, a privilege 1 task must invoke \textsf{int ttrace\_end(int thr\_id, int task\_id)}. If the task does not kwnow which task was tracing the thread, it could set \textsf{task\_id} to -1 and tracing will end no matter what the tracing task is.\\
+
+Once tracing has been activated on a thread, it's registers and memory can be read/writen by the tracing task invoking the following system calls:
+
+\begin{enumerate}
+\item[] \textsf{int ttrace\_reg(int thr\_id, int reg, void *value, int set)}: This function will allow a task to read/write the contents of the \textsf{thr\_id} thread registrers. When \textsf{set} is set to 1, the registrer specified by \textsf{reg} will be set to \textsf{value}. If \textsf{set} is 0, the contents of the register will be set on\textsf{value}. Since registers available depend on the current architecture, the values for \textsf{reg} and data types used by \textsf{value} are defined on the architecture dependant section of the Microkernel.
+\item[] \textsf{int ttrace\_mem\_read(int thr\_id, void *src, void *dst, int size)}: This system call will allow reading \textsf{size} bytes from the thread with id \textsf{thr\_id} (must have trave enabled to the current task) from \textsf{src} to \textsf{dst}.
+\item[] \textsf{int ttrace\_mem\_write(int thr\_id, void *src, void *dst, int size)}: Same as \textsf{ttrace\_mem\_read}) but will write memory from \textsf{src} to \textsf{dst}.
+\end{enumerate}
+
+It's important to note a debugger task can write on read-only pages of the debugged process.\\
+
+\textbf{IMPORTANT:} When tracing starts for a thread, it's state won't be accesible until it's executed after \textsf{ttrace\_begin} invoke. An interrupt (int 1) will be raised once the thread is executed.\\
+
+All tracing functions except for \textsf{ttrace\_mem\_read} and \textsf{ttrace\_mem\_write} will return SUCCESS or FAILURE as it's return value.
+
+\section{Metrics} \label{sec:metrics}
+
+If sartoris is compiled with the METRICS define, it will provide the \textsf{int get\_metrics(struct sartoris\_metrics *m)} system call. \textsf{sartoris\_metrics} structure is defined as follows in \textsf{metrics.h}:\\
+\\
+\begin{sf} \noindent struct sartoris\_metrics \{ \\
+\indent unsigned int tasks;                 // Tasks created\\
+\indent unsigned int threads;               // Threads created\\
+\indent unsigned int smos;									// SMOs created (system wide)\\
+\indent unsigned int messages;							// Messages allocated. (system wide)\\
+\indent unsigned int ports;									// Ports allocated. (system wide)\\
+\indent unsigned int indexes;               // Indexes currently used\\
+\indent unsigned int allocated\_tasks;       // Tasks allocated with dynamic memory\\
+\indent unsigned int allocated\_threads;     // Threads allocated with dynamic memory\\
+\indent unsigned int allocated\_smos;        // SMOs allocated with dynamic memory\\
+\indent unsigned int allocated\_messages;    // Messages allocated with dynamic memory\\
+\indent unsigned int allocated\_ports;       // Ports allocated with dynamic memory\\
+\indent unsigned int allocated\_indexes;     // Allocated indexes (dynamic memory)\\
+\indent unsigned int dynamic\_pages;         // How many pages where requested to the OS for dynamic memory\\
+\indent unsigned int alloc\_dynamic\_pages;   // How many pages is sartoris holding but not using\\\}; \\
+\end{sf}
+\\
+
+\section{Events} \label{sec:events}
+
+In Sartoris version 2.0, the following event syscalls where introduced:
+
+\begin{enumerate}
+\item[] \textsf{evt\_set\_listener}
+\item[] \textsf{evt\_wait}
+\item[] \textsf{evt\_disable}
+\end{enumerate}
+
+Using the first syscall \textsf{evt\_set\_listener}, a privilege level 1 service on the OS on top, can let sartoris know events will be enabled, providing a thread and interrupt and a port which will be used for the event subsystem as follows:
+
+When one of the currently defined events is triggered for a thread sartoris will send a message to the port specified when \textsf{evt\_set\_listener} whas invoked. If the port is full, the specified interrupt will be raised and after it was raised it'll attempt to put the message again. If the second time also fails, sartoris will ignore the event (the service should free the port when the interrupt is raised).
+
+I
+There are four kinds of events defined on sartoris:
+
+\begin{enumerate}
+\item[] \textsf{SARTORIS\_EVT\_MSG} 
+\item[] \textsf{SARTORIS\_EVT\_PORT\_CLOSED}
+\item[] \textsf{SARTORIS\_EVT\_INT}
+\item[] \textsf{SARTORIS\_EVT\_INTS}
+\end{enumerate}
+
+\textbf{kernel internals:} In current implementations, the microkernel has its own set of page tables to access the low memory area where its own code, data structures, and mappings per thread reside, that is injected into every task's page directory upon insertion. The page mangling functions described above take the appropiate measures to prevent user programs from disrupting the microkernel address space. To access user memory, the kernel uses the same page tables as the user processes do. Hence, the presence in memory of user data needed by system calls cannot be guaranteed by the microkernel. This is specially delicate when the microkernel must access a lock in order to perform the system call. Usually, critical sections are implemented in single processor kernels by disabling the interrupts. However, a page fault may well occur with interruptions disabled, thus disrupting the locking mechanism. The solution to this problem is twofold: for small structures received from user space, the structure is copied to the kernel stack before any locking is performed, and therefore page faults, if present, can be resolved without harm. For larger memory access (for example, in the implementations of the functions \textsf{read\_mem} and \textsf{write\_mem}), each time the microkernel must access a new page from user space, the presence of the relevant page in memory is checked and, if missing, a page fault is issued by the microkernel (not by the processor) after releasing any pertinent locks and saving the necessary information to allow the system call to continue normally and securely after the page fault has been resolved.
+
+\textbf{kernel internals:} Memory sharing functions are the only functions that need to access the address space of a task distinct from the currently executing one. This must be resolved by each platform implementation, providing functions \textsf{arch\_cpy\_from\_task} and \textsf{arch\_cpy\_to\_task} that perform inter-task address translation. See section \ref{sec:lowlevelinterface} for relevant details.
+
+\section{Low-level interface} \label{sec:lowlevelinterface}
+
+The Sartoris microkernel is divided in an architecture neutral section, which is written in the C programming language, and handles the kernel data structures, and an architecture specific section, which handles the processor data structures and its low level management. The interface that defines the low-level functions is located in \textsf{include/sartoris/cpu-arch.h}
+
+\begin{sf} \noindent /* This are the arch-dependent functions needed to support the kernel */ \\
+\\
+\#ifndef CPUARCH \\
+\#define CPUARCH \\
+\\
+\#include $<$sartoris/kernel.h$>$ \\
+\#include $<$cpu-arch-inline.h$>$\\
+\#include $<$lib/containers.h$>$\\
+\\
+void arch\_init\_cpu(void);\\
+\\
+int arch\_create\_task(int id, struct task *tsk);\\
+int arch\_destroy\_task(int id);\\
+\\
+int arch\_create\_thread(int id, int priv, struct thread *thr);\\
+int arch\_destroy\_thread(int id, struct thread* thr);\\
+int arch\_run\_thread(int id);\\
+int arch\_run\_thread\_int(int id, void *eip, void *stack);\\
+int arch\_is\_soft\_int();\\
+\\
+int arch\_create\_int\_handler(int number);\\
+int arch\_destroy\_int\_handler(int number);\\
+\\
+int arch\_page\_in(int task, void *linear, void *physical, int level, int attrib);\\
+int arch\_page\_out(int task, void *linear, int level);\\
+int arch\_kernel\_pf(void *linear);\\
+\\
+void arch\_mem\_cpy\_words(int *src, int *dst, unsigned int len);\\
+void arch\_mem\_cpy\_bytes(char *src, char *dst, unsigned int len);\\
+\\
+int arch\_test\_and\_set(int *x, int value);\\
+\\
+\#ifdef PAGING\\
+\\
+/*\\
+This function must request a page from the operating system. It *must*\\
+do so by issuing a Page Fault interrupt.\\
+It must return a linear sartoris address already mapped.\\
+*/\\
+int arch\_request\_page(void *laddr);\\
+\\
+void arch\_init\_dynmem();\\
+\\
+/*\\
+This function must return a page to the operating system. It *must*\\
+do so by issuing a Page Fault interrupt.\\
+if we could return the page to the OS, it must return 1, 0 otherwise.\\
+*/\\
+int arch\_return\_page(void *laddr);\\
+\\
+/*\\
+Get physical address for the page being freed by arch\_return\_page.\\
+*/\\
+void *arch\_get\_freed\_physical();\\
+\\
+/*\\
+Returns 0 if page granting/return finished.\\
+*/\\
+int arch\_req\_pages();\\
+\\
+int arch\_get\_perms(int task, struct permissions *localperms, struct permissions *p);\\
+unsigned int *arch\_map\_perms(int task, struct permissions *perms, unsigned int pos);\\
+\\
+\#endif\\
+\\
+/* \\
+  The following two return the number of bytes copied.\\
+  if paging is enabled, and a page fault (in either task)\\
+  occurs, the function will return the number of bytes\\
+  copied, and will do it after the page fault has been\\
+  served (i.e., it should detect it has just faulted,\\
+  and abort informing how much it copied).\\
+*/\\
+int arch\_cpy\_to\_task(int task, char* src, char* dst, unsigned int len, int x);\\
+int arch\_cpy\_from\_task(int task, char* src, char* dst, unsigned int len, int x);\\
+\\
+void arch\_dump\_cpu(void);\\
+\\
+\#ifndef HAVE\_INL\_CLI\\
+int arch\_cli(void);\\
+\#endif\\
+\\
+\#ifndef HAVE\_INL\_STI\\
+void arch\_sti(int x);\\
+\#endif\\
+\\
+\#ifndef HAVE\_INL\_GET\_PAGE\_FAULT\\
+void *arch\_get\_page\_fault(void);\\
+\#endif\\
+\\
+\#ifndef HAVE\_INL\_ISSUE\_PAGE\_FAULT\\
+void arch\_issue\_page\_fault(void);\\
+\#endif\\
+\\
+\#ifndef MAKE\_KRN\_PTR\\
+\# define MAKE\_KRN\_PTR(x) ((void*)x)\\
+\#endif\\
+\\
+\#ifndef MAKE\_KRN\_SHARED\_PTR\\
+\# define MAKE\_KRN\_SHARED\_PTR(t, x) ((void*)x)\\
+\#endif\\
+\\
+\#endif\\
+\end{sf}
+\\
+The architecture specific functions are called from the proper system calls. While they may access the rest of the kernel's data, they should define their own architecture specific data structures and reserve the necessary memory regions to hold them. 
+
+\chapter{The x86 implementation}
+\section{System organization overview}
+Initializing the processor and loading the microkernel and the init-process to main memory is the very fist task that the IA32 specific section of Sartoris must overcome. Once the bootstrapping has concluded, the kernel initialization function must create the system tables and execute the init task, which will start the operating system. 
+
+The main purpose of the architecture specific functions in Sartoris is the management of tasks, threads, paging and locking. In the IA32 architecture, the creation and destruction of tasks updating the descriptors in the Global Descriptor Table and one Local Descriptor Table, so that the user segments have the correct privilege levels and point to the task's memory areas. To perform the multiplexing of the CPU into several threads, the IA32 architecture defines a data structure which contains all the information required to create, suspend and resume a thread, the Task State Segment, but Sartoris will only create one TSS and instead of using the processor method, it'll use it's own state switch routine.
+
+The IA32 kernel code is located in \textsf{arch/i386/kernel/}.
+
+\section{Bootstrapping}
+
+In the PC x86 architecture, once the BIOS set's up most of the hardware, it will load the first 512 bytes from its selected boot media. Those bytes will be placed at a special location on physical memory (0x7c00) and will be executed from the first byte at that position. That program is called boot loader and will be in charge of loading the Operating System.
+
+Sartoris takes care of loading itself by providing a two-stage boot loader which will locate the kernel on position 0 of memory and begin the microkernel initialization. Once it has loaded itself, sartoris will create a first Task called the Init Task, whose id will be \textsf{INIT\_TASK\_NUM}, defined on kernel.h. 
+
+\subsection{Stage 1}
+
+Sartoris boot sector code for the x86 architecture is defined on arch/i386/boot/stage1.s.\\
+
+This stage of the boot loader, will use BIOS functions to load boot loader Stage 1.5 code. It will verify the boot media and check for LBA. If LBA is supported, it will begin coping from possition defined on stage2\_sector variable (currently 1 sector ahead) using int 0x13 function 0x45, if LBA is not supported, it will translate the value to CHS using Drive Geometry obtained by function 0x8 of int 0x13 and use function 0x2 of the same interrupt to read from media.\\
+
+Destination memory address for stage 1.5 is defined by stage1\_5seg16 on arch/i386/boot/stages.inc. 
+
+\subsection{Stage 1.5}
+
+This stage is only a loader as the first one. It will use an encoded block-list to load Stage 2.\\
+
+When executed, Stage 1 will have left the following:\\
+\\
+\begin{sf} 
+\indent ip = cs:0 = stage1\_5seg16:0\\
+\indent ds Pointing to bootseg16\\
+\indent ds:si = segment:offset of disk address packet/drive geometry\\
+\indent dl = drive num\\
+\indent Stack Pointing to 0xEFFF - 0x4\\
+\end{sf}\\
+\\
+This stage will issue read commands to the boot device, using int 0x13 as it was done by Stage 1, but with the block list located at possition 0x387 from the beggining of the stage.\\
+\\
+The encoded blocklist format will be:
+\begin{center}
+	\begin{tabular}{|l | l | l | l |}
+	\hline
+Memory location &	Name &	Size &	Default Value \\
+0x387 &	block\_list\_len &	1 byte &	1 \\
+0x388 &	block\_list\_start &	6 x Block list nodes &	Initial Node\\
+\hline
+	\end{tabular}
+\end{center}
+
+Starting at \textsf{block\_list\_start} there will be a list of up to 20 nodes with the following structure:
+\\
+\\
+\begin{sf} 
+\noindent struct list\_node\{\\
+\indent int start,\\
+\indent short length\\
+\noindent \}\\
+\end{sf}\\
+\\
+By default Sartoris will complete the list with only one node, telling stage 1.5 loader to copy starting at lba 3 with a length of (7*128)+2 512 bytes blocks.\\
+\\
+As the blocklist is located at a known possition on Sartoris image, this could be changed to point to a different Stage 2 Loader, even when the Microkernel is compiled.\\
+\\
+It's important to notice, that until now, we have been running on 16 bit (real) mode, however, we want to load sartoris at the 1MB mark (in order to avoid stepping on BIOS information which might be useful the the OS on top, and that's why on this stage we will set wat is known as "`Unreal Mode"', by entering protected mode, setting a protected mode gdt with segments big enough to copy the kernel above the 1MB mark and return to real mode.\\
+\\
+Once Unreal Mode has been set, stage 1.5 will load sartoris image to \textsf{nextstage\_addr}.\\
+
+\subsection{Stage 2}
+This stage is where most interesting things happen. Current Implementation is contained on \textsf{arch/i386/boot/stage2mem.s}.\\
+\\
+When executed, Stage 1.5 will have left the following:\\
+\\
+\begin{sf} 
+\indent Unreal Mode set\\
+\indent ip = cs:0 = stage1\_5seg16:0\\
+\indent ds Pointing to bootseg16\\
+\indent ds:si = segment:offset of disk address packet/drive geometry\\
+\indent dl = drive num\\
+\end{sf}\\
+\\
+This stage will perform the following actions:\\
+\begin{enumerate}
+\item[] \textsf{Check Multiboot header}: Starting at the end of Stage 2, is Sartoris Multiboot Header. Stage 2 will verify the multiboot magic number (0x1BADB002).
+\item[] \textsf{Enable A20}: Enable the A20 line on the processor, in order to remove the 1MB limit set by the processor for backward compatibility with really old systems. 
+\item[] \textsf{Calculate Memory Size}: Memory size will be calculated using the BIOS interrupt 0x12 or 0x15 function 0x88. Here it will also ask the BIOS to provide a memory map issuing interrupt 0x15 Function 0xE820. 
+\item[] \textsf{Switch to Protected Mode}: In order to switch to protected mode the bootloader defines a GDT table and an IDT table. The loader will Disable Interrupts, and IDT table will be loaded with only one record with 0.\\
+\\
+GDT table will have the following structure:\\
+\\
+\begin{center}
+	\begin{tabular}{|l | l |}
+	\hline
+Dummy Descriptor &	0 \\
+Code segment descriptor &	limit=ffff base\_adress=0 p-flag=1, \\
+ & dpl=0, s-flag=1 (non-system segment), type code exec/read \\
+ & g-flag=1, d/b bit=1 (limit mult by 4096, default 32-bit \\
+ & opsize), limit upper bits F \\
+Data segment descriptor &	limit=ffff, base\_adress=0, p-flag=1, \\
+ & dpl=0, s-flag=1, type read/write, g-flag=1, d/b bit=1, limit \\
+ & upper bits F\\
+ \hline
+	\end{tabular}
+\end{center}
+
+Once the IDT and GDT are loaded with lidt and lgdt, PE bit (bit 0) of CR0 will be set to 1 in order to switch to protected mode.
+\item[] \textsf{Move the Kernel}: The Kernel will be moved to the location specified on the Multiboot header.
+\end{enumerate}
+
+Once the kernel is moved Machine will be left like this:\\
+\begin{enumerate}
+\item[] - EAX contains the magic value 0x2BADB002
+\item[] - EBX contains the 32-bit physical address of the Multiboot information structure provided by the boot loader.
+\item[] - CS is a 32-bit read/execute code segment with an ofeset of 0 and a limit of 0xFFFFFFFF. The exact value is undefined.
+\item[] - DS,ES,es,GS,SS are 32-bit read/write data segment with an ofeset of 0 and a limit of 0xFFFFFFFF. The exact values are all undefined.
+\item[] - A20 gate is enabled.
+\item[] - CR0 Bit 31 (PG) is cleared. Bit 0 (PE) is set. Other bits are all undefined.
+\item[] - EFLAGS Bit 17 (VM) is cleared. Bit 9 (IF) is cleared. Other bits are all undefined.
+\item[] - All other processor registers and flag bits are undefined.
+\end{enumerate}
+
+Its important to notice this Machine State is conformig to Multiboot specification.\footnote{As defined in http://www.gnu.org/software/grub/manual/multiboot/html\_node/Machine-state.html\#Machine-state}. 
+
+\subsection{Sartoris Loader}
+
+Sartoris Multiboot loader, is defined on \textsf{/arch/i386/boot/sartoris\_loader.s}, and is the last step on the boot process, before jumping to Sartoris initialization.\\
+\\
+Even though the other stages can be replaced by a Multiboot compliant boot loader, this is the first stage which cannot be replaced. It will check eax register contains the Multiboot Magic Number and die if it does not.\\
+\\
+The second step, will be to load once more the GDT and IDT, because Multiboot does not guarantee they'll be loaded with something we can use. IDT and GDT used are the same we set on Stage 2 of the loader.\\
+\\
+Third step of the loader is to move Multiboot info structure to the address defined by \textsf{multiboot\_info\_address}, and place the Memory Map (if present) next to it, updating its pointer on the structure after relocation.\\
+\\
+Last steps are to move the Kernel image to address \textsf{multiboot\_header.entry\_addr} (this is an important step, since doing this will preserve the system BIOS tables) and the Init Task Image to \textsf{init\_address}.\\
+\\
+after the last step, stack register esp will be set to \textsf{stack\_address} and the loader will jump to possition \textsf{multiboot\_header.entry\_addr} on physical memory, that happens to be where the Kernel Image begins, and it's entry point.\\
+\\
+\section{Locking}
+
+The ability to enable and disable interrupts is used to implement critical sections that protect the integrity of microkernel data structures. The locking is as fine-grained as possible, without over-complicating the implementation. Some operations, like for example page-table mangling, are completely atomic, since implementing finer locking would require contemplating a too complex scenario. As was explained in \ref{sec:memorymanagement}, page faults are the only traps that are allowed to occur during critical sections. Hence the special measures taken to access user data from system calls.
+
+\section{IA32 system tables}
+
+\subsection{Global Descriptor Table}  \label{subsec:GDT}
+
+The GDT contains the descriptors that are shared among all the tasks in the system. Some descriptors, in particular the LDT descriptors used for tasking must reside in the GDT. Some other descriptors that are shared among all the tasks are also in the GDT. \textsf{MAX\_SCA} and \textsf{GDT\_LDTS} are used to statically reserve entries in the GDT for the maximum possible amount of system calls, tasks and threads. The descriptor layout in the GDT is: \\
+\\
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{descriptor group} & \textbf{how many?} & \textbf{details} \\
+\hline
+system descriptors & 4 & dummy, kernel code, \\
+ & & kernel data, high memory area \\
+\hline
+syscalls & \textsf{MAX\_SCA} & call gates for the system calls \\
+\hline
+ ldt segment descriptors & \textsf{GDT\_LDTS} & ldt segment descriptors \\
+\hline 
+\end{tabular}\\
+ \\
+The very first descriptor of the GDT is a null descriptor, required by the processor architecture\footnote{Loading a zero offset into an unused segment selector register is licit if the corresponding descriptor is null; a protection fault is only generated if a memory access through the null descriptor is attempted.}. The kernel sees the memory as a flat address space. The second descriptor is the kernel code descriptor, which defines a 32 bits execute-read segment with base zero and limit set to 16 megabytes (this is all the maximum amount of memory currently supported), and Descriptor Privilege Level set to zero (most privileged). The third descriptor is the kernel data descriptor, like the second one but with data-read-write type. The fourth descriptor is has a Descriptor Privilege Level of two, and is a data-read-write type descriptor which gives the service level tasks access to the high memory area\footnote{region between the physical addresses 0xa0000 and 0x100000.}, since numerous input output devices are configured to use buffers in this area (ie the standard VGA adapter) and the fifth descriptor is a privilege 1 descriptor granting access to the BIOS area (0 to 0x100000). The next \textsf{MAX\_SCA} entries are reserved for the system calls' call gates. A call gate allows the microkernel to offer it's services in a controlled way. Each gate has a privilege level (some calls may be accessed from service tasks only), an entry point into the kernel code, and a parameter count. When a thread performs a far call to one of these gates, control is transfered to the kernel and the right amount of parameters are copied to the kernel privilege zero stack. The following descriptors are used to hold 4 LDTs, which will be discussed later in this section.
+
+\subsection{Interrupt Descriptor Table}
+
+The Interrupt Descriptor Table contains the descriptors that define the processor's reaction to exceptions and external or software generated interrupt. The first 32 entries are reserved for the processor's exceptions, while the rest may be used to handle external interrupts or operating system services invoked through an \textsf{int} instruction. 
+
+Sartoris uses an interrupt stack. Any given thread can be *attached* to an interrupt, and can be declared as either nesting or non-nesting\footnote{Using the \textsf{nesting} parameter on \textsf{create\_int\_handler} system call.}. 
+
+When an interrupt is signaled, Sartoris will perform a thread-switch\footnote{Thread switching is implemented through software.} to the handler. If the handler was marked as nesting, it will be pushed onto the interrupt stack.
+
+Upon completion of interrupt service, a \textsf{nesting} interrupt handler \textbf{must} invoke \textsf{ret\_from\_int} system call, to return from the interrupt. When invoked, sartoris will switch to the first thread on the interrupt stack (if any).
+
+Non-nesting interrupts will not be pushed onto the interrupt stack and the only way out of them is invoking \textsf{run\_thread}. In any case threads \textbf{cannot} use \textsf{iret} or \textsf{ret} instructions to return execution.
+
+\subsection{Local Descriptor Tables}
+
+Every task has a linear address defined by two descriptors in it's Local Descriptor Table: an execute-read type descriptor for it's code and a read-write descriptor for it's data and stacks. There are only four LDT segment descriptors on the Global Descriptor Table, when thread-switching, sartoris will modify ldt descriptors to point to the switching task ldt, using first slot for privilege 0 descriptors, second slot for privilege 1 and so on up to privilege 3. any other privileges will map to ring3 on the processor.
+
+\subsection{Page Tables}
+
+To define an address space in the IA32 architecture a 4 Kb page directory is needed. This page directory indicates the location in physical memory of the page table corresponding to each chunk of linear space addresses. Then each 4 Kb page table is divided into 1024 4-byte entries that indicate the location in physical memory of a particular page, plus attributes (read, write, cache behavior, etc.). The microkernel has no intermediate structures for holding page mappings, it uses the page tables directly.
+
+\section{IA32 function implementation details}
+
+This section describes the behavior of the IA32 implementation of the architecture dependent functions.
+
+\textsf{arch\_init\_cpu}: 
+\begin{enumerate}
+\item[]\textbf{PIC reprogramming.} The init functions reprograms the programmable interrupt controllers so that the interrupts from the master controller go to the offsets 32-39 and interrupts from the slave controller go to offsets 40-47 of the IDT. The slave PIC is cascaded through the second interrupt request line of the master. All the interrupts are disabled though the PICs interrupt masks.
+\item[]\textbf{GDT set up.} The dummy, kernel code, kernel data and high memory area descriptors of the GDT are created. All the other descriptors are invalidated. The Global Descriptor Table is loaded using the \textsf{lgdt} instruction, which using a virtual descriptor composed by a linear base and a limit located in main memory loads the GDTR register.
+\item[]\textbf{Syscall Hooking.} All the call gates for the system calls are created in the corresponding GDT positions. This is done through the \textsf{hook\_syscall} function, with the correct entry point, privilege level and parameter count for each call, as described in subsection \ref{subsec:GDT}.
+\item[]\textbf{Initialize Thread State.} On this step the global (unique) TSS will be initialized and \textbf{curr\_state} will point to a dummy state for thread 0, setting only it's sartoris flags to 0, to avoid errors on the state switching routine.
+\item[]\textbf{IDT set up.} The fist 32 entries of the IDT are filled with interrupt gates\footnote{An interrupt gate is very similar to a call gate, but the processor handles the interrupt enable flag differently.} that point to routines that will dump the cpu registers and information about the currently running task and thread and halt the machine. These handlers should be replaced by the operating system exception handling threads, but for operating system development and to show some diagnostic in case the operating system dies very early in the boot process these default handlers are useful. The rest of the IDT is full with invalid descriptors. Finally, the IDT is loaded in a way analogous to the GDT, using the \textsf{lidt} instruction. Interrupts 7 and 1 are initialized to a microkernel stub, which will decide when the interrupt must be sent to the OS on top.
+\item[]\textbf{Get Capabilities.} Capabilities for the processor will be obtained using the CPUID instruction (this will be useful for state switching).
+\item[]\textbf{Initialize Dynamic Memory.} On this step, the arch dependant section of Dynamic Memory will be initialized, by setting all page table entries for the dynamic pages to 0.
+\item[]\textbf{Create Init Task} Init Task will be setup as follows: \\
+
+\begin{sf} 
+\indent tsk.size = INIT\_SIZE;\\
+\indent tsk.mem\_adr = USER\_OFFSET;\\
+\indent tsk.priv\_level = 0;\\
+\end{sf}\\
+\\
+Init thread:\\
+\\
+\begin{sf} 
+\indent thr.task\_num = INIT\_TASK\_NUM;\\
+\indent thr.invoke\_mode = PRIV\_LEVEL\_ONLY;\\
+\indent thr.invoke\_level = 1;\\
+\indent thr.ep = 0x00000000;\\
+\indent thr.stack = (INIT\_SIZE - BOOTINFO\_SIZE - 0x4);\\
+\end{sf}\\
+\item[]\textbf{Initialize Paging} Once Init Task and Thread are created, paging will be initialized by:\\
+\\
+\begin{enumerate}
+\item[] - Build Kernel Page Table (0x0 to 0xA0000)
+\item[] - Set 0xA0000 to 0xFFFFF as present, setting PG\_CACHE\_DIS to disable cache on the video memory area.\\
+\item[] - Set up a page directory for the init Task
+\item[] - Set first Page table on the directory to the Kernel Page Table
+\item[] - Create a Page table, mapping init Physical Memory to USER\_OFFSET.
+\item[] - Map last 64Kb to BootInfo Structure on the table.
+\item[] - Set the Table on the directory.
+\item[] - Set cr3 to the Physical address of the new Page directory, and enable Paging on CR0 by setting PG bit.
+\end{enumerate}
+\end{enumerate}
+
+Once paging is initialized and the init task/thread is created, control returns to the architecture independant section of the microkernel, who will execute the init thread through \textsf{run\_thread}.
+
+\textsf{arch\_create\_task}: 
+\begin{enumerate}
+\item[]\textbf{LDT set up.} An execute-read segment and a read-write segment are created in the task's local descriptor table first and second descriptors, with the privilege level corresponding to the task being created and base and limit according to the corresponding syscall parameters.
+\item[]\textbf{Add task to tasks list.} Add the task to a task list defined by the arch dependant section.
+\end{enumerate}
+
+\textsf{arch\_destroy\_task}: 
+\begin{enumerate}
+\item[]\textbf{invalidate LDT descriptor.} The task's LDT descriptor is invalidated, preventing any future access to or execution from the task's address space.
+\item[]\textbf{Remove task from tasks list.} Remove the task from the task list defined by the arch dependant section.
+\end{enumerate}
+
+\textsf{arch\_create\_thread}: 
+\begin{enumerate}
+\item[]\textbf{Thread State set up.} Sartoris Thread State structure holds the contents of general purpose registers wich must be preserved on cdecl convention, the base and stack register, the segment selector registers, the eflags register, the LDT selector register and the instruction pointer register. In a new thread's state, all the general purpose registers are set to zero. The base and stack pointer are set to the stack value supplied by the call. The cs register is loaded with a selector for the code segment in the task's LDT with the correct Requested Privilege Level, while cs, ds and ss are loaded with the second descriptor in the LDT, the data segment. The fs and gs registers are loaded with null descriptors, but in service task's threads fs is loaded with a selector for the high memory area descriptor located in the fourth entry of the GDT. The eflags register is loaded with IO Privilege set to 2 (only service tasks can access the IO space), and interrupts disabled if this is a privilege 0 thread. The LDT selector register is loaded with the task's LDT selector, which is the one corresponding to its privilege level. Finally, the instruction pointer register is loaded with the entry point supplied for the newly created thread.
+\end{enumerate}
+
+\textsf{arch\_run\_thread}: 
+\begin{enumerate}
+\item[]\textbf{Switch LDT.} Switch the LDT to the one used for this thread task.
+\item[]\textbf{Do task switch.} Once the current thread state has been preserved (including SSEx or MMX/FPU state if the thread used them) is preserved, the target thread state is loaded and if the thread is running for the first time a switch to the target thread is initiated by performing a far jump to the thread eip on the thread's state. If the thread has already been executed at least once, when the thread state has been loaded, it will continue execution (it'll be on the switching routine) with the ret instruction.
+\end{enumerate}
+
+\textsf{arch\_cli}:
+\begin{enumerate}
+\item[]\textbf{disable interrupts.} The interrupt enable bit of the eflags register is saved and then cleared. The function returns the original value.
+\end{enumerate}
+
+\textsf{arch\_sti}:
+\begin{enumerate}
+\item[]\textbf{enable interrupts.} The previous value of the interrupt enable bit is examined and interrupts are re-enabled only if they weren't disabled before the call to the previous \textsf{arch\_cli}.
+\end{enumerate}
+
+\end{document}
+
