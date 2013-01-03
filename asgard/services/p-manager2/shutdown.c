@@ -21,6 +21,7 @@
 #include "ports.h"
 #include "types.h"
 #include "command.h"
+#include "time.h"
 #include "task_thread.h"
 #include <services/stds/stdservice.h>
 #include <services/pmanager/services.h>
@@ -30,7 +31,8 @@ extern BOOL shutting_down;
 UINT32 shutdown_stage;
 UINT32 current_proc_count;
 UINT32 current_proc_ack;
-UINT32 timeout;
+
+TIME timeout;
 
 BOOL shuttingDown()
 {
@@ -104,7 +106,7 @@ BOOL cmd_shutdown_step()
 		}
 
 		/* Begin timeout */
-		timeout = ticks + SHUTDOWN_TIMEOUT;
+		set_timeout_tick(&timeout, SHUTDOWN_TIMEOUT);
 	}
 	else
 	{
@@ -112,7 +114,7 @@ BOOL cmd_shutdown_step()
 		struct pm_task *tsk = NULL;
 		
 		/* If timed out, abort */
-		if(timeout < ticks)
+		if(INL_TIME_COMP(&timeout, &time) > 0)
 		{
 			shutdown_stage = 0;
 			shutting_down = FALSE;
@@ -181,7 +183,7 @@ BOOL cmd_shutdown_step()
 			}
 
 			/* Begin timeout */
-			timeout = ticks + SHUTDOWN_TIMEOUT;			
+			set_timeout_tick(&timeout, SHUTDOWN_TIMEOUT);			
 		}
 	}
 	return TRUE;

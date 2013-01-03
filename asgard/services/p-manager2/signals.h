@@ -20,6 +20,7 @@
 
 #include "types.h"
 #include <services/pmanager/signals.h>
+#include "time.h"
 
 struct pm_task;
 struct pm_thread;
@@ -37,13 +38,11 @@ struct thr_signal
 	BYTE event_type;            // event which will trigger the signal
 	BYTE id;                    // identifier
 	UINT16 task;                // task from which the signal is expected
-	UINT16 infinite;
+	UINT16 rec_type;			// type of recursion
 	UINT32 signal_param;
 	UINT16 signal_port;         // port where the signal response must be sent (including errors)
 
-	UINT32 timeout;             // timeout in sched ticks (using ROUND_TIMEOUT(x) to convert from milliseconds) 
-                                // plus ticks (it could be less because of overflow but that is taken onto account). 
-	INT32 dir;                  // if timeout + ticks overflows, this will be set to !direction
+	TIME timeout;
 
     struct thr_signal *tnext;   // next signal on thread list
 	struct thr_signal *tprev;
@@ -51,6 +50,10 @@ struct thr_signal
 	struct thr_signal *gprev;
 	struct thr_signal *inext;   // next on interrupt signals
 } PACKED_ATT;
+
+#define SIGNAL_REC_TYPE_NONE		0
+#define SIGNAL_REC_TYPE_INFINITE	1
+#define SIGNAL_REC_TYPE_REPEATING	2
 
 /* This structure will hold signals for a given thread */
 struct thr_signals
@@ -81,38 +84,14 @@ struct signals
 
 extern struct signals signals;          // global signals container.
 
-#define SCHED_HERTZ       200           // 200 cycles per second
-#define SCHED_HERTZ_IDLE  1             // 1 cycle per second?          
-
-/* The pit will be programmed by setting SCHED_HERTZ.
-Pit speed in miliseconds will be:
-
-1/1000 ------ 1 tick every milisecond
-1/H --------- x (1/H)/(1/1000) = 1000 / H ticks per millisecond
-
-then the pit should generate an interrupt at 5 ms (with hz set to 200)
-
-5 ms ------- 1 tick 
-x ms ------- x / 5 tick.
-
-NOTE: I've checked on bochs by printing tick time and aparently the PIT
-is working at around 1000 hz, even though it should be set to 200.
-
-*/
-
-#define TMTICKS(x)        ((UINT32)((UINT32)x) / (1000 / SCHED_HERTZ))
-#define ROUND_TIMEOUT(x)  ( (TMTICKS(x) == 0)? 1 : TMTICKS(x) )
-
 /* Init Global signals container */
 void init_signals();
 /* Init thread signals container */
 void init_thr_signals(struct pm_thread *thr);
-/* Handle incoming signal messages */
-void process_signals();
-/* Handle incoming events */
-void process_events();
-/* Timer handling */
-void timer_tick();
+/* Handle incoming signal and event messages */
+void process_signals_and_events();
+/* Send signals whose timeout expired */
+void send_signals();
 /* Init task signals information */
 void init_tsk_signals(struct pm_task *tsk);
 

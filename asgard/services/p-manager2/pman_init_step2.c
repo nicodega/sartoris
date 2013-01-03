@@ -34,6 +34,7 @@
 #include "pman_print.h"
 #include "formats/initfs2.h"
 #include "task_thread.h"
+#include "time.h"
 
 void process_manager();
 int init_reloc();
@@ -156,8 +157,11 @@ void pman_init_stage2()
 				,PHYSICAL2LINEAR(PMAN_INIT_RELOC_PHYS + init_size));
 	
 	pman_print("Signals Initialization...");
+	
+	/* Initialize timer */
+	init_timer();
 
-	/* Initialize global signals container */
+	/* Initialize signals */
 	init_signals();
 
 	pman_print("Commands Initialization...");
