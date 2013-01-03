@@ -2,7 +2,7 @@ CFLAGS += -I"../../include"
 include ../../include/dep_rule.mk
 
 objects = pman_entry.o pman_init_step2.o  command.o command_queue.o elf.o elf_io_callbacks.o exceptions.o helpers.o interrupts.o io.o kmalloc.o loader.o loader_init.o \
-pman_main.o pman_print.o scheduler.o shutdown.o signals.o task.o thread.o vmm.o vmm_aging.o vmm_brk.o vmm_file_mmap.o vmm_pghandler.o \
+pman_main.o pman_print.o scheduler.o shutdown.o signals.o task.o thread.o vmm.o vmm_aging.o vmm_brk.o vmm_file_mmap.o vmm_pghandler.o time.o \
 vmm_phy_mmap.o vmm_shared_pages.o vmm_stealing.o vmm_swap.o vmm_swap_bitmap.o rb.o vmm_memarea.o vmm_regions.o vmm_shared_libs.o vmm_phy_alloc.o $(extobjects)
 
 extobjects = ../../klib/kserv.o ../../lib/int.o ../../lib/reboot.o ../../drivers/screen/screen.o ../../drivers/pit/pit.o \
@@ -10,7 +10,7 @@ extobjects = ../../klib/kserv.o ../../lib/int.o ../../lib/reboot.o ../../drivers
 
 dependencies = command.d command_queue.d elf.d elf_io_callbacks.d exceptions.d helpers.d interrupts.d io.d kmalloc.d loader.d loader_init.d pman_entry.d pman_init_step2.d pman_main.d \
 pman_print.d scheduler.d shutdown.d signals.d task.d thread.d vmm.d vmm_aging.d vmm_brk.d vmm_file_mmap.d vmm_pghandler.d vmm_phy_mmap.d vmm_regions.d \
-vmm_shared_pages.d vmm_stealing.d vmm_swap.d vmm_swap_bitmap.d rb.d vmm_memarea.d vmm_shared_libs.d vmm_phy_alloc.d
+vmm_shared_pages.d vmm_stealing.d vmm_swap.d vmm_swap_bitmap.d rb.d vmm_memarea.d vmm_shared_libs.d vmm_phy_alloc.d time.d
 	
 all :pmanager2.img 
 	$(MAKE) -C images
