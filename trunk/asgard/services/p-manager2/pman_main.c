@@ -25,6 +25,8 @@
 #include "loader.h"
 #include "pman_print.h"
 #include "interrupts.h"
+#include "signals.h"
+#include "time.h"
 
 int pman_stage = PMAN_STAGE_INITIALIZING;
 
@@ -50,10 +52,13 @@ void process_manager()
 		intraised = sch_schedule();
 		
 		/* Signals and timer */
-		process_signals();
-		process_events();
+		process_signals_and_events();
 
-		if(intraised) timer_tick();
+		if(intraised)
+		{
+			timer_tick();
+			send_signals();
+		}
 
         /* process sartoris events */
         sch_process_portblocks();
@@ -76,10 +81,13 @@ void process_manager()
 		intraised = sch_schedule();
 
 		/* Signals and timer */
-		process_signals();
-		process_events();
+		process_signals_and_events();
 
-		if(intraised) timer_tick();
+		if(intraised)
+		{
+			timer_tick();
+			send_signals();
+		}
 
         /* process sartoris events */
         sch_process_portblocks();

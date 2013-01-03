@@ -26,8 +26,6 @@
 #include "layout.h"
 #include <sartoris/syscall.h>
 
-UINT32 ticks = 0;			// clock ticks, when it reaches 0xFFFFFFFF it will return to 0 again
-INT32 direction = 0;		// each time ticks overflows this will be set to !direction
 struct signals signals;		// signals global list
 
 /* Initialize signals container. */
@@ -35,8 +33,6 @@ void init_signals()
 {
 	signals.first_thr = NULL;
 	signals.first = NULL;
-	ticks = 0;
-	direction = 0;
 }
 
 void init_thr_signals(struct pm_thread *thr)
@@ -52,10 +48,11 @@ void init_tsk_signals(struct pm_task *tsk)
     tsk->signals.handler_ep = NULL;
 }
 
-/* Handle incoming signal messages */
-void process_signals()
+/* Handle incoming signal and event messages */
+void process_signals_and_events()
 {
 	struct wait_for_signal_cmd signal;
+	struct event_cmd evt;
 	INT32 id;
 
 	/* Get signal requests from signals port */
@@ -85,14 +82,7 @@ void process_signals()
 				break;
 		}
 	}
-}
-
-/* Handle incoming events */
-void process_events()
-{
-	struct event_cmd evt;
-	INT32 id;
-
+		
 	/* Get signal requests from signals port */
 	while(get_msg_count(PMAN_EVENTS_PORT) > 0)
 	{
@@ -105,48 +95,40 @@ void process_events()
 	}
 }
 
-/* Timer handling */
-void timer_tick()
+/* Send signals whose timeout expired */
+void send_signals()
 {
 	struct thr_signal *signal = NULL;
-	UINT32 oticks = ticks;
-	ticks++;
-
-	if(oticks > ticks)
-	{
-		// overflow
-		direction = !direction;
-	}
-
+	
 	/* Now check for timeout on thread signals using global list */
 	signal = signals.first;
 
-	while(signal != NULL && signal->dir == direction && signal->timeout == ticks)
+	while(signal != NULL && INL_TIME_EQ(&signal->timeout, &time))
 	{
 		if(signal->task == PMAN_TASK && signal->event_type == PMAN_SLEEP)
 		{
-     		// it was a sleep command
 			send_signal(signal, NULL, SIGNAL_OK);
 		}
 		else
 		{
 			send_signal(signal, NULL, SIGNAL_TIMEOUT);
 		}
-
+		
         if(signal->thread->signals.blocking_signal == signal)
 	    {
             //pman_print_dbg("PMAN: blocking signal timeout signal: %x thread: %x\n", signal, signal->thread);
-            if(signal->timeout != PMAN_SIGNAL_REPEATING)
+            if(signal->rec_type != SIGNAL_REC_TYPE_REPEATING)
                 signal->thread->signals.blocking_signal = NULL;
 
 		    /* Reactivate thread */
 		    sch_activate(signal->thread);
 	    }
-        else
+        /*else
         {
             //pman_print_dbg("PMAN: signal timeout signal: %x thread: %x\n", signal, signal->thread);            
-        }
-		if(signal->timeout != PMAN_SIGNAL_REPEATING)
+        }*/
+
+		if(signal->rec_type != SIGNAL_REC_TYPE_REPEATING)
 		{
 			remove_signal(signal, signal->thread);
 			signal = signals.first;
@@ -159,7 +141,7 @@ void timer_tick()
 void wait_signal(struct wait_for_signal_cmd *signal, BOOL blocking, UINT16 task)
 {
 	/* 
-		Now, the process might have sent multiple blocking signal requests 
+		The process might have sent multiple blocking signal requests 
 		if it did, then the last signal expected will be the one unblocking 
 		the thread.
 	*/
@@ -167,9 +149,11 @@ void wait_signal(struct wait_for_signal_cmd *signal, BOOL blocking, UINT16 task)
 	struct pm_thread *thread = NULL;
 	struct thr_signal *nsignal = NULL;
 	struct pm_task *ptask;
-	UINT32 otimeout;
     
     thread = thr_get(signal->thr_id);
+    
+	if(thread == NULL) return;
+
 	ptask = tsk_get(task);
 
     if(ptask == NULL) return;
@@ -197,7 +181,7 @@ void wait_signal(struct wait_for_signal_cmd *signal, BOOL blocking, UINT16 task)
 	{
 		// fail
 		send_msg(task, signal->signal_port, &signal_msg);
-        pman_print_dbg("MAPPING -> FAILED\n");
+        pman_print_dbg("wait_signal: MAPPING -> FAILED\n");
 		return;
 	}
     	
@@ -209,9 +193,11 @@ void wait_signal(struct wait_for_signal_cmd *signal, BOOL blocking, UINT16 task)
 		  || thread->state == THR_KILLED
 		  || thread->state == THR_EXCEPTION)
 	{
+		if(nsignal != NULL)
+			kfree(nsignal);
 		// fail
 		send_msg(task, signal->signal_port, &signal_msg);
-        pman_print_dbg("INV THR -> FAILED\n");
+        pman_print_dbg("wait_signal: INV THR -> FAILED\n");
 		return;
 	}
 
@@ -221,40 +207,29 @@ void wait_signal(struct wait_for_signal_cmd *signal, BOOL blocking, UINT16 task)
 	nsignal->task = signal->task;
 	nsignal->signal_param = signal->signal_param;
 	nsignal->signal_port = signal->signal_port;
-
-	nsignal->infinite = 0;
-
+	
 	if(signal->timeout == PMAN_SIGNAL_TIMEOUT_INFINITE)
 	{
-		nsignal->infinite = 1;
+		nsignal->rec_type = SIGNAL_REC_TYPE_INFINITE;
 	}
     else if(signal->timeout == PMAN_SIGNAL_REPEATING)
 	{
         if(blocking)
         {
+			kfree(nsignal);
             // cannot set a blocking signal to repeating
             send_msg(task, signal->signal_port, &signal_msg);
-            pman_print_dbg("BLCK REP -> FAILED\n");
+            pman_print_dbg("wait_signal: BLCK REP -> FAILED\n");
             return;
         }
-		nsignal->infinite = 1;
-        nsignal->timeout = PMAN_SIGNAL_REPEATING;
+		nsignal->rec_type = SIGNAL_REC_TYPE_REPEATING;
+        init_time(&nsignal->timeout);
 	}
 	else
 	{
-		otimeout = ROUND_TIMEOUT(signal->timeout);
-
-		nsignal->timeout = otimeout + ticks;
-
-		if(nsignal->timeout < ticks || nsignal->timeout < otimeout)
-		{
-			nsignal->dir = !direction;
-			nsignal->timeout = otimeout - (0xFFFFFFFF - ticks);
-		}
-		else
-		{
-			nsignal->dir = direction;
-		}
+		nsignal->rec_type = SIGNAL_REC_TYPE_NONE;
+		
+		set_timeout(&nsignal->timeout, signal->timeout);
 	}
 
 	nsignal->tnext = NULL;
@@ -268,19 +243,17 @@ void wait_signal(struct wait_for_signal_cmd *signal, BOOL blocking, UINT16 task)
 		thread->signals.blocking_signal = nsignal;
 
 		sch_deactivate(thread);
-
-        //pman_print_dbg("BLOCKING ");
 	}
 
 	if(signal->event_type == PMAN_INTR && signal->task == PMAN_TASK && !int_signal(thread, nsignal))
 	{
 		// fail
+		kfree(nsignal);
 		send_msg(task, signal->signal_port, &signal_msg);
-		kfree(signal);
-        //pman_print_dbg("INV TASK OR INT -> FAILED\n");
+        pman_print_dbg("wait_signal: INV TASK OR INT -> FAILED\n");
 		return;
 	}
-   // pman_print_dbg("OK\n");
+
 	/* Insert signal */
 	insert_signal(nsignal, nsignal->thread);
 }
@@ -446,7 +419,7 @@ void signal_nblock2block(struct wait_for_signal_cmd *signal_cmd, UINT16 task)
 
 	if(signal != NULL)
     {
-        if(signal->timeout == PMAN_SIGNAL_REPEATING)
+        if(signal->rec_type == SIGNAL_REC_TYPE_REPEATING)
         {
             //pman_print_dbg("PMAN: signal_nblock2block signal is repeating.\n");
             send_msg(task, signal->signal_port, &signal_msg);
@@ -505,7 +478,7 @@ void event(struct event_cmd *evt, UINT16 task)
                     if(signal->thread->signals.blocking_signal == signal)
 	                {
                        // pman_print_dbg("PMAN: event blocking signal: %x thread: %x\n", signal, signal->thread);
-                        if(signal->timeout != PMAN_SIGNAL_REPEATING)
+                        if(signal->rec_type != SIGNAL_REC_TYPE_REPEATING)
                             signal->thread->signals.blocking_signal = NULL;
 
 		                /* Reactivate thread */
@@ -516,7 +489,7 @@ void event(struct event_cmd *evt, UINT16 task)
                        // pman_print_dbg("PMAN: event signal: %x thread: %x\n", signal, signal->thread);
                     }
 
-					if(signal->timeout != PMAN_SIGNAL_REPEATING)
+					if(signal->rec_type != SIGNAL_REC_TYPE_REPEATING)
 					{
 						remove_signal(signal, signal->thread);                        
 						kfree(signal);
@@ -557,7 +530,7 @@ void event(struct event_cmd *evt, UINT16 task)
                     if(signal->thread->signals.blocking_signal == signal)
 	                {
                        // pman_print_dbg("PMAN: event blocking signal: %x thread: %x\n", signal, signal->thread);
-                        if(signal->timeout != PMAN_SIGNAL_REPEATING)
+                        if(signal->rec_type != SIGNAL_REC_TYPE_REPEATING)
                             signal->thread->signals.blocking_signal = NULL;
 
 		                /* Reactivate thread */
@@ -568,7 +541,7 @@ void event(struct event_cmd *evt, UINT16 task)
                       //  pman_print_dbg("PMAN: event signal: %x thread: %x\n", signal, signal->thread);
                     }
 
-					if(signal->timeout != PMAN_SIGNAL_REPEATING)
+					if(signal->rec_type != SIGNAL_REC_TYPE_REPEATING)
 					{
 						remove_signal(signal, signal->thread);
 						kfree(signal);
@@ -637,7 +610,7 @@ void insert_signal(struct thr_signal *signal, struct pm_thread *thread)
 
 	if(ofirst != NULL) ofirst->tprev = signal;
 
-	if(!signal->infinite)
+	if(signal->rec_type == SIGNAL_REC_TYPE_NONE)
 	{
 		/* Insert on global list (ordered) */
 		struct thr_signal *prv = NULL, *curr = signals.first;
@@ -695,30 +668,23 @@ void remove_signal(struct thr_signal *signal, struct pm_thread *thread)
 	}
 
 	/* Remove from global list */
-	if(!signal->infinite)
+	if(signal->rec_type == SIGNAL_REC_TYPE_NONE)
 	{
 		if(signal->gprev != NULL)
-		{
 			signal->gprev->gnext = signal->gnext;
-		}
 		else
-		{
 			signals.first = signal->gnext;
-		}
-	
+		
         if(signal->gnext != NULL)
 		    signal->gnext->gprev = signal->gprev;
 	}
     	
 	/* Remove from thread list */
 	if(signal->tprev != NULL)
-	{
 		signal->tprev->tnext = signal->tnext;
-	}
 	else
-	{
 		thread->signals.first = signal->tnext;
-	}
+	
 	if(signal->tnext != NULL)
 		signal->tnext->tprev = signal->tprev;
 
@@ -774,19 +740,7 @@ return: 0 equal, < 0 then s0 < s1, > 0 then s0 > s1.
 */
 int signal_comp(struct thr_signal *s0, struct thr_signal *s1)
 {
-	if(s0->dir == s1->dir)
-		return s0->timeout - s1->timeout;
-
-	if(direction)
-	{
-		/* If direction is 1, then it means signals with dir 0 will be greater than signals with dir 1 */
-		return s1->dir - s0->dir;
-	}
-	else
-	{
-		/* If direction is 0, then it means signals with dir 1 will be greater than signals with dir 0 */
-		return s0->dir - s1->dir;
-	}
+	return INL_TIME_COMP(&s0->timeout, &s1->timeout);
 }
 
 

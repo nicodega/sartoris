@@ -369,7 +369,7 @@ void int_common_handler()
                 /* Update thread status */
 	            if(isignal->thread->signals.blocking_signal == isignal)
 	            {
-                    if(isignal->timeout != PMAN_SIGNAL_REPEATING)
+                    if(isignal->rec_type != SIGNAL_REC_TYPE_REPEATING)
                         isignal->thread->signals.blocking_signal = NULL;
 
 		            /* Reactivate thread */
@@ -382,7 +382,7 @@ void int_common_handler()
 				next_signal = isignal->inext;
 
 				/* Discard signal if not repeating */
-				if(isignal->timeout != PMAN_SIGNAL_REPEATING)
+				if(isignal->rec_type != SIGNAL_REC_TYPE_REPEATING)
 				{
 					remove_signal(isignal, isignal->thread);
 
