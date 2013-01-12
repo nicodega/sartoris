@@ -35,6 +35,8 @@
 void calc_mem(struct multiboot_info *mbinf);
 phy_allocator *vmm_addr_stack(ADDR pman_laddress);
 
+unsigned int *APICAddr;
+
 /* 
 Returns TRUE if this page can be used. False if BIOS has assigned for mapped IO.
 */
@@ -225,6 +227,18 @@ INT32 vmm_init(struct multiboot_info *multiboot, UINT32 ignore_start, UINT32 ign
     UINT32 size = 0, pgs;
 	struct mmap_entry *mbe = NULL;
 	UINT32 phy;
+
+    /* Map the APIC page */
+    pman_print_dbg("VMM: APIC Address mapping ");
+    
+    unsigned int *APICtbl = vmm_pm_get_page(FALSE);
+    // this is because the last SARTORIS_PROCBASE_LINEAR MB cannot be mapped onto PMAN address space
+    APICAddr = vmm_pm_get_page(FALSE);
+
+    if(page_in(PMAN_TASK, TRANSLATE_ADDR(APICAddr,ADDR), (ADDR)PG_ADDRESS(SARTORIS_APIC_ADDRESS), 2, PGATT_WRITE_ENA) != SUCCESS)
+        pman_print_dbg("FAILED\n");
+    else
+        pman_print_dbg("OK\n");
 	
 	pman_print_dbg("VMM: Init Finished\n");
 

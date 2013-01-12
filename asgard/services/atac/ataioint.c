@@ -43,7 +43,6 @@ static pic_enable_irq[8] =       // mask to enable
    { 0xFE, 0xFD, 0xFB, 0xF7,     //   IRQ 0-7 in PIC 0 or
      0xEF, 0xDF, 0xBF, 0x7F  };  //   IRQ 8-15 in PIC 1
 
-#define PIC_EOI      0x20        // end of interrupt
 
 //*************************************************************
 //
@@ -156,13 +155,8 @@ void int_handler( struct ata_channel *channel )
 
 			send_event(get_current_task(), IRQ_EVENT, channel->id, 0);
 		}
-
-		  
+        		  
 		// send End-of-Interrupt (EOI) to the interrupt controller(s).
-		outb( PIC0_CTRL, PIC_EOI );
-		if ( channel->irq >= 8 )
-			outb( PIC1_CTRL, PIC_EOI );			
-
-		ret_from_int();	// return from interrupt
+        ret_from_int(1);	// return from interrupt
 	}
 }

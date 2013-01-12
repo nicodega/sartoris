@@ -40,6 +40,8 @@ struct pm_thread *hardint_thr_handlers[32];
 
 void int_common_handler();
 void sartoris_evt_handler();
+INT32 apic = 0;
+extern unsigned int *APICAddr;
 
 void int_init()
 {
@@ -47,14 +49,20 @@ void int_init()
 	struct pm_thread *pmthr;
 	UINT32 i;
 
+    // check if an apic is present and setup
+    __asm__ __volatile__ ("movl 0xF0(%%edx), %%eax;"
+                          "andl $0x100, %%eax;"
+                          "movl %%eax, %[apic]" : [apic] "=m" (apic) : "d" (APICAddr) : "eax");
+        
+    if(apic)
+        pman_print_dbg("APIC detected\n");
+    
     for(i = 0; i < MAX_INTERRUPT; i++)
-	{
 		blocked_threads[i] = 0;
-	}
+	
     for(i = 0; i < 32; i++)
-	{
 		hardint_thr_handlers[i] = NULL;
-	}
+	
 	/* Create generic exceptions handler. */
 	hdl.task_num = PMAN_TASK;
 	hdl.invoke_mode = PRIV_LEVEL_ONLY;
@@ -63,9 +71,10 @@ void int_init()
 	hdl.stack = (ADDR)STACK_ADDR(PMAN_EXSTACK_ADDR);
 
 	if(create_thread(EXC_HANDLER_THR, &hdl))
-		pman_print_and_stop("INT: FAILED To create Exception handler Thread");
-
+		pman_print_dbg("INT: FAILED To create Exception handler Thread");
+    pman_print_dbg("OK1\n");
 	create_int_handler(DIV_ZERO, EXC_HANDLER_THR, false, 0);
+    pman_print_dbg("OK2\n");
 	create_int_handler(OVERFLOW, EXC_HANDLER_THR, false, 0);
 	create_int_handler(BOUND, EXC_HANDLER_THR, false, 0);
 	create_int_handler(INV_OPC, EXC_HANDLER_THR, false, 0);
@@ -88,7 +97,7 @@ void int_init()
 	hdl.stack = (ADDR)STACK_ADDR(PMAN_PGSTACK_ADDR);
 
 	if(create_thread(PGF_HANDLER_THR, &hdl))
-		pman_print_and_stop("INT: FAILED To create PF handler Thread");
+		pman_print_dbg("INT: FAILED To create PF handler Thread");
 
 	create_int_handler(PAGE_FAULT, PGF_HANDLER_THR, FALSE, 0);
 
@@ -104,7 +113,7 @@ void int_init()
 	hdl.stack = (ADDR)STACK_ADDR(PMAN_INTCOMMON_STACK_ADDR);
 
 	if(create_thread(INT_HANDLER_THR, &hdl))
-		pman_print_and_stop("INT: FAILED To create Interrupt handler Thread");
+		pman_print_dbg("INT: FAILED To create Interrupt handler Thread");
 
 	for(i = IA32FIRST_INT; i < MAX_INTERRUPT; i++)
 	{
@@ -124,7 +133,7 @@ void int_init()
 	hdl.stack = (ADDR)STACK_ADDR(PMAN_EVTHNDL_STACK_ADDR);
 
 	if(create_thread(SART_EVT_THR, &hdl))
-		pman_print_and_stop("INT: FAILED To create Interrupt handler Thread.\n");
+		pman_print_dbg("INT: FAILED To create Interrupt handler Thread.\n");
 
     /* Open the port for events */
     if(open_port(SARTORIS_EVENTS_PORT, 0, PRIV_LEVEL_ONLY) == FAILURE)
@@ -256,13 +265,24 @@ void gen_ex_handler()
 BOOL is_int0_active()
 {
 	int res = 0;
-	// 0xB = 1011 meaning we will read the ISR (In Service Reg) from the first PIC
-	__asm__ __volatile__ ("xor %%eax,%%eax;"
-                          "movb $0x0B, %%al;"
-                          "outb %%al, $0x20;"
-                          "inb $0x20, %%al;"
-                          "andl $0x1, %%eax;"
-                          "movl %%eax, %0" : "=r" (res) :: "eax");
+    // if we have an apic check APIC ISR
+    if(apic)
+    {
+        // check vector 32 ISR
+        __asm__ __volatile__ ("movl 0x110(%%edx), %%eax;"
+                        "andl $0x1,%%eax;"
+                        "movl %%eax, %0" : "=r" (res) : "d" (APICAddr) : "eax");    
+    }
+    else
+    {
+	    // 0xB = 1011 meaning we will read the ISR (In Service Reg) from the first PIC
+	    __asm__ __volatile__ ("xor %%eax,%%eax;"
+                              "movb $0x0B, %%al;"
+                              "outb %%al, $0x20;"
+                              "inb $0x20, %%al;"
+                              "andl $0x1, %%eax;"
+                              "movl %%eax, %0" : "=r" (res) :: "eax");
+    }
 	return res;
 }
 
@@ -413,7 +433,7 @@ void int_common_handler()
 		/* Tell Scheduler to move our current executing thread */
 		sch_force_complete();
 
-		ret_from_int();
+		ret_from_int(0);
 	}
 }
 
@@ -468,6 +488,6 @@ void sartoris_evt_handler()
     {
         sch_process_portblocks();
 
-        ret_from_int();
+        ret_from_int(0);
     }
 }

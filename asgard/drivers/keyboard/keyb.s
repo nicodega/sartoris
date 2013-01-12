@@ -15,7 +15,6 @@
 ;; if not, it can be downloaded from our project site: sartoris.sourceforge.net,
 ;; or you can contact us directly at the email addresses provided above.
 
-
 ;; this thread will handle IRQ1, the keyboard.
 
 ;; the keyboard has a very primitive interface, and will interrupt us
@@ -89,12 +88,7 @@ bits 32
 ;; %define nesting_mode        
 
 %include "../../include/sartoris-i386/gdt-syscalls.h"
-    
-%define PICm0 0x20        ; the master pic port 0
-%define PICm1 0x21        ; the master pic port 1
-    
-%define EOI   0x20        ; end of interrupt code
-    
+        
 %define KBD_PORT        0x60
 %define KBD_ACK_PORT    0x61
 
@@ -265,10 +259,9 @@ not_full:
     and bh, ~(KEY_EXT)
 done:
 
-    mov al, EOI        
-    out PICm0, al        ; acknowledge the interrupt
-
-    pusha        
+    pusha
+    xor eax,eax
+    inc eax         ; ret from int will eoi
     call RET_FROM_INT : 0x00000000
     popa
     jmp read_code        ; ok, we're back. let's do it again!
