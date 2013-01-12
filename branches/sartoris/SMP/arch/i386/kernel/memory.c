@@ -24,14 +24,14 @@ extern pd_entry *tsk_pdb[MAX_TSK];
 #ifndef PAGING
 
 /* the simple version: paging is disabled */
-int arch_cpy_to_task(int task, char* src, char* dst, unsigned int len, int x, int trace) 
+int ARCH_FUNC_ATT6 arch_cpy_to_task(int task, char* src, char* dst, unsigned int len, int x, int trace) 
 {
 	arch_mem_cpy_bytes(MAKE_KRN_PTR(src), MAKE_KRN_SHARED_PTR(task, dst), len);
   
 	return len; 
 }
 
-int arch_cpy_from_task(int task, char*src, char* dst, unsigned int len, int x) 
+int ARCH_FUNC_ATT5 arch_cpy_from_task(int task, char*src, char* dst, unsigned int len, int x) 
 {
 	arch_mem_cpy_bytes(MAKE_KRN_SHARED_PTR(task, src), MAKE_KRN_PTR(dst), len);
 	
@@ -58,7 +58,7 @@ int arch_cpy_from_task(int task, char*src, char* dst, unsigned int len, int x)
 /* this is so freaking sound it makes me wanna cry! */
 extern unsigned int exc_error_code;
 
-int arch_cpy_to_task(int task, char* src, char* dst, unsigned int len, int x, int trace) 
+int ARCH_FUNC_ATT6 arch_cpy_to_task(int task, char* src, char* dst, unsigned int len, int x, int trace) 
 {
 	char *mapped_dst;
 	unsigned int i, j;  /* i: index for curr_task, j: index for task */
@@ -147,7 +147,7 @@ int arch_cpy_to_task(int task, char* src, char* dst, unsigned int len, int x, in
 	return i;
 }
 
-int arch_cpy_from_task(int task, char* src, char* dst, unsigned int len, int x) 
+int ARCH_FUNC_ATT5 arch_cpy_from_task(int task, char* src, char* dst, unsigned int len, int x) 
 {
 	char *mapped_src;
 	unsigned int i, j;  /* i: index for curr_task, j: index for task */
@@ -240,7 +240,7 @@ int arch_cpy_from_task(int task, char* src, char* dst, unsigned int len, int x)
 /* these copy functions should work fine
    when the memory areas to copy overlap. */
 
-void arch_mem_cpy_words(int* src, int* dst, unsigned int len) 
+void ARCH_FUNC_ATT3 arch_mem_cpy_words(int* src, int* dst, unsigned int len) 
 {
     unsigned int i;
  
@@ -254,7 +254,7 @@ void arch_mem_cpy_words(int* src, int* dst, unsigned int len)
     }	
 }
 
-void arch_mem_cpy_bytes(char *src, char *dst, unsigned int len) 
+void ARCH_FUNC_ATT3 arch_mem_cpy_bytes(char *src, char *dst, unsigned int len) 
 {
     unsigned int i;
     int *wsrc, *wdst;
@@ -283,13 +283,11 @@ Atomic test and set.
 FIXME: This works, but see if we can use mfence and new operations defined on intel
 and AMD architectures.
 */
-int arch_test_and_set(int *x, int value)
+int ARCH_FUNC_ATT2 arch_test_and_set(int *x, int value)
 {
 	int ret;
-	__asm__ __volatile__ (  "movl %2, %%eax;\r\n"
-							"movl %1, %%ebx;\r\n"
-							"lock; xchgl (%%ebx), %%eax;\r\n" 
-							"movl %%eax, %0;" : "=r" (ret) : "m" (x), "m" (value) :"%eax","%ebx");
+	__asm__ __volatile__ (  "lock; xchgl (%%edx), %%eax;\r\n" 
+							"movl %%eax, %0;" : "=r" (ret) : "a" (x), "d" (value) );
 	return ret;
 }
 

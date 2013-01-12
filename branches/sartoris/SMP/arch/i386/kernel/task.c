@@ -14,7 +14,7 @@
 #include "lib/indexing.h"
 #include "i386.h"
 
-int arch_create_task(int num, struct task *tsk) 
+int ARCH_FUNC_ATT2 arch_create_task(int num, struct task *tsk) 
 {
 	struct i386_task *tinf = (struct i386_task *)CONT_TSK_ARCH_PTR(tsk);
 	
@@ -38,7 +38,7 @@ int arch_create_task(int num, struct task *tsk)
 	return SUCCESS;
 }
 
-int arch_destroy_task(int task_num) 
+int ARCH_FUNC_ATT1 arch_destroy_task(int task_num) 
 {
 	struct i386_task *tinf = GET_TASK_ARCH(task_num);
     

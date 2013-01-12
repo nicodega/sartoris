@@ -27,7 +27,7 @@ extern "C" {
 int ARCH_FUNC_ATT2 create_task(int id, struct task *tsk);
 int ARCH_FUNC_ATT3 init_task(int task, int *src, unsigned int size);
 int ARCH_FUNC_ATT1 destroy_task(int task_num);
-int ARCH_FUNC_ATT0 get_current_task(void);
+int ARCH_FUNC_ATT0 get_current_task();
 
 /* threading */
 int ARCH_FUNC_ATT2 create_thread(int id, struct thread *thr);
@@ -35,7 +35,7 @@ int ARCH_FUNC_ATT1 destroy_thread(int id);
 int ARCH_FUNC_ATT1 run_thread(int id);
 int ARCH_FUNC_ATT2 set_thread_run_perms(int thr_id, struct permissions *perms);
 int ARCH_FUNC_ATT3 set_thread_run_mode(int thr_id, int priv, enum usage_mode mode);
-int ARCH_FUNC_ATT0 get_current_thread(void);
+int ARCH_FUNC_ATT0 get_current_thread();
 
 void idle_cpu();
 
@@ -47,9 +47,11 @@ int ARCH_FUNC_ATT1 get_page_fault(struct page_fault *pf);
 int ARCH_FUNC_ATT1 grant_page_mk(void *physical);
 
 /* interrupt handling */
+int map_hard_int(int hard_int, int vector, ...);
 int ARCH_FUNC_ATT4 create_int_handler(int number, int thread, int nesting, int priority);
 int ARCH_FUNC_ATT2 destroy_int_handler(int number, int thread);
-int ARCH_FUNC_ATT0 ret_from_int(void);
+int ARCH_FUNC_ATT1 ret_from_int(int eoi);
+int ARCH_FUNC_ATT0 eoi();
 int ARCH_FUNC_ATT1 get_last_int(unsigned int *error_code);
 void * ARCH_FUNC_ATT0 get_last_int_addr();
 int ARCH_FUNC_ATT0 pop_int();

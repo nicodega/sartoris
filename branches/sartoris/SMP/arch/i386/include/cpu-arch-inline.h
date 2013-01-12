@@ -44,7 +44,7 @@ static inline int arch_cli(void)
 
 #define HAVE_INL_STI
 
-static inline void arch_sti(int x) { if (x) __asm__ ("sti" : :); }
+static inline void ARCH_FUNC_ATT1 arch_sti(int x) { if (x) __asm__ ("sti" : :); }
 
 #define HAVE_INL_GET_PAGE_FAULT
 
@@ -107,6 +107,8 @@ static inline void invalidate_tlb(void *linear)
 	arch_flush_tlb();   /* FIXME !!! */
 }
 #endif
+
+#define ARCH_MAX_PROCESSORS 32
 
 #define MAKE_KRN_PTR(x) (void*) ((unsigned int)(x) + (unsigned int)curr_base)
 #define MAKE_KRN_SHARED_PTR(t, x) (void*) ((unsigned int)(x) + (unsigned int)(GET_PTR(t,tsk))->mem_adr)

@@ -36,11 +36,13 @@ extern int ARCH_FUNC_ATT0 flush_tlb_c();
 extern int ARCH_FUNC_ATT1 get_page_fault_c(struct page_fault *pf);
 extern int ARCH_FUNC_ATT1 grant_page_mk_c(void *physical);
 
+int map_hard_int_c(int hard_int, int vector, ...);
 extern int ARCH_FUNC_ATT4 create_int_handler_c(int number, int thread, int nesting, int priority);
 extern int ARCH_FUNC_ATT2 destroy_int_handler_c(int number, int thread);
-extern int ARCH_FUNC_ATT0 ret_from_int_c();
+extern int ARCH_FUNC_ATT1 ret_from_int_c();
 extern int ARCH_FUNC_ATT1 get_last_int_c(unsigned int *error_code);
 extern void * ARCH_FUNC_ATT0 get_last_int_addr_c();
+extern void ARCH_FUNC_ATT0 eoi_c();
 
 extern int ARCH_FUNC_ATT3 open_port_c(int port, int priv, int mode);
 extern int ARCH_FUNC_ATT1 close_port_c(int port);
@@ -58,8 +60,6 @@ extern int ARCH_FUNC_ATT4 read_mem_c(int, int, int, int*);
 extern int ARCH_FUNC_ATT4 write_mem_c(int, int, int, int*);
 extern int ARCH_FUNC_ATT2 pass_mem_c(int, int);
 extern int ARCH_FUNC_ATT1 mem_size_c(int);
-
-extern int ARCH_FUNC_ATT0 ret_from_int_c();
 
 extern int ARCH_FUNC_ATT1 push_int_c(int);
 extern int ARCH_FUNC_ATT0 pop_int_c();

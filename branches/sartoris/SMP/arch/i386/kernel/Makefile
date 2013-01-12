@@ -2,11 +2,12 @@ objects = ../../../mk/kimg.o cpu-arch.o scr-print.o
 
 fill = ../../../utils/fill
 
-cpu_objects = main.o task.o pgrequest.o descriptor.o thread.o tss.o interrupt.o paging.o memory.o cpu-asm.o syscall-gates.o int.o pic.o state_switch.o stack_winding.o caps.o permissions.o ttrace.o
+cpu_objects = main.o task.o pgrequest.o descriptor.o thread.o tss.o interrupt.o paging.o memory.o cpu-asm.o syscall-gates.o int.o pic.o state_switch.o \
+              stack_winding.o caps.o permissions.o ttrace.o acpi.o apic.o
 
 prt_objects = print.o vga.o
 
-dependencies = main.d task.d descriptor.d thread.d tss.d interrupt.d paging.d memory.d print.d caps.d permissions.d ttrace.d
+dependencies = main.d task.d descriptor.d thread.d tss.d interrupt.d paging.d memory.d print.d caps.d permissions.d ttrace.d acpi.d
 
 CPPFLAGS += -I"../../../include/" -I"../include"
 
@@ -19,7 +20,7 @@ all : kimg
 kimg : $(objects)
 	$(LD) $(objects) --oformat binary -Ttext 0x100000 -e 0x100000 -Map kernel.map -o kimg
 	$(fill) kimg -m 512
-	#Checking Kernel size... (less than 0xF0000
+	#Checking Kernel size... (less than 0x1F0000)
 	../size.sh
 
 kelf : $(objects)

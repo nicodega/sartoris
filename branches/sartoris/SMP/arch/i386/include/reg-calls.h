@@ -22,3 +22,8 @@
 #ifndef ARCH_FUNC_ATT5
 #define ARCH_FUNC_ATT5 __attribute__((regparm(3)))
 #endif
+
+#ifndef ARCH_FUNC_ATT6
+#define ARCH_FUNC_ATT6 __attribute__((regparm(3)))
+#endif
+
