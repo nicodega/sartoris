@@ -89,5 +89,5 @@ extern int edata[];
 #define PMAN_STACK_ADDR             (PMAN_CODE_SIZE - 0x2000)
 #define PMAN_EXSTACK_ADDR           (PMAN_CODE_SIZE)
 
-
+#define SARTORIS_APIC_ADDRESS       0xFEE00000
 #endif

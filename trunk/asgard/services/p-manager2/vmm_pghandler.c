@@ -71,7 +71,7 @@ BOOL vmm_handle_page_fault(UINT16 *thr_id, BOOL internal)
                 if(page_addr == NULL)
                     pman_print_dbg("PMAN: NO FREE PAGE FOR SARTORIS");
 
-                if(grant_page_mk(LINEAR2PHYSICAL(page_addr)) < 0)
+                if(grant_page_mk((ADDR)LINEAR2PHYSICAL(page_addr)) < 0)
                     pman_print_and_stop("PMAN: grant_page_mk failed!");
             }
             // don't put the thread on hold.

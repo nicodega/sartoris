@@ -1062,15 +1062,12 @@ void irq_handler()
 		int_ack = 1;
 	
 		// send EOI to master PIC
-		__asm__	 __volatile__ ("movl $0x20, %%eax;"
-			                   "outb %%al, $0x20" : : :"eax");
-		ret_from_int();
+		ret_from_int(1);
 	}
 }
 
 void timer() 
 {
-
     __asm__ ("cli"::);
 
 	for(;;)
@@ -1095,12 +1092,7 @@ void timer()
 		/* read RTC status C so we can continue... */
 		read_rtc_status();
 
-		/* send EOI to master and slave pics */
-		__asm__ __volatile__ ("movb $0x20, %%al;" 
-			                  "outb %%al, $0xa0;" 
-			                  "outb %%al, $0x20" : : : "eax");
-		
-		ret_from_int();
+		ret_from_int(1);
 	}
 }
 

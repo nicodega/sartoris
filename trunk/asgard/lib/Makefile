@@ -77,7 +77,7 @@ clean :
 
 include ../include/dep_attach.mk
 
-stdlib_libs = start.o proc_entry.o init.o ./../klib/kserv-user.o int.o scheduler.o sprintf.o printf.o piolib.o dirlib.o ./pmalloc.o ./structures/string.o ./structures/int64.o \
+stdlib_libs = start.o proc_entry.o init.o ./../klib/kserv-user.o scheduler.o sprintf.o printf.o piolib.o dirlib.o ./pmalloc.o ./structures/string.o ./structures/int64.o \
 ./structures/list.o ./structures/stdlibsim.o debug.o ../drivers/screen/screen.o ./parameters.o ./wait_msg_sync.o
 
 stdlib.o : $(stdlib_libs)

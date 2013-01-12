@@ -653,7 +653,7 @@ This will be executed as a soft int by pman.
 void sig_handler()
 {
     process_signal_responses(1);
-    ret_from_int();
+    ret_from_int(0);
 }
 
 /*

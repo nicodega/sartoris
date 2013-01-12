@@ -134,11 +134,14 @@ void pman_init_stage2()
 	pmthr->state = THR_INTHNDL;	
     
 	pman_print("Initializing allocator and interrupts.");
+
     /* Initialize kernel memory allocator */
 	kmem_init(PMAN_MALLOC_LINEAR, PMAN_MALLOC_PAGES);
 	
 	/* get our own interrupt handlers, override microkernel defaults */
 	int_init();
+
+	pman_print_dbg("Ints Initialized...\n");
 	
 	/* Initialize Scheduler subsystem */
 	sch_init();

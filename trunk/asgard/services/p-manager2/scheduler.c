@@ -39,7 +39,7 @@ void sch_init()
 	adjust_pit(SCHED_HERTZ);
 
 	/* acknowledge first interrupt */
-	ack_int_master();
+	eoi();
 
 	/* Initialize Scheduler List */
 	for(i = 0; i < SCHED_MAXPRIORITY; i++)
@@ -180,7 +180,7 @@ int sch_schedule()
 	intraised = is_int0_active();
 
 	if(intraised) 
-		ack_int_master();    /* ack timer interrupt!*/
+		eoi();    /* ack timer interrupt!*/
 
 	scheduler.last_runned = scheduler.running;
 	scheduler.running = NULL;

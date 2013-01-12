@@ -21,14 +21,7 @@
 bits 32
    
 %include "../../include/sartoris-i386/gdt-syscalls.h"
-    
-%define PIC0_CTRL 0x20           ;; PIC0 i/o address
-%define PIC0_MASK 0x21           ;; PIC0 i/o address
-%define PIC1_CTRL 0xA0           ;; PIC1 i/o address
-%define PIC1_MASK 0xA1           ;; PIC1 i/o address
-    
-%define EOI   0x20        ; end of interrupt code
-   
+       
 ;; The PS2 mouse shares the controler with the keyboard. While whe handle
 ;; the mouse interrupt, the keyboard won't be able to process keys, so let's
 ;; try to make this handler FAST.
@@ -98,10 +91,8 @@ below1:
     inc cl
 mouse_int_cont:
     mov byte [mouse_cycle], cl
-    mov al, EOI        
-    out PIC0_CTRL, al        ; acknowledge the interrupt
-    mov al, EOI        
-    out PIC1_CTRL, al        ; acknowledge interrupt on pic1 (int 12 is on the second pic)
+    xor eax,eax
+    inc eax         ; ret from int will eoi    
     call RET_FROM_INT : 0x00000000
     jmp mouse_do_int        ; ok, we're back. let's do it again!
 
