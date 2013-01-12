@@ -101,7 +101,8 @@ copymmap_entry:
 	mov ebx, multiboot_info_address
 	mov dword [ebx + multiboot_info.mmap_addr], (multiboot_info_address + boot_info_size)
 nommap:
-	;; move the kernel down to 0x100000
+
+	;; move the kernel down to 0x100000 (1MB)
 	mov ecx, ((kern_sectors * 512) >> 2)						;; how many bytes will we copy? 
 	mov esi, image_phys_pos+(loader_sectors*512)                ;; where do we start? (this is the value in our 
                                                                 ;; multiboot header + size of this loader)
@@ -129,8 +130,7 @@ nommap:
 	
 die:
 	jmp $
-	
-	
+			
 ;; gdt table we will load
 gdt:	
 

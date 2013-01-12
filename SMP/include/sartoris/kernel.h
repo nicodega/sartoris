@@ -16,10 +16,9 @@
 #define MAX_ALLOC_LINEAR   0x7000000   /* 112 MB (remember to change stack_windings and int.s debug routine on i386 if this value is modified) */
 #define MIN_TASK_OFFSET    MAX_ALLOC_LINEAR
 
-#define MAX_SCA						49    /* max system calls */
 #define MAX_TSK						4096  /* max tasks */
 #define MAX_THR						16384 /* max concurrent threads of execution */
-#define MAX_IRQ						64    /* max irqs */
+#define MAX_IRQ						0xFF   /* max irqs */
 #define MAX_SMO						65536 /* system-wide */
 #define MAX_MSG						65536 /* system-wide */
 #define MAX_TSK_OPEN_PORTS			32    /* if this number is increased, the port flag for events on tasks should be incresed in size. */

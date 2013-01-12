@@ -24,11 +24,35 @@
 extern unsigned int exc_error_code; // it's defined on arch interrupt.c
 extern void *exc_int_addr;   // it's defined on arch interrupt.c
 
+int map_hard_int(int hard_int, int vector, ...)
+{
+    int result = FAILURE, x;
+
+    if(vector >= MAX_IRQ)
+    {
+        set_error(SERR_INVALID_INTERRUPT);
+        return FAILURE;
+    }
+
+    set_error(SERR_OK);
+
+    x = mk_enter(); 
+
+    result = arch_map_hard_int(hard_int, vector, (int*) (&vector + 1));
+
+    if(result == FAILURE)
+        set_error(SERR_ERROR);
+
+    mk_leave(x);
+
+    return result;
+}
+
 int ARCH_FUNC_ATT4 create_int_handler(int number, int thread_id, int nesting, int priority) 
 {
     int x;
     int result;	
-    
+    bprintf("create_int_handler(%i,%i,%i,%i)\n",number,thread_id,nesting,priority);
     result = FAILURE;
     
     x = mk_enter(); /* enter critical block */
@@ -244,7 +268,7 @@ void handle_int(int number)
     }
 }
 
-int ARCH_FUNC_ATT0 ret_from_int() 
+int ARCH_FUNC_ATT1 ret_from_int(int do_eoi) 
 {
     int x;
     int result;
@@ -255,11 +279,15 @@ int ARCH_FUNC_ATT0 ret_from_int()
     
     x = mk_enter(); /* enter critical block */
 
+
     if(arch_is_soft_int() || handling_int[curr_thread] == MAX_IRQ)
     {
         mk_leave(x);
         return SUCCESS;
     }
+
+    if(do_eoi)
+        arch_eoi(handling_int[curr_thread]);
 
     if (int_stack_count > 0 && handling_int[curr_thread] == int_stack_first) 
 	{
@@ -320,6 +348,21 @@ void * ARCH_FUNC_ATT0 get_last_int_addr()
 {
     set_error(SERR_OK);
     return exc_int_addr;
+}
+
+int ARCH_FUNC_ATT0 eoi() 
+{
+    if(handling_int[curr_thread] == MAX_IRQ)
+    {
+        set_error(SERR_NO_INTERRUPT);
+        return FAILURE;
+    }
+
+    arch_eoi(handling_int[curr_thread]);
+
+    set_error(SERR_OK);
+
+    return SUCCESS;
 }
 
 /* remove a nested int from the stack, but keep it active.

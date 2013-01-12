@@ -13,8 +13,8 @@ global enable_int_master
 global enable_int_slave
 global disable_int_master
 global disable_int_slave
-global eoi_master
-global eoi_slave
+global eoi_int_master
+global eoi_int_slave
 	
 ;; PIC ports
 PICm0	equ	0x20
@@ -120,6 +120,13 @@ disable_int_slave:
 	pop ebp
 	ret
 	
-
+    
+eoi_int_slave:
+    mov al, 0x20  
+    out PICs0, al
+eoi_int_master:
+    mov al, 0x20  
+    out PICm0, al   
+	ret
 
 

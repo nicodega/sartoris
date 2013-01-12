@@ -44,6 +44,12 @@ global flush_tlb_c
 
 extern get_page_fault
 global get_page_fault_c
+
+extern eoi
+global eoi_c
+
+extern map_hard_int
+global map_hard_int_c
 		
 extern create_int_handler
 global create_int_handler_c
@@ -174,7 +180,7 @@ extern stack_unwind_syscall
     add eax, 4      ;; count our push
 	mov ecx, %2
 	mov edx, %1
-	call do_syscall
+	call do_syscall_not_fast
     call stack_unwind_syscall
     pop ecx
 	retf (%1*4)
@@ -375,6 +381,8 @@ grant_page_mk_c:
 	reg1_syscall_def grant_page_mk
 	
 	;; interrupt handling
+map_hard_int_c:
+    syscall_def 4, map_hard_int
 
 create_int_handler_c:
 	fast4_syscall_def create_int_handler
@@ -382,30 +390,17 @@ create_int_handler_c:
 destroy_int_handler_c:
 	reg2_syscall_def destroy_int_handler
 
-	;; I will inline ret_from_int, because it is called
-	;; so bloody often.
 ret_from_int_c:
-    push dword 0
-	call stack_winding_syscall
-	push ds				; switch to kernel space
-	push es
-	mov eax, 0x10
-	mov ds, eax
-	mov es, eax
-	mov ecx, ret_from_int
-	call ecx			; make call
-	
-	pop es				; back to userland
-	pop ds	
-	call stack_unwind_syscall
-    add esp, 4          ; for the first push
-	retf 0
+    reg1_syscall_def ret_from_int
 
 get_last_int_c:	
 	reg1_syscall_def get_last_int
 
 get_last_int_addr_c:
 	syscall_def_np get_last_int_addr
+
+eoi_c:
+	syscall_def_np eoi
     		
 	;; messaging
 	
@@ -529,4 +524,37 @@ do_syscall_no_args:
     add esp, 4          ; pop params count
 	retf 0 
 
+do_syscall_not_fast:
+    ;; eax has how many bytes we must skip on the stack (because of the winding and param count push)
+	push ebp
+	mov ebp, esp
+
+    push ebx
+	push ds				; switch to kernel space
+	push es
+	mov ebx, 0x10
+	mov ds, ebx
+	mov es, ebx
+    
+    add eax, ebp        ; now eax points to the last parameter
+
+	push esi
+	mov esi, edx		; save parameter count
 	
+pass_argument:
+
+	sub edx, 1
+	push dword [eax+edx*4+16]	; pass edx arguments (16 = eip, eip far call, cs far call)
+	jnz pass_argument
+		
+	call ecx			; make call
+	
+	shl esi, 2
+	add esp, esi		; free stack space
+	
+	pop esi
+	pop es				; back to userland
+	pop ds
+    pop ebx
+	pop ebp
+	ret

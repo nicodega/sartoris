@@ -23,14 +23,14 @@ extern void arch_switch_thread(struct thr_state *thr, int thr_id, unsigned int c
 extern int arch_switch_thread_int(struct thr_state *thr, int id, unsigned int cr3, void *eip, void *stack);
 extern struct thr_state *mmx_state_owner;
 
-int arch_create_thread(int id, int priv, struct thread* thr) 
+int ARCH_FUNC_ATT3 arch_create_thread(int id, int priv, struct thread* thr) 
 {		
 	build_tss((struct thr_state *)CONT_THR_STATE_PTR(thr), id, thr->task_num, priv, thr->ep, thr->stack);
 		
 	return 0;
 }
 
-int arch_destroy_thread(int id, struct thread* thr) 
+int ARCH_FUNC_ATT2 arch_destroy_thread(int id, struct thread* thr) 
 {
 #ifdef FPU_MMX	
 	struct thr_state *thrs = (struct thr_state*)CONT_THR_STATE_PTR(thr);
@@ -75,7 +75,6 @@ int ARCH_FUNC_ATT1 arch_run_thread(int id)
 #endif
 	return SUCCESS;
 }
-
 
 int ARCH_FUNC_ATT3 arch_run_thread_int(int id, void *eip, void *stack)
 {

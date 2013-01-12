@@ -6,6 +6,8 @@
 struct i386_task;
 
 /* system tables macros */
+#define MAX_SCA       52    /* max system calls */
+
 #define GDT_ENT (SYS_DESC + MAX_SCA + GDT_LDTS + 1)
 
 #define LDT_ENT 3
@@ -65,7 +67,7 @@ struct seg_desc
 
 void init_desc_tables();
 int init_tss_desc();
-void hook_syscall(int num, int dpl, void *ep, unsigned int nparams);
+void hook_syscall(int num, int dpl, void *ep, unsigned int nparams, int fast);
 void build_ldt(struct i386_task *tinf, int task_num, void *mem_adr, unsigned int size, int type);
 void switch_ldt_desc(struct i386_task *tinf, int type);
 

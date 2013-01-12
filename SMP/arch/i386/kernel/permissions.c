@@ -5,7 +5,7 @@
 #include "paging.h"
 #include "sartoris/kernel.h"
 
-int arch_get_perms(int task, struct permissions *localperms, struct permissions *p)
+int ARCH_FUNC_ATT3 arch_get_perms(int task, struct permissions *localperms, struct permissions *p)
 {
     struct permissions *map = (struct permissions*)AUX_PAGE_SLOT(curr_thread);
 
@@ -54,7 +54,7 @@ int arch_get_perms(int task, struct permissions *localperms, struct permissions 
     return SUCCESS;    
 }
 
-unsigned int *arch_map_perms(int task, struct permissions *perms, unsigned int pos)
+unsigned int * ARCH_FUNC_ATT3 arch_map_perms(int task, struct permissions *perms, unsigned int pos)
 {   
 #ifdef PAGING
     unsigned int *map = (unsigned int*)AUX_PAGE_SLOT(curr_thread);

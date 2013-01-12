@@ -137,56 +137,16 @@ int_16:	int_hook_get_addr       16	; floating-point error exception
 int_17:	int_hook_pop_error      17	; alignment check exception
 int_18: int_hook_get_addr       18	; machine check exception
 int_19: int_hook_get_addr       19	; SIMD floating-point exception
-int_20: int_hook 20
-int_21: int_hook 21
-int_22: int_hook 22
-int_23: int_hook 23
-int_24: int_hook 24
-int_25: int_hook 25
-int_26: int_hook 26
-int_27: int_hook 27
-int_28: int_hook 28
-int_29: int_hook 29
-int_30: int_hook 30
-int_31: int_hook 31
-int_32: int_hook 32
-int_33: int_hook 33
-int_34: int_hook 34
-int_35: int_hook 35
-int_36: int_hook 36
-int_37: int_hook 37
-int_38: int_hook 38
-int_39: int_hook 39
-int_40: int_hook 40
-int_41: int_hook 41
-int_42: int_hook 42
-int_43: int_hook 43
-int_44: int_hook 44
-int_45: int_hook 45
-int_46: int_hook 46
-int_47: int_hook 47
-int_48: int_hook 48
-int_49: int_hook 49
-int_50: int_hook 50
-int_51: int_hook 51
-int_52: int_hook 52
-int_53: int_hook 53
-int_54: int_hook 54
-int_55: int_hook 55
-int_56: int_hook 56
-int_57: int_hook 57
-int_58: int_hook 58
-int_59: int_hook 59
-int_60: int_hook 60
-int_61: int_hook 61
-int_62: int_hook 62
-int_63: int_hook 63
-
+%assign i 20
+%rep    234
+	global int_%[i]
+     int_%[i]: int_hook i   
+%assign i i+1
+%endrep
 
 	;; that was terrible, but the only way to know which interrupt we
 	;; are handling is through the entry point. so i think it's the
-	;; only way. maybe there is a way to do this with the assembler,
-	;; but i don't know how to.
+	;; only way. 
 
 int_run:
 	pop eax			; eax <- int number
@@ -208,73 +168,13 @@ int_run:
     call stack_unwind_int
 	iret
  
-
 idt_call_table:	
-dd int_0
-dd int_1
-dd int_2
-dd int_3
-dd int_4
-dd int_5
-dd int_6
-dd int_7
-dd int_8
-dd int_9
-dd int_10
-dd int_11
-dd int_12
-dd int_13
-dd int_14
-dd int_15
-dd int_16
-dd int_17
-dd int_18
-dd int_19
-dd int_20
-dd int_21
-dd int_22
-dd int_23
-dd int_24
-dd int_25
-dd int_26
-dd int_27
-dd int_28
-dd int_29
-dd int_30
-dd int_31
-dd int_32
-dd int_33
-dd int_34
-dd int_35
-dd int_36
-dd int_37
-dd int_38
-dd int_39
-dd int_40
-dd int_41
-dd int_42
-dd int_43
-dd int_44
-dd int_45
-dd int_46
-dd int_47
-dd int_48
-dd int_49
-dd int_50
-dd int_51
-dd int_52
-dd int_53
-dd int_54
-dd int_55
-dd int_56
-dd int_57
-dd int_58
-dd int_59
-dd int_60
-dd int_61
-dd int_62
-dd int_63	
-
+%assign i 0
+%rep    234
+     dd int_%[i]
+%assign i i+1
+%endrep
+dd default_int		;; spurious will be mapped here
 
 	;; that was all the interrupt handling. what follows is the
 	;; default handlers for the i386 exceptions. they just

@@ -35,7 +35,7 @@ void arch_init_dynmem()
 /*
 This will grant a page to sartoris. (Used by the OS when whe generate a sartoris PF).
 */
-int arch_grant_page_mk(void *physical) 
+int ARCH_FUNC_ATT1 arch_grant_page_mk(void *physical) 
 {
 	rq_physical = physical;
 
@@ -49,7 +49,7 @@ because page table had not been updated. (this is used in order
 to avoid loading every kernel dynamic memory page on each task directory,
 and load them on demand)
 */
-int arch_kernel_pf(void *laddr)
+int ARCH_FUNC_ATT1 arch_kernel_pf(void *laddr)
 {
 	struct i386_task *tinf;
 	pd_entry *pdir_map;
@@ -79,7 +79,7 @@ IMPORTANT:
     - It will return a linear sartoris address already mapped.
     - This function WILL break atomicity.
 */
-int arch_request_page(void *laddr)
+int ARCH_FUNC_ATT1 arch_request_page(void *laddr)
 {
 	struct i386_task *tinf_it, *tinf;
 	pd_entry *pdir_map = AUX_PAGE_SLOT(curr_thread);
@@ -159,7 +159,7 @@ This function must return a page to the operating system. It *must*
 do so by issuing a PF Interrupt.
 If we could return the page to the OS, it must return 1, 0 otherwise.
 */
-int arch_return_page(void *laddr)
+int ARCH_FUNC_ATT1 arch_return_page(void *laddr)
 {
 	struct i386_task *tinf_it, *tinf;
     pd_entry *slot = AUX_PAGE_SLOT(curr_thread);	

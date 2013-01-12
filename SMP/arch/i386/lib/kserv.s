@@ -27,6 +27,8 @@ global page_out
 global flush_tlb
 global get_page_fault
 	
+global eoi
+global map_hard_int
 global create_int_handler
 global destroy_int_handler
 global ret_from_int
@@ -182,6 +184,25 @@ get_page_fault:
 	mov ebp, esp
 	call GET_PAGE_FAULT : 0x00000000
 	pop ebp
+	ret	
+
+eoi:
+	push ebp
+	mov ebp, esp
+	call EOI : 0x00000000
+	pop ebp
+	ret
+
+map_hard_int:
+	push ebp
+	mov ebp, esp
+    xchg bx,bx
+	push dword [ebp+20]
+	push dword [ebp+16]
+	push dword [ebp+12]
+	push dword [ebp+8]
+	call MAP_HARD_INT : 0x00000000
+	pop ebp
 	ret
 	
 create_int_handler:
@@ -191,7 +212,6 @@ create_int_handler:
 	call CREATE_INT_HANDLER : 0x00000000
 	pop ebp
 	ret
-
 		
 destroy_int_handler:
 	push ebp

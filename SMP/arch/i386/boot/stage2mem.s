@@ -11,8 +11,6 @@
 %include "multiboot.inc"
 %include "stages.inc"
 
-%define stage2_blocks 2
-
 bits 16
 
 stage2_entry:
@@ -316,5 +314,5 @@ getmem2cont:
 getmem2fail:
 	mov eax, 0xffffffff
 	ret
-
+	
 times ((stage2_blocks*512)-($-$$)) db 0x0 	;; fill with 0's

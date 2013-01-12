@@ -55,7 +55,7 @@ struct fxsave_data
 this file implements the architecture dependant section of ttrace (thread trace).
 */
 
-int arch_ttrace_begin(int thr_id)
+int ARCH_FUNC_ATT1 arch_ttrace_begin(int thr_id)
 {
     if(curr_thread == thr_id) return FAILURE;
 
@@ -70,7 +70,7 @@ int arch_ttrace_begin(int thr_id)
     return SUCCESS;
 }
 
-void arch_ttrace_end(int thr_id)
+void ARCH_FUNC_ATT1 arch_ttrace_end(int thr_id)
 {
     struct thr_state *state = GET_THRSTATE_ARCH(thr_id);
 
@@ -83,7 +83,7 @@ void arch_ttrace_end(int thr_id)
     state->sflags |= SFLAG_TRACE_END;
 }
 
-int arch_ttrace_reg_size(int reg)
+int ARCH_FUNC_ATT1 arch_ttrace_reg_size(int reg)
 {
     if(reg == REG_ALL_GENERAL)
         return sizeof(struct regs);
@@ -99,7 +99,7 @@ int arch_ttrace_reg_size(int reg)
     return 0;
 }
 
-int arch_ttrace_set_reg(int thr_id, int reg, void *value)
+int ARCH_FUNC_ATT3 arch_ttrace_set_reg(int thr_id, int reg, void *value)
 {
     struct thread *thr = (struct thread *)GET_PTR(thr_id,thr);
     struct thr_state *state = GET_THRSTATE_ARCH(thr_id);
@@ -166,7 +166,7 @@ int arch_ttrace_set_reg(int thr_id, int reg, void *value)
     return ret;
 }
 
-int arch_ttrace_get_reg(int thr_id, int reg, void *value)
+int ARCH_FUNC_ATT3 arch_ttrace_get_reg(int thr_id, int reg, void *value)
 {
     struct thr_state *state = GET_THRSTATE_ARCH(thr_id);
     int ret = FAILURE;
@@ -205,7 +205,7 @@ int arch_ttrace_get_reg(int thr_id, int reg, void *value)
     return ret;
 }
 
-int arch_ttrace_get_regs(int thr_id, void *ptr_regs)
+int ARCH_FUNC_ATT2 arch_ttrace_get_regs(int thr_id, void *ptr_regs)
 {
     struct thr_state *state = GET_THRSTATE_ARCH(thr_id);
     struct regs *regs = (struct regs*)ptr_regs;
@@ -218,7 +218,7 @@ int arch_ttrace_get_regs(int thr_id, void *ptr_regs)
     return SUCCESS;
 }
 
-int arch_ttrace_set_regs(int thr_id, void *ptr_regs)
+int ARCH_FUNC_ATT2 arch_ttrace_set_regs(int thr_id, void *ptr_regs)
 {
     struct thr_state *state = GET_THRSTATE_ARCH(thr_id);
     struct regs *regs = (struct regs*)ptr_regs;

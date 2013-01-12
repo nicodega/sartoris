@@ -113,7 +113,7 @@ void init_paging()
 	{		
 		if(page_in(INIT_TASK_NUM, (void*)linear, (void*)physical, 2, PGATT_WRITE_ENA) == FAILURE)
 		{
-			k_scr_print("Paging.c: Failed mapping Init image",0x7);
+			bprintf("Paging.c: Failed mapping Init image %x\n",0x7);
 			for(;;);
 		}
 		linear += PG_SIZE;
@@ -128,12 +128,19 @@ void init_paging()
 	{		
 		if(page_in(INIT_TASK_NUM, (void*)linear, (void*)physical, 2, PGATT_WRITE_ENA) == FAILURE)
 		{
-			k_scr_print("Paging.c: Failed mapping BootInfo and MMAP",0x7);
+			bprintf("Paging.c: Failed mapping BootInfo and MMAP %x\n",0x7);
 			for(;;);
 		}
 		linear += PG_SIZE;
 		physical += PG_SIZE;
 	}
+}
+
+/* This will map linear memory within the kernel to a physical address */
+void kernel_map_phy(void *kernel_addr, void *physical)
+{
+    kern_ptables[PG_LINEAR_TO_DIR(kernel_addr)][PG_LINEAR_TO_TAB(kernel_addr)] = PG_ADDRESS(physical) | PG_WRITABLE | PG_PRESENT;
+    invalidate_tlb((void*)PG_LINEAR_TO_TAB(kernel_addr)); // invalidate this page
 }
 
 void start_paging(struct i386_task *tinf) 
@@ -178,7 +185,7 @@ void restore_map(pt_entry map)
 	          disabled, since the map will have no effect if
               there is no address translation */
 
-int arch_page_in(int task, void *linear, void *physical, int level, int attrib) 
+int ARCH_FUNC_ATT5 arch_page_in(int task, void *linear, void *physical, int level, int attrib) 
 {
 	pd_entry *pdir_ptr;
 	pt_entry *ptab_ptr;
@@ -321,13 +328,25 @@ int arch_page_in(int task, void *linear, void *physical, int level, int attrib)
 						break;
 				} /* no more cases */
 			}
+            else
+            {
+                bprintf("ERR1 l: %x uoff: %x\n",linear, USER_OFFSET);
+            }
 		}
+        else
+        {
+            bprintf("ERR2\n");
+        }
 	}
+    else
+    {
+        bprintf("ERR2\n");
+    }
 
 	return result;
 }
 
-int arch_page_out(int task, void *linear, int level) 
+int ARCH_FUNC_ATT3 arch_page_out(int task, void *linear, int level) 
 {
 	pd_entry *pdir_ptr;
 	pt_entry *ptab_ptr;

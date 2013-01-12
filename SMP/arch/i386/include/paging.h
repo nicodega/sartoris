@@ -47,6 +47,8 @@ int verify_present(void *address, int write);
 
 void map_page(void *physical);
 
+void kernel_map_phy(void *kernel_addr, void *physical);
+
 #endif
 
 #endif
