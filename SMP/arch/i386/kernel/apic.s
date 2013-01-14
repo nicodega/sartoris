@@ -30,8 +30,8 @@ global start_apic
 %define APIC_TMR   0x180
 %define APIC_IRR   0x200
 %define APIC_ESR   0x280
-%define APIC_ICR   0x300
-%define APIC_ICR32    0x310
+%define APIC_ICRLOW    0x300
+%define APIC_ICRHIGH   0x310
 %define APIC_LVT_TR   0x320
 %define APIC_LVT_TSR  0x330
 %define APIC_LVT_PMCR 0x340
@@ -256,3 +256,47 @@ apic_eoi:
     mov dword [edx+APIC_EOI], eax
     ret
 
+;; int send_ipi(int dest, int vector, int dmode, int level, int tgmode, int dshorthand)
+;; this function will return when the ipi is delivered
+send_ipi:
+    push ebp
+	mov ebp, esp
+
+    pushf
+    cli
+
+    mov edx, [localApicAddress]
+
+    ; writing to ICR_LOW will send the IPI
+    mov eax, [ebp+8]            ; destination
+    shl eax, 23
+    mov [edx+APIC_ICRHIGH], eax
+
+    ; build high part
+    mov eax, [ebp+32]               ; destination short hand
+    shl eax, 18
+    mov ecx, [ebp+28]               ; trigger mode
+    shl ecx, 15
+    or eax, ecx
+    mov ecx, [ebp+24]               ; level
+    shl ecx, 14
+    or eax, ecx
+    mov ecx, [ebp+20]               ; dest mode
+    shl ecx, 11
+    or eax, ecx
+    mov ecx, [ebp+16]               ; delivery mode
+    shl ecx, 8
+    or eax, ecx
+    mov ecx, [ebp+12]               ; vector
+    or eax, ecx
+    mov [edx+APIC_ICRLOW], eax     ; send ipi
+
+send_ipi_wait:
+    pause
+    mov eax, [edx+APIC_ICRLOW]
+    and eax, 0x1000
+    jnz send_ipi_wait
+
+    popf
+    pop ebp
+    ret
